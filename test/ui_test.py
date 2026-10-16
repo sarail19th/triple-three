@@ -13,7 +13,7 @@ from playwright.sync_api import sync_playwright
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 DIST = os.path.join(ROOT, 'dist')
-EMOJI = ['', '🌱', '🌿', '🌳', '🛖', '🏠', '🏡', '🏰', '🏯', '🐻', '🪦', '⛪', '🕌', '💎']
+EMOJI = ['', '🌱', '🌿', '🌳', '🛖', '🏠', '🏛️', '🏰', '🏯', '🐻', '🪦', '⛪', '🕌', '💎', '💰']
 MIN_TURNS = 50   # random turns that must be played
 MAX_TURNS = 600  # safety cap: a full board must be reached long before this
 

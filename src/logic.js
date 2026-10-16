@@ -9,7 +9,7 @@
   // Cell / item codes. 0 empty. 1..8 building chain. 9 bear, 10 tombstone, 11 church, 12 cathedral, 13 crystal, 14 treasure
   // (final tier of the bear chain: tap it to open it for coins).
   var EMPTY = 0, BEAR = 9, TOMB = 10, CRYSTAL = 13, TREASURE = 14;
-  var EMOJI = ['', '🌱', '🌿', '🌳', '🛖', '🏠', '🏡', '🏰', '🏯', '🐻', '🪦', '⛪', '🕌', '💎', '💰'];
+  var EMOJI = ['', '🌱', '🌿', '🌳', '🛖', '🏠', '🏛️', '🏰', '🏯', '🐻', '🪦', '⛪', '🕌', '💎', '💰'];
   var NAME = ['empty', 'grass', 'bush', 'tree', 'hut', 'house', 'mansion', 'castle', 'grand castle', 'bear', 'tombstone', 'church', 'cathedral', 'crystal', 'treasure'];
   // code -> code it becomes when 3+ connect. Final tiers (8 grand castle, 12 cathedral), bear and crystal are absent.
   var NEXT = { 1: 2, 2: 3, 3: 4, 4: 5, 5: 6, 6: 7, 7: 8, 10: 11, 11: 12, 12: 14 };
