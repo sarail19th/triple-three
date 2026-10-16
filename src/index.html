@@ -42,6 +42,7 @@
       <button class="tool" data-tool="1" aria-label="Buy grass"><span class="te">🌱</span><span class="tp"></span></button>
       <button class="tool" data-tool="2" aria-label="Buy bush"><span class="te">🌿</span><span class="tp"></span></button>
       <button class="tool" data-tool="3" aria-label="Buy tree"><span class="te">🌳</span><span class="tp"></span></button>
+      <button class="tool" data-tool="trap" id="trapBtn" aria-pressed="false" aria-label="Bear trap: kill a bear instantly"><span class="te">🪤</span><span class="tp"></span></button>
       <button class="tool" data-tool="hammer" id="hammerBtn" aria-pressed="false" aria-label="Hammer: remove a placed item"><span class="te">🔨</span><span class="tp"></span></button>
     </section>
 
@@ -71,11 +72,11 @@
   <div class="card">
     <h2>How to play</h2>
     <ul>
-      <li>Tap an empty tile to <b>preview</b> the move (the result shows faintly, merged items are outlined), tap it again to place the item shown in <b>Place</b>. Turn <b>Preview</b> off to place with one tap.</li>
+      <li>On a computer, hover a tile to preview the move (the result shows faintly, merged items are outlined) and click to place the item shown in <b>Place</b>. On a touch screen, tap to preview and tap again to place. Turn <b>Preview</b> off to place with one tap.</li>
       <li>Connect <b>3 or more</b> identical items (up, down, left, right) and <i>all</i> of them merge into one of the next tier on the tile you tapped (4 or 5 pay more points and coins, nothing is left over):<br>🌱 → 🌿 → 🌳 → 🛖 → 🏠 → 🏡 → 🏰 → 🏯</li>
       <li>🐻 <b>Bears</b> wander one step each turn. Box one in so it cannot move and it becomes a 🪦. Three connected 🪦 merge into ⛪, three ⛪ into 🕌.</li>
       <li>💎 The <b>crystal</b> is a wildcard: it turns into whatever makes the best merge. If it cannot merge yet it waits, and merges as soon as a group of 3 is possible next to it.</li>
-      <li>🪙 <b>Coins</b> come from merges. Spend them in the shop: buy 🌱 🌿 🌳 as your current item (the old one moves to Next), or use the 🔨 hammer to remove any placed item. Shop actions are free.</li>
+      <li>🪙 <b>Coins</b> come from merges. Spend them in the shop: buy 🌱 🌿 🌳 as your current item (the old one moves to Next), or use the 🪤 <b>bear trap</b> to kill a bear on the spot (it turns into a 🪦), or the 🔨 hammer to remove any placed item. Shop actions are free.</li>
       <li>The <b>Reserve</b> tray (top left) stores the current item for later (free swap). <b>Undo</b> takes back your last move.</li>
       <li>The game ends when the board is full and you cannot afford a hammer.</li>
     </ul>

@@ -209,6 +209,46 @@ with sync_playwright() as p:
     page.wait_for_selector('#board .cell')
     resumed = check_consistent(page, 'resume')
     assert resumed['grid'] == mid['grid'] and resumed['turn'] == mid['turn'] and resumed['rng'] == mid['rng'], 'saved game resumes'
+    # ---- mouse: hover previews, ONE click places (touch needs preview + confirm, covered above)
+    def load(grid, **kw):
+        s = {'grid': grid, 'cur': 1, 'next': 2, 'hold': 0, 'score': 0, 'coins': 30, 'turn': 3, 'over': False, 'rng': 77, 'seed': 77, 'undo': None}
+        s.update(kw)
+        page.evaluate('s => localStorage.setItem("tt-save", JSON.stringify(s))', s)
+        page.goto(URL + '#')
+        page.reload()
+        page.wait_for_selector('#board .cell')
+
+    g = [0] * 36
+    g[13] = 1; g[15] = 1
+    load(g)
+    if page.get_attribute('#previewBtn', 'aria-pressed') != 'true': page.tap('#previewBtn')
+    page.hover('#board .cell[data-i="14"]')
+    assert page.locator('#board .cell.pv').count() == 1 and page.locator('#board .cell.eat').count() == 2, 'hover previews the merge'
+    assert state(page)['turn'] == 3
+    page.click('#board .cell[data-i="14"]')
+    after = check_consistent(page, 'mouse click')
+    assert after['turn'] == 4 and after['grid'][14] == 2, 'a single mouse click places (and merges)'
+
+    # ---- bear trap: kills a bear on the spot into a tombstone; mouse = one click, touch = preview + confirm
+    g = [0] * 36
+    g[14] = 9; g[8] = 10; g[9] = 10
+    load(g)
+    assert page.locator('#trapBtn').is_enabled()
+    page.tap('#trapBtn')
+    assert page.get_attribute('#trapBtn', 'aria-pressed') == 'true'
+    page.tap('#board .cell[data-i="0"]')  # not a bear: ignored
+    assert state(page)['grid'] == g
+    tap_cell(page, 14, True)
+    after = check_consistent(page, 'trap')
+    assert after['grid'][14] == 11 and after['grid'][8] == 0 and after['coins'] == 30 - 12 + 20 and after['turn'] == 3, 'trapped bear becomes a tombstone (here completing a church), free action'
+    assert page.get_attribute('#trapBtn', 'aria-pressed') == 'false' and page.locator('#trapBtn').is_disabled(), 'no bear left'
+    load(g)
+    page.tap('#trapBtn')
+    page.hover('#board .cell[data-i="14"]')
+    page.click('#board .cell[data-i="14"]')
+    after = check_consistent(page, 'trap by mouse')
+    assert after['grid'][14] == 11 and after['turn'] == 3
+
     # corrupt save is ignored, not crashed on
     page.evaluate("localStorage.setItem('tt-save', JSON.stringify({grid:[1,2,3]}))")
     page.reload()

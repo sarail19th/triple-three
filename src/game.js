@@ -10,7 +10,7 @@
   var boardEl = $('board'), fxEl = $('fx');
   var state, best = store.get('tt-best', 0), hints = false;
   var previewOn = store.get('tt-preview', true) !== false;
-  var sel = -1, hover = -1, hammerMode = false; // UI-only: selected tile awaiting confirmation, mouse hover, hammer armed
+  var sel = -1, hover = -1, mode = null, lastPointer = 'touch'; // UI-only: tile awaiting confirmation, mouse hover, armed tool ('hammer'|'trap'), last input type
   var cells = [];
 
   function seedFromHash() {
@@ -21,7 +21,7 @@
 
   function startNew(seed) {
     state = TT.newGame(seed || randomSeed());
-    sel = -1; hover = -1; hammerMode = false;
+    sel = -1; hover = -1; mode = null;
     $('overlay').classList.add('hidden');
     save();
     render([]);
@@ -44,6 +44,7 @@
     var e = document.createElement('span'); e.className = 'e'; el.appendChild(e);
     boardEl.appendChild(el); cells.push(el);
   }
+  boardEl.addEventListener('pointerdown', function (ev) { lastPointer = ev.pointerType || 'touch'; });
   boardEl.addEventListener('click', function (ev) {
     var t = ev.target.closest ? ev.target.closest('.cell') : null;
     if (t) tap(+t.dataset.i);
@@ -61,16 +62,24 @@
 
   function vibrate(ms) { if (navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } }
 
-  // First tap selects and previews (when Preview is on), a second tap on the same tile commits.
+  // Is idx a legal target for the armed tool (or for placement when none is armed)?
+  function targetOk(idx) {
+    var v = state.grid[idx];
+    return mode === 'hammer' ? v !== 0 : mode === 'trap' ? v === TT.BEAR : v === 0;
+  }
+  function doAction(idx) {
+    return mode === 'hammer' ? TT.hammer(state, idx) : mode === 'trap' ? TT.trap(state, idx) : TT.place(state, idx);
+  }
+
+  // Mouse: hover already showed the preview, so one click commits. Touch: the first tap selects and previews
+  // (when Preview is on), a second tap on the same tile commits.
   function tap(idx) {
     if (!state || state.over) return;
-    var occupied = state.grid[idx] !== 0;
-    if (hammerMode ? !occupied : occupied) { bump(idx); return; }
-    if (previewOn && sel !== idx) { sel = idx; hover = -1; updatePreview(); return; }
+    if (!targetOk(idx)) { bump(idx); return; }
+    if (previewOn && lastPointer !== 'mouse' && sel !== idx) { sel = idx; hover = -1; updatePreview(); return; }
     sel = -1;
-    var r;
-    if (hammerMode) { r = TT.hammer(state, idx); hammerMode = false; }
-    else r = TT.place(state, idx);
+    var r = doAction(idx);
+    mode = null;
     if (!r) { bump(idx); render([]); return; }
     state = r.state;
     save();
@@ -99,8 +108,8 @@
       c.classList.toggle('hint', hints && !state.over && TT.wouldMerge(state, i));
       c.setAttribute('aria-label', 'row ' + (((i / TT.W) | 0) + 1) + ' column ' + ((i % TT.W) + 1) + ' ' + TT.NAME[code]);
     });
-    if (sel >= 0 && (state.over || (hammerMode ? g[sel] === 0 : g[sel] !== 0))) sel = -1;
-    if (hammerMode && (state.over || state.coins < TT.PRICE.hammer)) hammerMode = false;
+    if (mode && (state.over || state.coins < TT.PRICE[mode])) mode = null;
+    if (sel >= 0 && (state.over || !targetOk(sel))) sel = -1;
     $('score').textContent = state.score;
     $('coins').textContent = state.coins;
     if (state.score > best) { best = state.score; store.set('tt-best', best); }
@@ -114,7 +123,10 @@
       var t = b.dataset.tool;
       if (t === 'hammer') {
         b.disabled = state.over || state.coins < TT.PRICE.hammer || TT.emptyCount(g) === TT.N;
-        b.setAttribute('aria-pressed', hammerMode);
+        b.setAttribute('aria-pressed', mode === 'hammer');
+      } else if (t === 'trap') {
+        b.disabled = state.over || state.coins < TT.PRICE.trap || g.indexOf(TT.BEAR) < 0;
+        b.setAttribute('aria-pressed', mode === 'trap');
       } else b.disabled = !TT.buy(state, +t);
     });
     $('turn').textContent = 'Turn ' + state.turn;
@@ -132,10 +144,18 @@
     });
     var note = '', hot = false, pi = sel >= 0 ? sel : (previewOn ? hover : -1), p;
     if (state.over) note = '';
-    else if (hammerMode) {
+    else if (mode === 'trap') {
+      if (pi >= 0 && state.grid[pi] === TT.BEAR) {
+        cells[pi].classList.add('target');
+        var tr = TT.trap(state, pi);
+        var res = tr ? tr.state.grid[pi] : TT.TOMB;
+        note = (sel === pi ? 'Tap again to trap' : 'Trap') + ' the bear -> ' + TT.NAME[res] + ' (-' + TT.PRICE.trap + ' coins)';
+        hot = sel === pi;
+      } else note = '🪤 Tap a bear to kill it';
+    } else if (mode === 'hammer') {
       if (pi >= 0 && state.grid[pi] !== 0) {
         cells[pi].classList.add('target');
-        note = (sel === pi ? 'Tap again to smash ' : 'Smash ') + TT.NAME[state.grid[pi]] + ' (-' + TT.PRICE.hammer + ' coins)';
+        note = (lastPointer !== 'mouse' && sel === pi ? 'Tap again to smash ' : 'Smash ') + TT.NAME[state.grid[pi]] + ' (-' + TT.PRICE.hammer + ' coins)';
         hot = sel === pi;
       } else note = '🔨 Tap an item to remove it';
     } else if (TT.emptyCount(state.grid) === 0) {
@@ -179,6 +199,10 @@
         c.classList.add('slide');
       } else if (ev.type === 'trapped') {
         cells[ev.at].classList.add('shake');
+      } else if (ev.type === 'trap') {
+        var tp = cellCenter(ev.at), tel = document.createElement('div');
+        tel.className = 'pts'; tel.textContent = '🪤 -' + TT.PRICE.trap + '🪙'; tel.style.left = tp.x + 'px'; tel.style.top = tp.y + 'px';
+        fxEl.appendChild(tel); cells[ev.at].classList.add('shake');
       } else if (ev.type === 'hammer') {
         var h = cellCenter(ev.at), hp = document.createElement('div');
         hp.className = 'pts'; hp.textContent = '🔨 -' + TT.PRICE.hammer + '🪙'; hp.style.left = h.x + 'px'; hp.style.top = h.y + 'px';
@@ -204,7 +228,7 @@
     var t = b.dataset.tool;
     b.querySelector('.tp').textContent = '🪙' + TT.PRICE[t];
     b.addEventListener('click', function () {
-      if (t === 'hammer') { hammerMode = !hammerMode; sel = -1; render([]); return; }
+      if (t === 'hammer' || t === 'trap') { mode = mode === t ? null : t; sel = -1; render([]); return; }
       var s = TT.buy(state, +t);
       if (s) { state = s; save(); render([]); }
     });

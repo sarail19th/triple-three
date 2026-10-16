@@ -20,7 +20,7 @@
   // coins: earned per merge (COIN[consumed code] * (group size - 2)), spent in the shop (free actions, no turn passes)
   var START_COINS = 10;
   var COIN = { 1: 2, 2: 4, 3: 8, 4: 16, 5: 30, 6: 60, 7: 120, 10: 20, 11: 100 };
-  var PRICE = { 1: 6, 2: 15, 3: 35, hammer: 20 };
+  var PRICE = { 1: 6, 2: 15, 3: 35, hammer: 20, trap: 12 };
   var BUYABLE = [1, 2, 3];
 
   // ---- seeded RNG (mulberry32). The state is one uint32 kept inside the game state, so undo/replay is exact.
@@ -176,6 +176,18 @@
     return { state: s, events: [{ type: 'hammer', at: idx, item: item }] };
   }
 
+  // Shop: the bear trap kills the bear on cell idx on the spot: it becomes a tombstone (which may merge into a church
+  // right away). Free action, costs coins. Returns {state, events} or null (no bear there, too poor, or it would
+  // leave a full board without hammer money).
+  function trap(state, idx) {
+    if (state.over || !(idx >= 0 && idx < N) || state.grid[idx] !== BEAR || state.coins < PRICE.trap) return null;
+    var s = clone(state), events = [{ type: 'trap', at: idx }];
+    s.coins -= PRICE.trap; s.grid[idx] = TOMB;
+    resolveAt(s, idx, events);
+    s.over = isOver(s);
+    return s.over ? null : { state: s, events: events };
+  }
+
   // What would placing the current item at idx do? Pure (no bear movement, no rng use). Returns null for an illegal move,
   // else {item, final (code left on idx), eaten (other cells emptied by merges), points, coins, merged}.
   function preview(state, idx) {
@@ -234,6 +246,6 @@
     START_COINS: START_COINS, COIN: COIN, PRICE: PRICE, BUYABLE: BUYABLE,
     rand: rand, drawItem: drawItem, newGame: newGame, neighbors: neighbors, group: group,
     place: place, swap: swap, undo: undo, validate: validate, wouldMerge: wouldMerge, emptyCount: emptyCount,
-    buy: buy, hammer: hammer, preview: preview, isOver: isOver
+    buy: buy, hammer: hammer, trap: trap, preview: preview, isOver: isOver
   };
 });

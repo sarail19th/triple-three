@@ -134,6 +134,19 @@ t('hammer removes an item for coins; empty cells and poor players are rejected',
   assert.strictEqual(TT.hammer(withGrid({ [I(1, 1)]: 1 }, { coins: TT.PRICE.hammer - 1 }), I(1, 1)), null);
 });
 
+t('trap: kills a bear instantly into a tombstone (chaining into a church), costs coins, needs a bear', () => {
+  const s = withGrid({ [I(2, 2)]: TT.BEAR, [I(2, 3)]: TT.TOMB, [I(2, 4)]: TT.TOMB, [I(5, 5)]: 1 }, { coins: 30 });
+  const r = TT.trap(s, I(2, 2));
+  assert.strictEqual(r.state.grid[I(2, 2)], 11, 'tomb trio becomes a church on the trapped cell');
+  assert.strictEqual(r.state.coins, 30 - TT.PRICE.trap + TT.COIN[10]);
+  assert.strictEqual(r.state.turn, s.turn, 'free action');
+  assert.deepStrictEqual(TT.validate(r.state), []);
+  const lone = TT.trap(withGrid({ [I(0, 0)]: TT.BEAR }, { coins: 30 }), I(0, 0));
+  assert.strictEqual(lone.state.grid[I(0, 0)], TT.TOMB);
+  assert.strictEqual(TT.trap(s, I(5, 5)), null, 'only bears');
+  assert.strictEqual(TT.trap(withGrid({ [I(0, 0)]: TT.BEAR }, { coins: TT.PRICE.trap - 1 }), I(0, 0)), null, 'too poor');
+});
+
 t('full board with enough coins is not game over: hammer makes room; poor + full = over', () => {
   const cells = {};
   for (let i = 0; i < 35; i++) cells[i] = ((i % 6) + ((i / 6) | 0)) % 2 ? 5 : 6;
