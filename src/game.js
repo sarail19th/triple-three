@@ -1,4 +1,4 @@
-// Triple Three UI. Relies on global TT (logic.js).
+// Three Bears UI. Relies on global TT (logic.js).
 (function () {
   'use strict';
   var $ = function (id) { return document.getElementById(id); };

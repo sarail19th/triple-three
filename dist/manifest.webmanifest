@@ -1,6 +1,6 @@
 {
-  "name": "Triple Three",
-  "short_name": "Triple Three",
+  "name": "เกมสามหมี",
+  "short_name": "เกมสามหมี",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

@@ -1,4 +1,4 @@
-"""Mobile-viewport end-to-end test for Triple Three (needs `pip install playwright` + `playwright install chromium`).
+"""Mobile-viewport end-to-end test for Three Bears (needs `pip install playwright` + `playwright install chromium`).
 
 Serves dist/ over http://localhost (so the service worker can register), then:
   - checks PWA bits (manifest, icons, service worker controls the page),
@@ -19,7 +19,7 @@ MAX_TURNS = 600  # safety cap: a full board must be reached long before this
 
 ap = argparse.ArgumentParser()
 ap.add_argument('--seed', type=int, default=20240607)
-ap.add_argument('--shots', default=os.path.join(tempfile.gettempdir(), 'triple-three-shots'))
+ap.add_argument('--shots', default=os.path.join(tempfile.gettempdir(), 'three-bears-shots'))
 args = ap.parse_args()
 os.makedirs(args.shots, exist_ok=True)
 
@@ -92,7 +92,7 @@ with sync_playwright() as p:
     # ---- load a reproducible game and check the PWA plumbing
     page.goto(URL + '#seed=12345')
     page.wait_for_selector('#board .cell')
-    assert page.title() == 'Triple Three'
+    assert page.title() == 'เกมสามหมี'
     assert page.locator('#board .cell').count() == 36
     assert page.locator('#help').is_visible(), 'help shows on first launch'
     page.click('#helpClose')

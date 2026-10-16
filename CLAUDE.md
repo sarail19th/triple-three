@@ -1,6 +1,6 @@
-# Triple Three (emoji)
+# เกมสามหมี (Three Bears, emoji)
 
-Single-file Triple Three clone: 6x6 board, place the "next" item, 3+ orthogonally connected identical items merge into the next tier on the tapped tile, bears wander and get trapped into tombstones -> churches. Plain HTML/CSS/JS, no framework, no runtime deps, installable PWA. Spec: `docs/TRIPLE_THREE_BRIEF.md`.
+Single-file merge-puzzle game (a free hobby project inspired by the classic genre, with its own name, code and emoji art): 6x6 board, place the "next" item, 3+ orthogonally connected identical items merge into the next tier on the tapped tile, bears wander and get trapped into tombstones -> churches. Plain HTML/CSS/JS, no framework, no runtime deps, installable PWA. Spec: `docs/GAME_BRIEF.md`.
 
 ## Layout
 - `src/logic.js` - pure game logic (UMD: `require` in Node, global `TT` in the browser). State is plain JSON: `{grid[36], cur, next, hold, score, coins, turn, over, rng, seed, undo}`. `place(state, idx)` -> `{state, events}` or `null`; `swap`, `undo`, `validate`, `wouldMerge`, `preview` (pure what-if for a placement), shop: `buy(state, item)` -> state, `hammer(state, idx)` and `trap(state, idx)` (kills a bear into a tombstone) -> `{state, events}` (both free actions, cost coins; prices/earnings in `PRICE`/`COIN`). Everything is deterministic from `seed` (mulberry32; its state lives in the game state so undo/replay is exact).

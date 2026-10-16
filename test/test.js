@@ -1,4 +1,4 @@
-// Logic tests for Triple Three. Run: node test/test.js
+// Logic tests for Three Bears. Run: node test/test.js
 const assert = require('assert');
 const TT = require('../src/logic.js');
 

@@ -1,4 +1,4 @@
-# Triple Three (emoji version) - build brief
+# Three Bears (เกมสามหมี) - build brief
 
 Single-file HTML game, (no framework, installable PWA, no image assets).
 
