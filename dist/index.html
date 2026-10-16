@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#14301f">
 <meta name="mobile-web-app-capable" content="yes">
-<title>เกมสามหมี</title>
+<title>Triple Three</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -151,7 +151,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     <button id="holdBtn" class="tray" aria-label="Reserve tray: tap to swap with the stored item">
       <small>Reserve</small><span class="emoji" id="holdItem"></span>
     </button>
-    <div class="brand">เกม<span>สามหมี</span></div>
+    <div class="brand">Triple <span>Three</span></div>
     <div class="stat"><small>Score</small><b id="score">0</b></div>
     <div class="stat"><small>Best</small><b id="best">0</b></div>
     <div class="stat coins"><small>Coins</small><b id="coins">0</b></div>
@@ -228,7 +228,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   </div>
 </div>
 
-<script>// Three Bears (emoji) - pure game logic. No DOM. States are plain JSON; every operation returns a new state.
+<script>// Triple Three (emoji) - pure game logic. No DOM. States are plain JSON; every operation returns a new state.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.TT = factory();
@@ -532,7 +532,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   };
 });
 </script>
-<script>// Three Bears UI. Relies on global TT (logic.js).
+<script>// Triple Three UI. Relies on global TT (logic.js).
 (function () {
   'use strict';
   var $ = function (id) { return document.getElementById(id); };

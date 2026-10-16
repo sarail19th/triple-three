@@ -1,4 +1,4 @@
-// Three Bears (emoji) - pure game logic. No DOM. States are plain JSON; every operation returns a new state.
+// Triple Three (emoji) - pure game logic. No DOM. States are plain JSON; every operation returns a new state.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.TT = factory();
