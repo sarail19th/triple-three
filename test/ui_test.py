@@ -1,0 +1,173 @@
+"""Mobile-viewport end-to-end test for Triple Three (needs `pip install playwright` + `playwright install chromium`).
+
+Serves dist/ over http://localhost (so the service worker can register), then:
+  - checks PWA bits (manifest, icons, service worker controls the page),
+  - plays random turns (swap / undo mixed in) on a seeded game, asserting after EVERY action that the game state
+    is valid and the DOM mirrors it,
+  - keeps playing until the board is full, checks the game-over screen, new game, and reload-resume.
+
+Usage: python test/ui_test.py [--seed N] [--shots DIR]
+"""
+import argparse, functools, http.server, json, os, random, sys, tempfile, threading
+from playwright.sync_api import sync_playwright
+
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+DIST = os.path.join(ROOT, 'dist')
+EMOJI = ['', '🌱', '🌿', '🌳', '🛖', '🏠', '🏡', '🏰', '🏯', '🐻', '🪦', '⛪', '🕌', '💎']
+MIN_TURNS = 50   # random turns that must be played
+MAX_TURNS = 600  # safety cap: a full board must be reached long before this
+
+ap = argparse.ArgumentParser()
+ap.add_argument('--seed', type=int, default=20240607)
+ap.add_argument('--shots', default=os.path.join(tempfile.gettempdir(), 'triple-three-shots'))
+args = ap.parse_args()
+os.makedirs(args.shots, exist_ok=True)
+
+if not os.path.exists(os.path.join(DIST, 'index.html')):
+    sys.exit('dist/index.html missing - run `node build.js` first')
+
+
+class Quiet(http.server.SimpleHTTPRequestHandler):
+    def log_message(self, *a):
+        pass
+
+
+server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), functools.partial(Quiet, directory=DIST))
+threading.Thread(target=server.serve_forever, daemon=True).start()
+URL = f'http://localhost:{server.server_address[1]}/index.html'
+
+rng = random.Random(args.seed)
+
+
+def state(page):
+    return page.evaluate('window.ttDebug.state()')
+
+
+def check_consistent(page, where):
+    """Logic state is valid and the DOM shows exactly that state."""
+    st = state(page)
+    problems = page.evaluate('window.ttDebug.validate()')
+    assert problems == [], f'{where}: invalid state {problems}'
+    dom = page.evaluate("""() => ({
+        cells: [...document.querySelectorAll('#board .cell')].map(c => c.textContent),
+        score: document.getElementById('score').textContent,
+        cur: document.getElementById('curItem').textContent,
+        next: document.getElementById('nextItem').textContent,
+        hold: document.getElementById('holdItem').textContent,
+        undoDisabled: document.getElementById('undoBtn').disabled })""")
+    assert len(dom['cells']) == 36, f'{where}: board must have 36 cells'
+    assert dom['cells'] == [EMOJI[v] for v in st['grid']], f'{where}: DOM board differs from state'
+    assert dom['score'] == str(st['score']), f'{where}: score text'
+    assert dom['cur'] == EMOJI[st['cur']] and dom['next'] == EMOJI[st['next']], f'{where}: queue display'
+    assert dom['hold'] == (EMOJI[st['hold']] if st['hold'] else '·'), f'{where}: hold display'
+    assert dom['undoDisabled'] == (st['undo'] is None), f'{where}: undo button state'
+    return st
+
+
+with sync_playwright() as p:
+    browser = p.chromium.launch()
+    ctx = browser.new_context(viewport={'width': 412, 'height': 860}, device_scale_factor=2, has_touch=True, is_mobile=True)
+    page = ctx.new_page()
+    errors = []
+    page.on('pageerror', lambda e: errors.append(str(e)))
+    page.on('console', lambda m: errors.append(m.text) if m.type == 'error' else None)
+    page.on('dialog', lambda d: d.accept())
+
+    # ---- load a reproducible game and check the PWA plumbing
+    page.goto(URL + '#seed=12345')
+    page.wait_for_selector('#board .cell')
+    assert page.title() == 'Triple Three'
+    assert page.locator('#board .cell').count() == 36
+    assert page.locator('#help').is_visible(), 'help shows on first launch'
+    page.click('#helpClose')
+    assert page.locator('#help').is_hidden()
+    page.evaluate('navigator.serviceWorker.ready')
+    page.reload()
+    page.wait_for_selector('#board .cell')
+    assert page.evaluate('navigator.serviceWorker.controller !== null'), 'service worker should control the page after reload'
+    manifest = page.evaluate("fetch('manifest.webmanifest').then(r => r.json())")
+    assert manifest['display'] == 'standalone' and manifest['start_url'] == './'
+    for icon in manifest['icons']:
+        ok = page.evaluate("src => fetch(src).then(r => r.ok && r.headers.get('content-type'))", icon['src'])
+        assert ok and 'png' in ok, f"icon {icon['src']} not served as png ({ok})"
+    assert page.evaluate("document.querySelector('link[rel=manifest]') !== null")
+    # no horizontal overflow on a phone
+    assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), 'horizontal scroll on mobile'
+    st = check_consistent(page, 'initial')
+    assert st['turn'] == 0 and st['seed'] == 12345 and st['grid'] == [0] * 36
+    assert page.locator('#undoBtn').is_disabled()
+    page.screenshot(path=os.path.join(args.shots, '1_start.png'))
+
+    # ---- play random turns until game over
+    turns = swaps = undos = merges = pops = 0
+    prev = st
+    while not state(page)['over']:
+        assert turns < MAX_TURNS, f'no game over after {MAX_TURNS} turns'
+        st = state(page)
+        roll = rng.random()
+        if roll < 0.06:
+            page.tap('#holdBtn'); swaps += 1
+            after = check_consistent(page, f'swap@{turns}')
+            assert after['turn'] == st['turn'], 'swap must be free'
+            assert sorted([after['cur'], after['hold']]) == sorted([st['cur'], st['hold']]) or st['hold'] == 0, 'swap exchanges items'
+            continue
+        if roll < 0.10 and st['undo'] is not None and not page.locator('#undoBtn').is_disabled():
+            before_turn = st['turn']
+            page.tap('#undoBtn'); undos += 1
+            after = check_consistent(page, f'undo@{turns}')
+            assert after['turn'] == before_turn - 1, 'undo reverts one turn'
+            assert after['undo'] is None and page.locator('#undoBtn').is_disabled(), 'single-level undo'
+            continue
+        empties = [i for i, v in enumerate(st['grid']) if v == 0]
+        idx = rng.choice(empties)
+        page.tap(f'#board .cell[data-i="{idx}"]')
+        turns += 1
+        after = check_consistent(page, f'turn {turns}')
+        assert after['turn'] == st['turn'] + 1, 'a tap on an empty tile plays exactly one turn'
+        if after['score'] > st['score']:
+            merges += 1
+            if page.locator('#board .cell.pop').count(): pops += 1
+        if turns == 8: page.screenshot(path=os.path.join(args.shots, '2_midgame.png'))
+        # tapping an occupied tile must be a no-op
+        occ = [i for i, v in enumerate(after['grid']) if v != 0]
+        if occ and not after['over'] and rng.random() < 0.15:
+            page.tap(f'#board .cell[data-i="{rng.choice(occ)}"]')
+            same = state(page)
+            assert same['grid'] == after['grid'] and same['turn'] == after['turn'], 'tapping an occupied tile must do nothing'
+
+    final = check_consistent(page, 'final')
+    assert final['over'] and 0 not in final['grid'], 'game over means a full board'
+    assert turns >= MIN_TURNS, f'only {turns} random turns before game over (want >= {MIN_TURNS})'
+    assert page.locator('#overlay').is_visible(), 'game-over overlay'
+    assert str(final['score']) in page.inner_text('#overText')
+    best = page.evaluate("JSON.parse(localStorage.getItem('tt-best'))")
+    assert best >= final['score'], 'best score persisted'
+    page.screenshot(path=os.path.join(args.shots, '3_gameover.png'))
+    # a move after game over must be impossible
+    page.evaluate("document.getElementById('overlay').classList.add('hidden')")
+    page.tap('#board .cell[data-i="0"]')
+    assert state(page)['turn'] == final['turn'], 'no moves after game over'
+    page.evaluate("document.getElementById('overlay').classList.remove('hidden')")
+
+    # ---- new game and reload resume
+    page.tap('#againBtn')
+    fresh = check_consistent(page, 'new game')
+    assert fresh['turn'] == 0 and fresh['grid'] == [0] * 36 and not fresh['over'] and page.locator('#overlay').is_hidden()
+    page.tap('#board .cell[data-i="14"]')
+    mid = check_consistent(page, 'one move')
+    page.goto(URL)  # no seed in hash -> resume saved game
+    page.wait_for_selector('#board .cell')
+    resumed = check_consistent(page, 'resume')
+    assert resumed['grid'] == mid['grid'] and resumed['turn'] == mid['turn'] and resumed['rng'] == mid['rng'], 'saved game resumes'
+    # corrupt save is ignored, not crashed on
+    page.evaluate("localStorage.setItem('tt-save', JSON.stringify({grid:[1,2,3]}))")
+    page.reload()
+    page.wait_for_selector('#board .cell')
+    assert check_consistent(page, 'corrupt save')['turn'] == 0
+
+    assert not errors, f'console errors: {errors}'
+    browser.close()
+
+print(f'OK: random game reached game over after {turns} turns (+{swaps} swaps, {undos} undos, {merges} scoring turns, '
+      f'{pops} with pop animation), final score {final["score"]}')
+server.shutdown()

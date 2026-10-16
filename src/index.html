@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#14301f">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Triple Three</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>/*INLINE_CSS*/</style>
+</head>
+<body>
+<main id="app">
+  <header class="hud">
+    <div class="brand">Triple <span>Town</span></div>
+    <div class="stat"><small>Score</small><b id="score">0</b></div>
+    <div class="stat"><small>Best</small><b id="best">0</b></div>
+  </header>
+
+  <div id="boardWrap">
+    <div id="board" role="grid" aria-label="Game board"></div>
+    <div id="fx" aria-hidden="true"></div>
+  </div>
+
+  <section class="panel">
+    <button id="holdBtn" class="slot" aria-label="Swap with stored item">
+      <small>Swap</small><span class="emoji" id="holdItem"></span>
+    </button>
+    <div class="slot current" aria-live="polite">
+      <small>Place</small><span class="emoji" id="curItem"></span><em id="curName"></em>
+    </div>
+    <div class="slot next"><small>Next</small><span class="emoji" id="nextItem"></span></div>
+    <div class="actions">
+      <button id="undoBtn" class="btn" aria-label="Undo last move">↶ Undo</button>
+      <button id="hintBtn" class="btn" aria-pressed="false" aria-label="Toggle merge hints">💡 Hints</button>
+      <button id="newBtn" class="btn" aria-label="New game">⟳ New</button>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span id="turn">Turn 0</span> · <span id="seed">seed</span> ·
+    <a href="#" id="helpLink">How to play</a>
+  </footer>
+</main>
+
+<div id="overlay" class="overlay hidden" role="dialog" aria-modal="true">
+  <div class="card" id="overCard">
+    <h2 id="overTitle">Town full!</h2>
+    <p id="overText"></p>
+    <button id="againBtn" class="btn primary">Play again</button>
+  </div>
+</div>
+
+<div id="help" class="overlay hidden" role="dialog" aria-modal="true">
+  <div class="card">
+    <h2>How to play</h2>
+    <ul>
+      <li>Tap an empty tile to place the item shown in <b>Place</b>.</li>
+      <li>Connect <b>3 or more</b> identical items (up, down, left, right) and they merge into the next tier on the tile you tapped:<br>🌱 → 🌿 → 🌳 → 🛖 → 🏠 → 🏡 → 🏰 → 🏯</li>
+      <li>🐻 <b>Bears</b> wander one step each turn. Box one in so it cannot move and it becomes a 🪦. Three connected 🪦 merge into ⛪, three ⛪ into 🕌.</li>
+      <li>💎 The <b>crystal</b> becomes whatever item makes the best merge where you drop it.</li>
+      <li><b>Swap</b> stores the current item for later (free). <b>Undo</b> takes back your last move.</li>
+      <li>The game ends when the board is full.</li>
+    </ul>
+    <button id="helpClose" class="btn primary">Got it</button>
+  </div>
+</div>
+
+<script>/*INLINE_LOGIC*/</script>
+<script>/*INLINE_GAME*/</script>
+</body>
+</html>

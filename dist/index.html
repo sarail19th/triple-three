@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#14301f">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Triple Three</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>:root {
+  --bg: #0f2418; --bg2: #14301f; --ink: #eaf6e6; --muted: #8fb39a; --accent: #ffd45a;
+  --t1: #5f9f55; --t2: #6aae5f; --bs: min(94vw, calc(100dvh - 306px), 470px);
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; background: radial-gradient(circle at 50% 0, var(--bg2), var(--bg)); color: var(--ink);
+  font: 15px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overscroll-behavior: none; user-select: none; -webkit-user-select: none; }
+body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+#app { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 10px 0 8px; min-height: 100%; }
+.hidden { display: none !important; }
+
+.hud { width: var(--bs); display: flex; align-items: center; gap: 10px; }
+.brand { flex: 1; font-size: 22px; font-weight: 800; letter-spacing: .3px; }
+.brand span { color: var(--accent); }
+.stat { text-align: right; min-width: 64px; }
+.stat small { display: block; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .8px; }
+.stat b { font-size: 20px; font-variant-numeric: tabular-nums; }
+
+#boardWrap { position: relative; width: var(--bs); height: var(--bs); }
+#board { width: 100%; height: 100%; display: grid; grid-template: repeat(6, 1fr) / repeat(6, 1fr); gap: 4px; padding: 6px;
+  background: #0b1a11; border-radius: 16px; box-shadow: 0 8px 28px #0008, inset 0 0 0 2px #1d4a30; touch-action: manipulation; }
+.cell { position: relative; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+  font-size: calc(var(--bs) / 6 * .58); line-height: 1; cursor: pointer; background: var(--t1);
+  box-shadow: inset 0 -3px 0 #0003, inset 0 2px 0 #fff2; transition: background .2s; }
+.cell.alt { background: var(--t2); }
+/* tinted tiles by content */
+.cell[data-c="2"], .cell[data-c="3"] { background: #4e8f4a; }
+.cell[data-c="4"], .cell[data-c="5"], .cell[data-c="6"], .cell[data-c="7"], .cell[data-c="8"] { background: #b58d5a; }
+.cell[data-c="9"] { background: #7a5236; }
+.cell[data-c="10"] { background: #666e78; }
+.cell[data-c="11"], .cell[data-c="12"] { background: #8a78b8; }
+.cell[data-c="13"] { background: #4a8fb8; }
+.cell.empty:active { filter: brightness(1.25); }
+.cell.hint::after { content: ""; position: absolute; inset: 30%; border-radius: 50%; background: var(--accent); opacity: .85; box-shadow: 0 0 10px var(--accent); }
+.cell .e { display: block; pointer-events: none; }
+
+/* animations (cells are not scaled as layout; only the inner emoji is) */
+.cell.drop .e { animation: drop .22s ease-out; }
+.cell.pop .e { animation: pop .38s cubic-bezier(.2, 1.6, .4, 1); }
+.cell.shake { animation: shake .45s; }
+.cell.slide .e { animation: slide .28s ease-out; }
+@keyframes drop { from { transform: translateY(-60%) scale(.5); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes pop { 0% { transform: scale(.4); } 60% { transform: scale(1.35); } 100% { transform: scale(1); } }
+@keyframes shake { 0%, 100% { transform: translateX(0); } 15% { transform: translateX(-7px) rotate(-4deg); } 35% { transform: translateX(7px) rotate(4deg); }
+  55% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+@keyframes slide { from { transform: translate(var(--dx), var(--dy)); } to { transform: none; } }
+
+#fx { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+.ghost { position: absolute; display: flex; align-items: center; justify-content: center; font-size: calc(var(--bs) / 6 * .58);
+  animation: fly .3s ease-in forwards; }
+@keyframes fly { to { transform: translate(var(--dx), var(--dy)); opacity: 0; } }
+.pts { position: absolute; font-weight: 800; color: var(--accent); text-shadow: 0 2px 4px #000a; transform: translate(-50%, -50%);
+  animation: rise .9s ease-out forwards; font-size: 16px; }
+@keyframes rise { to { transform: translate(-50%, -190%); opacity: 0; } }
+
+.panel { width: var(--bs); display: grid; grid-template-columns: 1fr 1.5fr 1fr; gap: 8px; }
+.slot { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 98px;
+  background: #0b1a11; border: 2px solid #1d4a30; border-radius: 14px; color: inherit; font: inherit; padding: 4px; }
+.slot small { position: absolute; top: 4px; left: 8px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .8px; }
+.slot .emoji { font-size: 38px; line-height: 1; margin-top: 10px; min-height: 38px; }
+.slot em { position: absolute; bottom: 3px; font-style: normal; font-size: 11px; color: var(--muted); }
+.slot.current { border-color: var(--accent); }
+.slot.current .emoji { font-size: 44px; margin-top: 6px; }
+.slot.next { opacity: .85; }
+.slot.next .emoji { font-size: 30px; }
+button.slot { cursor: pointer; }
+button.slot:active { filter: brightness(1.3); }
+.actions { grid-column: 1 / -1; display: flex; gap: 8px; }
+.btn { flex: 1; padding: 12px 8px; border-radius: 12px; border: 2px solid #1d4a30; background: #153322; color: var(--ink); font: 600 15px inherit; cursor: pointer; }
+.btn:active:not(:disabled) { filter: brightness(1.3); }
+.btn:disabled { opacity: .4; }
+.btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.btn.primary { background: var(--accent); color: #2b2100; border-color: var(--accent); }
+
+.foot { color: var(--muted); font-size: 12px; }
+.foot a { color: var(--muted); }
+
+.overlay { position: fixed; inset: 0; background: #000b; display: flex; align-items: center; justify-content: center; z-index: 10; padding: 16px; }
+.card { background: #14301f; border: 2px solid var(--accent); border-radius: 18px; padding: 20px; max-width: 380px; width: 100%; text-align: center; }
+.card h2 { margin: 0 0 8px; font-size: 24px; }
+.card ul { text-align: left; padding-left: 18px; margin: 0 0 14px; }
+.card li { margin-bottom: 8px; }
+.card p { margin: 0 0 14px; font-size: 17px; }
+.card .btn { width: 100%; }
+@media (prefers-reduced-motion: reduce) { .cell .e, .cell, .ghost, .pts { animation-duration: .01s !important; } }
+</style>
+</head>
+<body>
+<main id="app">
+  <header class="hud">
+    <div class="brand">Triple <span>Town</span></div>
+    <div class="stat"><small>Score</small><b id="score">0</b></div>
+    <div class="stat"><small>Best</small><b id="best">0</b></div>
+  </header>
+
+  <div id="boardWrap">
+    <div id="board" role="grid" aria-label="Game board"></div>
+    <div id="fx" aria-hidden="true"></div>
+  </div>
+
+  <section class="panel">
+    <button id="holdBtn" class="slot" aria-label="Swap with stored item">
+      <small>Swap</small><span class="emoji" id="holdItem"></span>
+    </button>
+    <div class="slot current" aria-live="polite">
+      <small>Place</small><span class="emoji" id="curItem"></span><em id="curName"></em>
+    </div>
+    <div class="slot next"><small>Next</small><span class="emoji" id="nextItem"></span></div>
+    <div class="actions">
+      <button id="undoBtn" class="btn" aria-label="Undo last move">↶ Undo</button>
+      <button id="hintBtn" class="btn" aria-pressed="false" aria-label="Toggle merge hints">💡 Hints</button>
+      <button id="newBtn" class="btn" aria-label="New game">⟳ New</button>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span id="turn">Turn 0</span> · <span id="seed">seed</span> ·
+    <a href="#" id="helpLink">How to play</a>
+  </footer>
+</main>
+
+<div id="overlay" class="overlay hidden" role="dialog" aria-modal="true">
+  <div class="card" id="overCard">
+    <h2 id="overTitle">Town full!</h2>
+    <p id="overText"></p>
+    <button id="againBtn" class="btn primary">Play again</button>
+  </div>
+</div>
+
+<div id="help" class="overlay hidden" role="dialog" aria-modal="true">
+  <div class="card">
+    <h2>How to play</h2>
+    <ul>
+      <li>Tap an empty tile to place the item shown in <b>Place</b>.</li>
+      <li>Connect <b>3 or more</b> identical items (up, down, left, right) and they merge into the next tier on the tile you tapped:<br>🌱 → 🌿 → 🌳 → 🛖 → 🏠 → 🏡 → 🏰 → 🏯</li>
+      <li>🐻 <b>Bears</b> wander one step each turn. Box one in so it cannot move and it becomes a 🪦. Three connected 🪦 merge into ⛪, three ⛪ into 🕌.</li>
+      <li>💎 The <b>crystal</b> becomes whatever item makes the best merge where you drop it.</li>
+      <li><b>Swap</b> stores the current item for later (free). <b>Undo</b> takes back your last move.</li>
+      <li>The game ends when the board is full.</li>
+    </ul>
+    <button id="helpClose" class="btn primary">Got it</button>
+  </div>
+</div>
+
+<script>// Triple Three (emoji) - pure game logic. No DOM. States are plain JSON; every operation returns a new state.
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.TT = factory();
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+  var W = 6, H = 6, N = W * H;
+
+  // Cell / item codes. 0 empty. 1..8 building chain. 9 bear, 10 tombstone, 11 church, 12 cathedral, 13 crystal.
+  var EMPTY = 0, BEAR = 9, TOMB = 10, CRYSTAL = 13;
+  var EMOJI = ['', '🌱', '🌿', '🌳', '🛖', '🏠', '🏡', '🏰', '🏯', '🐻', '🪦', '⛪', '🕌', '💎'];
+  var NAME = ['empty', 'grass', 'bush', 'tree', 'hut', 'house', 'mansion', 'castle', 'grand castle', 'bear', 'tombstone', 'church', 'cathedral', 'crystal'];
+  // code -> code it becomes when 3+ connect. Final tiers (8 grand castle, 12 cathedral), bear and crystal are absent.
+  var NEXT = { 1: 2, 2: 3, 3: 4, 4: 5, 5: 6, 6: 7, 7: 8, 10: 11, 11: 12 };
+  // points per item consumed by a merge, keyed by the consumed code
+  var BASE = { 1: 10, 2: 30, 3: 90, 4: 270, 5: 810, 6: 2430, 7: 7290, 10: 150, 11: 1500 };
+  // item queue draw weights (sum 100): mostly grass, sometimes bush/tree/bear, rare crystal
+  var WEIGHTS = [[1, 62], [2, 16], [3, 6], [BEAR, 12], [CRYSTAL, 4]];
+  var QUEUE_ITEMS = [1, 2, 3, BEAR, CRYSTAL];
+
+  // ---- seeded RNG (mulberry32). The state is one uint32 kept inside the game state, so undo/replay is exact.
+  function rand(s) {
+    s.rng = (s.rng + 0x6D2B79F5) >>> 0;
+    var t = s.rng;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+  function randInt(s, n) { return Math.floor(rand(s) * n); }
+  function drawItem(s) {
+    var r = randInt(s, 100), acc = 0;
+    for (var i = 0; i < WEIGHTS.length; i++) { acc += WEIGHTS[i][1]; if (r < acc) return WEIGHTS[i][0]; }
+    return 1;
+  }
+
+  function clone(s) {
+    return { grid: s.grid.slice(), cur: s.cur, next: s.next, hold: s.hold, score: s.score, turn: s.turn,
+      over: s.over, rng: s.rng, seed: s.seed, undo: s.undo };
+  }
+
+  function newGame(seed) {
+    seed = (seed >>> 0) || 1;
+    var s = { grid: new Array(N).fill(EMPTY), cur: 1, next: 1, hold: 0, score: 0, turn: 0, over: false, rng: seed, seed: seed, undo: null };
+    s.next = drawItem(s); // always open with grass
+    return s;
+  }
+
+  function neighbors(i) {
+    var r = (i / W) | 0, c = i % W, out = [];
+    if (r > 0) out.push(i - W);
+    if (c > 0) out.push(i - 1);
+    if (c < W - 1) out.push(i + 1);
+    if (r < H - 1) out.push(i + W);
+    return out;
+  }
+
+  // flood fill over orthogonally connected cells holding `code`, starting at `start`
+  function group(grid, start, code) {
+    var seen = {}, stack = [start], out = [];
+    seen[start] = true;
+    while (stack.length) {
+      var i = stack.pop(); out.push(i);
+      var nb = neighbors(i);
+      for (var k = 0; k < nb.length; k++) {
+        var j = nb[k];
+        if (!seen[j] && grid[j] === code) { seen[j] = true; stack.push(j); }
+      }
+    }
+    return out;
+  }
+
+  // Resolve merges triggered at cell `at`, chaining while the result keeps matching. Mutates s.
+  function resolveAt(s, at, events) {
+    for (;;) {
+      var code = s.grid[at];
+      if (!NEXT[code]) return;
+      var g = group(s.grid, at, code);
+      if (g.length < 3) return;
+      var pts = g.length * BASE[code];
+      for (var k = 0; k < g.length; k++) s.grid[g[k]] = EMPTY;
+      s.grid[at] = NEXT[code];
+      s.score += pts;
+      events.push({ type: 'merge', at: at, cells: g, from: code, to: NEXT[code], points: pts });
+    }
+  }
+
+  // The crystal becomes the highest building tier that forms a 3+ group here; otherwise it stays as an inert item.
+  function placeCrystal(s, at, events) {
+    for (var t = 7; t >= 1; t--) {
+      s.grid[at] = t;
+      if (group(s.grid, at, t).length >= 3) { events.push({ type: 'crystal', at: at, as: t }); resolveAt(s, at, events); return; }
+    }
+    s.grid[at] = CRYSTAL;
+  }
+
+  // Each bear takes one random step into an empty neighbour; a bear with none is trapped and becomes a tombstone.
+  function moveBears(s, events) {
+    var bears = [], trapped = [], i;
+    for (i = 0; i < N; i++) if (s.grid[i] === BEAR) bears.push(i);
+    bears.forEach(function (from) {
+      var free = neighbors(from).filter(function (j) { return s.grid[j] === EMPTY; });
+      if (!free.length) { s.grid[from] = TOMB; trapped.push(from); events.push({ type: 'trapped', at: from }); return; }
+      var to = free[randInt(s, free.length)];
+      s.grid[from] = EMPTY; s.grid[to] = BEAR;
+      events.push({ type: 'bear', from: from, to: to });
+    });
+    trapped.forEach(function (at) { if (s.grid[at] === TOMB) resolveAt(s, at, events); });
+  }
+
+  function emptyCount(grid) { var n = 0; for (var i = 0; i < N; i++) if (grid[i] === EMPTY) n++; return n; }
+
+  // Play one turn: put s.cur on empty cell idx. Returns {state, events}, or null if the move is illegal.
+  function place(state, idx) {
+    if (state.over || !(idx >= 0 && idx < N) || state.grid[idx] !== EMPTY) return null;
+    var s = clone(state), events = [], item = s.cur;
+    s.undo = clone(state); s.undo.undo = null; // one level of undo, no nesting
+    events.push({ type: 'place', at: idx, item: item });
+    if (item === CRYSTAL) placeCrystal(s, idx, events);
+    else { s.grid[idx] = item; resolveAt(s, idx, events); }
+    moveBears(s, events);
+    s.cur = s.next; s.next = drawItem(s); s.turn++;
+    if (emptyCount(s.grid) === 0) { s.over = true; events.push({ type: 'over', score: s.score }); }
+    return { state: s, events: events };
+  }
+
+  // Swap the current item with the storage slot (free action). Empty slot: store it and advance the queue.
+  function swap(state) {
+    if (state.over) return null;
+    var s = clone(state);
+    if (!s.hold) { s.hold = s.cur; s.cur = s.next; s.next = drawItem(s); }
+    else { var t = s.cur; s.cur = s.hold; s.hold = t; }
+    return s;
+  }
+
+  // Revert the last placement (one level, including any swap made since). Returns null if there is nothing to undo.
+  function undo(state) {
+    if (!state.undo) return null;
+    var s = clone(state.undo);
+    s.undo = null;
+    return s;
+  }
+
+  // Returns a list of problems (empty = valid). Used by tests and before restoring a saved game.
+  function validate(s) {
+    var p = [], i;
+    if (!s || !Array.isArray(s.grid) || s.grid.length !== N) return ['bad grid'];
+    for (i = 0; i < N; i++) {
+      var v = s.grid[i];
+      if (v !== (v | 0) || v < 0 || v > CRYSTAL) p.push('bad code at ' + i + ': ' + v);
+    }
+    if (p.length) return p;
+    if (QUEUE_ITEMS.indexOf(s.cur) < 0) p.push('bad current item ' + s.cur);
+    if (QUEUE_ITEMS.indexOf(s.next) < 0) p.push('bad next item ' + s.next);
+    if (s.hold && QUEUE_ITEMS.indexOf(s.hold) < 0) p.push('bad hold ' + s.hold);
+    if (typeof s.score !== 'number' || s.score < 0 || s.score !== (s.score | 0)) p.push('bad score ' + s.score);
+    if (s.over !== (emptyCount(s.grid) === 0)) p.push('over flag inconsistent with grid');
+    // after a resolved turn no mergeable group of 3+ may remain
+    var seen = {};
+    for (i = 0; i < N; i++) {
+      var c = s.grid[i];
+      if (NEXT[c] && !seen[i]) {
+        var g = group(s.grid, i, c);
+        g.forEach(function (k) { seen[k] = true; });
+        if (g.length >= 3) p.push('unmerged group of ' + NAME[c] + ' at ' + i);
+      }
+    }
+    return p;
+  }
+
+  // Would placing the current item at idx trigger a merge? (for the tap hint). Does not mutate.
+  function wouldMerge(state, idx) {
+    if (state.grid[idx] !== EMPTY) return false;
+    var item = state.cur, g = state.grid.slice(), t;
+    if (item === CRYSTAL) {
+      for (t = 7; t >= 1; t--) { g[idx] = t; if (group(g, idx, t).length >= 3) return true; }
+      return false;
+    }
+    if (!NEXT[item]) return false;
+    g[idx] = item;
+    return group(g, idx, item).length >= 3;
+  }
+
+  return {
+    W: W, H: H, N: N, EMPTY: EMPTY, BEAR: BEAR, TOMB: TOMB, CRYSTAL: CRYSTAL,
+    EMOJI: EMOJI, NAME: NAME, NEXT: NEXT, BASE: BASE, WEIGHTS: WEIGHTS,
+    rand: rand, drawItem: drawItem, newGame: newGame, neighbors: neighbors, group: group,
+    place: place, swap: swap, undo: undo, validate: validate, wouldMerge: wouldMerge, emptyCount: emptyCount
+  };
+});
+</script>
+<script>// Triple Three UI. Relies on global TT (logic.js).
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var store = {
+    get: function (k, d) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+    set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  };
+
+  var boardEl = $('board'), fxEl = $('fx');
+  var state, best = store.get('tt-best', 0), hints = false;
+  var cells = [];
+
+  function seedFromHash() {
+    var m = /seed=(\d+)/.exec(location.hash);
+    return m ? (parseInt(m[1], 10) >>> 0) || 1 : 0;
+  }
+  function randomSeed() { return ((Math.random() * 4294967295) >>> 0) || 1; }
+
+  function startNew(seed) {
+    state = TT.newGame(seed || randomSeed());
+    $('overlay').classList.add('hidden');
+    save();
+    render([]);
+  }
+  function save() { store.set('tt-save', state); }
+
+  function loadSaved() {
+    var s = store.get('tt-save', null);
+    try { if (s && TT.validate(s).length === 0 && typeof s.rng === 'number') return s; } catch (e) {}
+    return null;
+  }
+
+  // ---- board construction
+  for (var i = 0; i < TT.N; i++) {
+    var el = document.createElement('div');
+    el.className = 'cell empty' + (((i % TT.W) + ((i / TT.W) | 0)) % 2 ? ' alt' : '');
+    el.dataset.i = i; el.dataset.c = 0; el.setAttribute('role', 'gridcell');
+    var e = document.createElement('span'); e.className = 'e'; el.appendChild(e);
+    boardEl.appendChild(el); cells.push(el);
+  }
+  boardEl.addEventListener('click', function (ev) {
+    var t = ev.target.closest ? ev.target.closest('.cell') : null;
+    if (t) tap(+t.dataset.i);
+  });
+
+  function tap(idx) {
+    if (!state || state.over) return;
+    var r = TT.place(state, idx);
+    if (!r) { bump(idx); return; }
+    state = r.state;
+    save();
+    render(r.events);
+    if (navigator.vibrate) { try { navigator.vibrate(r.events.some(function (e) { return e.type === 'merge'; }) ? 25 : 8); } catch (e) {} }
+  }
+  function bump(idx) { var c = cells[idx]; c.classList.remove('shake'); void c.offsetWidth; c.classList.add('shake'); }
+
+  // ---- rendering
+  function cellCenter(idx) {
+    var c = cells[idx], b = fxEl.getBoundingClientRect(), r = c.getBoundingClientRect();
+    return { x: r.left - b.left + r.width / 2, y: r.top - b.top + r.height / 2, w: r.width, h: r.height };
+  }
+  function clearAnim() {
+    cells.forEach(function (c) { c.classList.remove('drop', 'pop', 'shake', 'slide'); });
+  }
+
+  function render(events) {
+    clearAnim();
+    var g = state.grid;
+    cells.forEach(function (c, i) {
+      var code = g[i];
+      c.dataset.c = code;
+      c.firstChild.textContent = TT.EMOJI[code];
+      c.classList.toggle('empty', code === 0);
+      c.classList.toggle('hint', hints && !state.over && TT.wouldMerge(state, i));
+      c.setAttribute('aria-label', 'row ' + (((i / TT.W) | 0) + 1) + ' column ' + ((i % TT.W) + 1) + ' ' + TT.NAME[code]);
+    });
+    $('score').textContent = state.score;
+    if (state.score > best) { best = state.score; store.set('tt-best', best); }
+    $('best').textContent = best;
+    $('curItem').textContent = TT.EMOJI[state.cur];
+    $('curName').textContent = TT.NAME[state.cur];
+    $('nextItem').textContent = TT.EMOJI[state.next];
+    $('holdItem').textContent = state.hold ? TT.EMOJI[state.hold] : '·';
+    $('undoBtn').disabled = !state.undo;
+    $('turn').textContent = 'Turn ' + state.turn;
+    $('seed').textContent = 'seed ' + state.seed;
+    animate(events);
+    if (state.over) showOver();
+  }
+
+  function animate(events) {
+    fxEl.textContent = '';
+    void boardEl.offsetWidth; // reflow so restarted animations play
+    events.forEach(function (ev) {
+      if (ev.type === 'place') cells[ev.at].classList.add('drop');
+      else if (ev.type === 'merge') {
+        var to = cellCenter(ev.at);
+        cells[ev.at].classList.remove('drop'); cells[ev.at].classList.add('pop');
+        ev.cells.forEach(function (ci) {
+          if (ci === ev.at) return;
+          var f = cellCenter(ci), gh = document.createElement('div');
+          gh.className = 'ghost'; gh.textContent = TT.EMOJI[ev.from];
+          gh.style.cssText = 'left:' + (f.x - f.w / 2) + 'px;top:' + (f.y - f.h / 2) + 'px;width:' + f.w + 'px;height:' + f.h +
+            'px;--dx:' + (to.x - f.x) + 'px;--dy:' + (to.y - f.y) + 'px';
+          fxEl.appendChild(gh);
+        });
+        var p = document.createElement('div');
+        p.className = 'pts'; p.textContent = '+' + ev.points; p.style.left = to.x + 'px'; p.style.top = to.y + 'px';
+        fxEl.appendChild(p);
+      } else if (ev.type === 'bear') {
+        var a = cellCenter(ev.from), b = cellCenter(ev.to), c = cells[ev.to];
+        c.style.setProperty('--dx', (a.x - b.x) + 'px'); c.style.setProperty('--dy', (a.y - b.y) + 'px');
+        c.classList.add('slide');
+      } else if (ev.type === 'trapped') {
+        cells[ev.at].classList.add('shake');
+      }
+    });
+    setTimeout(function () { if (fxEl.childNodes.length) fxEl.textContent = ''; }, 1000);
+  }
+
+  function showOver() {
+    var newBest = state.score >= best && state.score > 0;
+    $('overTitle').textContent = newBest ? 'New best!' : 'Town full!';
+    $('overText').textContent = 'Score ' + state.score + ' in ' + state.turn + ' turns' + (newBest ? '' : ' · best ' + best);
+    $('overlay').classList.remove('hidden');
+  }
+
+  // ---- controls
+  $('holdBtn').addEventListener('click', function () {
+    var s = TT.swap(state);
+    if (s) { state = s; save(); render([]); }
+  });
+  $('undoBtn').addEventListener('click', function () {
+    var s = TT.undo(state);
+    if (s) { state = s; save(); render([]); }
+  });
+  $('hintBtn').addEventListener('click', function () {
+    hints = !hints; this.setAttribute('aria-pressed', hints); render([]);
+  });
+  $('newBtn').addEventListener('click', function () {
+    if (state.over || state.turn === 0 || confirm('Start a new game?')) startNew();
+  });
+  $('againBtn').addEventListener('click', function () { startNew(); });
+  $('helpLink').addEventListener('click', function (e) { e.preventDefault(); $('help').classList.remove('hidden'); });
+  $('helpClose').addEventListener('click', function () { $('help').classList.add('hidden'); store.set('tt-seen-help', 1); });
+
+  // ---- start: ?#seed=N forces a reproducible game, otherwise resume the saved one
+  var forced = seedFromHash();
+  if (forced) startNew(forced);
+  else {
+    state = loadSaved();
+    if (state) render([]); else startNew();
+  }
+  if (!store.get('tt-seen-help', 0) && state.turn === 0) $('help').classList.remove('hidden');
+
+  // test / debugging hooks (read-only view of the game)
+  window.ttDebug = {
+    state: function () { return JSON.parse(JSON.stringify(state)); },
+    validate: function () { return TT.validate(state); }
+  };
+
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+    navigator.serviceWorker.register('sw.js').catch(function () {});
+  }
+})();
+</script>
+</body>
+</html>
