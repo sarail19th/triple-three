@@ -30,8 +30,7 @@
 
   function loadSaved() {
     var s = store.get('tt-save', null);
-    // saves from before the shop existed have no coins
-    if (s && typeof s.coins !== 'number') { s.coins = TT.START_COINS; if (s.undo) s.undo.coins = TT.START_COINS; }
+    try { if (s) TT.migrate(s); } catch (e) { return null; } // saves from before coins / stock existed
     try { if (s && TT.validate(s).length === 0 && typeof s.rng === 'number') return s; } catch (e) {}
     return null;
   }
@@ -113,7 +112,7 @@
       c.classList.toggle('hint', hints && !state.over && TT.wouldMerge(state, i));
       c.setAttribute('aria-label', 'row ' + (((i / TT.W) | 0) + 1) + ' column ' + ((i % TT.W) + 1) + ' ' + TT.NAME[code]);
     });
-    if (mode && (state.over || state.coins < TT.PRICE[mode])) mode = null;
+    if (mode && (state.over || state.coins < TT.PRICE[mode] || !(state.stock[mode] > 0))) mode = null;
     if (sel >= 0 && (state.over || !targetOk(sel))) sel = -1;
     $('score').textContent = state.score;
     $('coins').textContent = state.coins;
@@ -123,17 +122,22 @@
     $('curName').textContent = TT.NAME[state.cur];
     $('nextItem').textContent = TT.EMOJI[state.next];
     $('holdItem').textContent = state.hold ? TT.EMOJI[state.hold] : '·';
-    $('undoBtn').disabled = !state.undo;
+    $('undoBtn').disabled = !TT.canUndo(state);
     document.querySelectorAll('.tool').forEach(function (b) {
       var t = b.dataset.tool;
       if (t === 'hammer') {
-        b.disabled = state.over || state.coins < TT.PRICE.hammer || TT.emptyCount(g) === TT.N;
+        b.disabled = !TT.canHammer(state) || state.over || TT.emptyCount(g) === TT.N;
         b.setAttribute('aria-pressed', mode === 'hammer');
       } else if (t === 'trap') {
-        b.disabled = state.over || state.coins < TT.PRICE.trap || g.indexOf(TT.BEAR) < 0;
+        b.disabled = state.over || state.coins < TT.PRICE.trap || !(state.stock.trap > 0) || g.indexOf(TT.BEAR) < 0;
         b.setAttribute('aria-pressed', mode === 'trap');
       } else b.disabled = !TT.buy(state, +t);
+      b.querySelector('.tb').textContent = '×' + (state.stock[t] || 0);
     });
+    var nextAt = TT.milestoneScore(state.milestone), gifts = [];
+    [1, 2, 3, TT.CRYSTAL].forEach(function (c) { gifts.push('+' + TT.RESTOCK[c] + TT.EMOJI[c]); });
+    $('unlock').textContent = 'Shop restocks at score ' + nextAt + ' (' + (nextAt - state.score) + ' to go): ' + gifts.join(' ') + ' +1🪤 +1🔨';
+    $('undoBtn').textContent = '↶ Undo 🪙' + TT.UNDO_COST;
     $('turn').textContent = 'Turn ' + state.turn;
     $('seed').textContent = 'seed ' + state.seed;
     animate(events);
@@ -206,6 +210,10 @@
         c.classList.add('slide');
       } else if (ev.type === 'trapped') {
         cells[ev.at].classList.add('shake');
+      } else if (ev.type === 'unlock') {
+        var ub = fxEl.getBoundingClientRect(), un = document.createElement('div');
+        un.className = 'pts'; un.textContent = '🛒 Shop restocked!'; un.style.left = ub.width / 2 + 'px'; un.style.top = ub.height / 2 + 'px';
+        fxEl.appendChild(un);
       } else if (ev.type === 'open') {
         var oc = cellCenter(ev.at), oe = document.createElement('div');
         oe.className = 'pts'; oe.textContent = '💰 +' + ev.coins + '🪙'; oe.style.left = oc.x + 'px'; oe.style.top = oc.y + 'px';
@@ -302,6 +310,11 @@
   };
 
   if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+    // cache-first service worker: when an update takes over, reload once so the new version shows without a manual refresh
+    var hadController = !!navigator.serviceWorker.controller, reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (hadController && !reloaded) { reloaded = true; location.reload(); }
+    });
     navigator.serviceWorker.register('sw.js').catch(function () {});
   }
 })();

@@ -62,7 +62,9 @@ def check_consistent(page, where):
     assert dom['coins'] == str(st['coins']), f'{where}: coins text'
     assert dom['cur'] == EMOJI[st['cur']] and dom['next'] == EMOJI[st['next']], f'{where}: queue display'
     assert dom['hold'] == (EMOJI[st['hold']] if st['hold'] else '·'), f'{where}: hold display'
-    assert dom['undoDisabled'] == (st['undo'] is None), f'{where}: undo button state'
+    assert dom['undoDisabled'] == (st['undo'] is None or st['undo']['coins'] < 5), f'{where}: undo button state'
+    for tool in ['1', '2', '3', '13', 'trap', 'hammer']:
+        assert page.inner_text(f'.tool[data-tool="{tool}"] .tb') == f"×{st['stock'][tool]}", f'{where}: stock badge {tool}'
     return st
 
 
@@ -140,19 +142,20 @@ with sync_playwright() as p:
             before_turn = st['turn']
             page.tap('#undoBtn'); undos += 1
             after = check_consistent(page, f'undo@{turns}')
+            assert after['coins'] == st['undo']['coins'] - 5, 'undo costs coins'
             assert after['turn'] == before_turn - 1, 'undo reverts one turn'
             assert after['undo'] is None and page.locator('#undoBtn').is_disabled(), 'single-level undo'
             continue
         if roll < 0.20:  # shop: buy grass / bush / tree if enabled
-            tool = rng.choice(['1', '2', '3'])
+            tool = rng.choice(['1', '2', '3', '13'])
             btn = page.locator(f'.tool[data-tool="{tool}"]')
             if btn.is_enabled():
                 btn.tap(); buys += 1
                 after = check_consistent(page, f'buy@{turns}')
                 assert after['cur'] == int(tool) and after['next'] == st['cur'] and after['turn'] == st['turn'], 'buy replaces current, free'
-                assert after['coins'] < st['coins'], 'buying costs coins'
+                assert after['coins'] < st['coins'] and after['stock'][tool] == st['stock'][tool] - 1, 'buying costs coins and stock'
             else:
-                assert st['coins'] < {'1': 6, '2': 15, '3': 35}[tool] or st['cur'] == int(tool) or 0 not in st['grid'], 'tool disabled only when unaffordable/useless'
+                assert st['coins'] < {'1': 6, '2': 15, '3': 35, '13': 50}[tool] or st['stock'][tool] == 0 or st['cur'] == int(tool) or 0 not in st['grid'], 'tool disabled only when unaffordable/sold out/useless'
             continue
         empties = [i for i, v in enumerate(st['grid']) if v == 0]
         hammer_btn = page.locator('#hammerBtn')
@@ -186,7 +189,7 @@ with sync_playwright() as p:
             assert same['grid'] == after['grid'] and same['turn'] == after['turn'], 'tapping an occupied tile must do nothing'
 
     final = check_consistent(page, 'final')
-    assert final['over'] and 0 not in final['grid'] and final['coins'] < 20, 'game over means a full board and no hammer money'
+    assert final['over'] and 0 not in final['grid'] and (final['coins'] < 20 or final['stock']['hammer'] == 0), 'game over means a full board and no usable hammer'
     assert turns >= MIN_TURNS, f'only {turns} random turns before game over (want >= {MIN_TURNS})'
     assert page.locator('#overlay').is_visible(), 'game-over overlay'
     assert str(final['score']) in page.inner_text('#overText')

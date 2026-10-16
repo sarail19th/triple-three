@@ -105,6 +105,17 @@ t('crystal picks the best merge available, else waits as an inert wildcard', () 
   assert.strictEqual(r.state.grid[I(5, 5)], TT.CRYSTAL);
 });
 
+t('crystal also stands in for cathedral / church / tombstone (bear chain)', () => {
+  let s = withGrid({ [I(2, 1)]: 12, [I(2, 3)]: 12 }, { cur: TT.CRYSTAL });
+  let r = TT.place(s, I(2, 2));
+  assert.strictEqual(r.state.grid[I(2, 2)], TT.TREASURE, 'crystal as cathedral -> treasure');
+  s = withGrid({ [I(2, 1)]: 11, [I(2, 3)]: 11 }, { cur: TT.CRYSTAL });
+  assert.strictEqual(TT.place(s, I(2, 2)).state.grid[I(2, 2)], 12, 'crystal as church -> cathedral');
+  s = withGrid({ [I(2, 1)]: TT.TOMB, [I(2, 3)]: TT.TOMB }, { cur: TT.CRYSTAL });
+  assert.strictEqual(TT.place(s, I(2, 2)).state.grid[I(2, 2)], 11, 'crystal as tombstone -> church');
+  assert.strictEqual(TT.preview(s, I(2, 2)).final, 11);
+});
+
 t('a waiting crystal merges as soon as a later placement makes a group possible', () => {
   let s = withGrid({ [I(2, 2)]: TT.CRYSTAL, [I(2, 1)]: 1 }, { cur: 1, next: 1 });
   assert.deepStrictEqual(TT.validate(s), [], 'crystal + one grass cannot merge yet');
@@ -140,6 +151,63 @@ t('buy: spends coins, makes the item current, pushes the old current to next, fr
   assert.strictEqual(TT.buy(withGrid({}, { coins: TT.PRICE[3] - 1 }), 3), null, 'cannot afford');
   assert.strictEqual(TT.buy(withGrid({}, { cur: 1, coins: 99 }), 1), null, 'already current');
   assert.strictEqual(TT.buy(s, TT.BEAR), null, 'not for sale');
+});
+
+t('shop stock is limited; spending decrements it, sold-out items cannot be bought', () => {
+  let s = withGrid({}, { cur: TT.BEAR, coins: 500 });
+  for (let k = 0; k < TT.START_STOCK[1]; k++) { s.cur = TT.BEAR; s = TT.buy(s, 1); assert(s, 'stock left'); }
+  assert.strictEqual(s.stock[1], 0);
+  s.cur = TT.BEAR;
+  assert.strictEqual(TT.buy(s, 1), null, 'sold out');
+  assert.strictEqual(TT.buy(withGrid({}, { coins: 500, cur: TT.BEAR }), TT.CRYSTAL), null, 'crystal starts locked (0 stock)');
+  const h = withGrid({ [I(0, 0)]: 5 }, { coins: 500 });
+  h.stock.hammer = 0;
+  assert.strictEqual(TT.hammer(h, I(0, 0)), null, 'no hammers left');
+  const tp = withGrid({ [I(0, 0)]: TT.BEAR }, { coins: 500 });
+  tp.stock.trap = 0;
+  assert.strictEqual(TT.trap(tp, I(0, 0)), null, 'no traps left');
+});
+
+t('score milestones restock the shop (crystal unlocks) and the state stays valid', () => {
+  assert.strictEqual(TT.START_STOCK[TT.CRYSTAL], 0);
+  const m = TT.milestoneScore(0);
+  // score just below the first milestone, then a grass trio pushes it over
+  const s = withGrid({ [I(2, 2)]: 1, [I(2, 4)]: 1 }, { score: m - 10 });
+  const r = TT.place(s, I(2, 3));
+  assert(r.state.score >= m && r.state.milestone === 1);
+  assert(r.events.some((e) => e.type === 'unlock'));
+  assert.strictEqual(r.state.stock[TT.CRYSTAL], 1);
+  assert.strictEqual(r.state.stock[1], TT.START_STOCK[1] + TT.RESTOCK[1]);
+  assert.deepStrictEqual(TT.validate(r.state), []);
+  const bought = TT.buy(Object.assign(r.state, { cur: 1, coins: 100 }), TT.CRYSTAL);
+  assert.strictEqual(bought.cur, TT.CRYSTAL); assert.strictEqual(bought.coins, 100 - TT.PRICE[TT.CRYSTAL]);
+  assert.deepStrictEqual(TT.validate(bought), []);
+});
+
+t('a full board with money but no hammers left is game over', () => {
+  const cells = {};
+  for (let i = 0; i < 35; i++) cells[i] = ((i % 6) + ((i / 6) | 0)) % 2 ? 5 : 6;
+  const s = withGrid(cells, { cur: 4, coins: 500 });
+  s.stock.hammer = 0;
+  assert(TT.place(s, 35).state.over);
+});
+
+t('undo costs coins; refused when the restored state cannot pay', () => {
+  const s = withGrid({}, { coins: 4 });
+  const a = TT.place(s, I(0, 0)).state;
+  assert(!TT.canUndo(a) && TT.undo(a) === null, 'cannot afford undo');
+  const rich = TT.place(withGrid({}, { coins: 30 }), I(0, 0)).state;
+  assert(TT.canUndo(rich));
+  assert.strictEqual(TT.undo(rich).coins, 30 - TT.UNDO_COST);
+});
+
+t('migrate fills coins / stock / milestone for old saves, including the undo snapshot', () => {
+  const old = JSON.parse(JSON.stringify(TT.newGame(3)));
+  delete old.coins; delete old.stock; delete old.milestone;
+  old.score = 1500; old.undo = JSON.parse(JSON.stringify(old)); old.undo.undo = null;
+  TT.migrate(old);
+  assert.strictEqual(old.coins, TT.START_COINS); assert.strictEqual(old.milestone, 2); assert.strictEqual(old.undo.milestone, 2);
+  assert.deepStrictEqual(TT.validate(old), []);
 });
 
 t('hammer removes an item for coins; empty cells and poor players are rejected', () => {
@@ -248,12 +316,12 @@ t('swap stores the item, then exchanges', () => {
 t('undo restores the exact previous state (incl. rng) and replay is identical', () => {
   let s = TT.newGame(11);
   for (let k = 0; k < 6; k++) s = TT.place(s, s.grid.indexOf(0)).state;
-  const before = JSON.stringify(Object.assign({}, s, { undo: null }));
+  const before = JSON.stringify(Object.assign({}, s, { undo: null, coins: s.coins - TT.UNDO_COST }));
   const a = TT.place(s, 30);
   const back = TT.undo(a.state);
-  assert.strictEqual(JSON.stringify(back), before);
+  assert.strictEqual(JSON.stringify(back), before, 'undo restores everything but charges UNDO_COST');
   const b = TT.place(back, 30);
-  assert.strictEqual(JSON.stringify(a.state), JSON.stringify(b.state));
+  ['grid', 'score', 'rng', 'cur', 'next', 'turn'].forEach((k) => assert.deepStrictEqual(a.state[k], b.state[k], 'replay after undo is identical: ' + k));
   assert.strictEqual(TT.undo(back), null, 'one level only');
 });
 
@@ -293,7 +361,7 @@ t('fuzz: 400 random games keep state valid and always terminate', () => {
       assert(++guard < 4000, 'game must terminate (seed ' + seed + ')');
       if (TT.rand(pick) < 0.05) { s = TT.swap(s); assert.deepStrictEqual(TT.validate(s), []); continue; }
       if (TT.rand(pick) < 0.04) {
-        const b = TT.buy(s, TT.BUYABLE[Math.floor(TT.rand(pick) * 3)]);
+        const b = TT.buy(s, TT.BUYABLE[Math.floor(TT.rand(pick) * TT.BUYABLE.length)]);
         if (b) { s = b; assert.deepStrictEqual(TT.validate(s), []); continue; }
       }
       const empties = [], occupied = [];
@@ -310,7 +378,11 @@ t('fuzz: 400 random games keep state valid and always terminate', () => {
       assert.deepStrictEqual(prob, [], `seed ${seed} turn ${s.turn}: ${prob.join(', ')}`);
       assert(r.state.score >= s.score);
       r.events.forEach((e) => { if (e.type === 'merge') { merges++; if (e.to === 11) churches++; } if (e.type === 'trapped') trapped++; });
-      if (TT.rand(pick) < 0.05) { const u = TT.undo(r.state); assert.deepStrictEqual(u.grid, s.grid); }
+      if (TT.rand(pick) < 0.05) {
+        const u = TT.undo(r.state);
+        assert.strictEqual(!!u, TT.canUndo(r.state));
+        if (u) { assert.deepStrictEqual(u.grid, s.grid); assert.strictEqual(u.coins, s.coins - TT.UNDO_COST); assert.deepStrictEqual(TT.validate(u), []); }
+      }
       s = r.state;
     }
     maxTurns = Math.max(maxTurns, s.turn);
