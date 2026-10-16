@@ -4,7 +4,7 @@ Single-file Triple Three clone: 6x6 board, place the "next" item, 3+ orthogonall
 
 ## Layout
 - `src/logic.js` - pure game logic (UMD: `require` in Node, global `TT` in the browser). State is plain JSON: `{grid[36], cur, next, hold, score, coins, turn, over, rng, seed, undo}`. `place(state, idx)` -> `{state, events}` or `null`; `swap`, `undo`, `validate`, `wouldMerge`, `preview` (pure what-if for a placement), shop: `buy(state, item)` -> state, `hammer(state, idx)` and `trap(state, idx)` (kills a bear into a tombstone) -> `{state, events}` (both free actions, cost coins; prices/earnings in `PRICE`/`COIN`). Everything is deterministic from `seed` (mulberry32; its state lives in the game state so undo/replay is exact).
-- Codes: 0 empty, 1-8 grass/bush/tree/hut/house/mansion/castle/grand castle (final), 9 bear, 10 tombstone, 11 church, 12 cathedral (final), 13 crystal.
+- Codes: 0 empty, 1-8 grass/bush/tree/hut/house/mansion/castle/grand castle (final), 9 bear, 10 tombstone, 11 church, 12 cathedral, 13 crystal, 14 treasure (final; tap to open for coins via `open(state, idx)`).
 - `src/game.js` - UI: tap-to-select then tap-to-confirm placement (Preview toggle, `tt-preview`; mouse hover previews too), reserve tray (top-left, the swap slot), shop row, hammer mode, one-level undo, hints toggle, animations driven by the `events` list, localStorage save (`tt-save`) and best score (`tt-best`). `#seed=N` in the URL forces a reproducible game. `window.ttDebug` is a read-only hook for tests.
 - `src/style.css`, `src/index.html` - templates with `/*INLINE_...*/` placeholders.
 - `build.js` - inlines everything into `dist/index.html`, writes manifest + service worker (cache name = content hash).

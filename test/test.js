@@ -65,9 +65,28 @@ t('chain merge: result keeps merging with neighbours', () => {
   assert.strictEqual(r.state.score, 3 * TT.BASE[1] + 3 * TT.BASE[2]);
 });
 
+t('bear chain: tombs -> church -> cathedral -> treasure in one chain; treasure is final', () => {
+  const s = withGrid({ [I(2, 2)]: TT.BEAR, [I(2, 1)]: 5, [I(2, 3)]: TT.TOMB, [I(2, 4)]: TT.TOMB, [I(1, 2)]: 11, [I(0, 2)]: 11, [I(3, 2)]: 12, [I(4, 2)]: 12 });
+  const r = TT.place(s, I(5, 5)); // the bear at (2,2) has no exit: tomb -> church -> cathedral -> treasure
+  assert.strictEqual(r.state.grid[I(2, 2)], TT.TREASURE);
+  assert.strictEqual(r.events.filter((e) => e.type === 'merge').length, 3);
+  assert.deepStrictEqual(TT.validate(r.state), []);
+  const g = withGrid({ [I(0, 0)]: 14, [I(0, 1)]: 14, [I(0, 2)]: 14 });
+  assert.deepStrictEqual(TT.validate(g), [], 'treasures never merge');
+});
+
+t('open: treasure pays coins, free action, only on a treasure', () => {
+  const s = withGrid({ [I(1, 1)]: TT.TREASURE, [I(2, 2)]: 5 }, { coins: 3 });
+  const r = TT.open(s, I(1, 1));
+  assert.strictEqual(r.state.grid[I(1, 1)], 0); assert.strictEqual(r.state.coins, 3 + TT.TREASURE_COINS);
+  assert.strictEqual(r.state.turn, s.turn);
+  assert.deepStrictEqual(TT.validate(r.state), []);
+  assert.strictEqual(TT.open(s, I(2, 2)), null); assert.strictEqual(TT.open(s, I(0, 0)), null);
+});
+
 t('final tiers never merge', () => {
-  const g = withGrid({ [I(0, 0)]: 8, [I(0, 1)]: 8, [I(0, 2)]: 8, [I(3, 0)]: 12, [I(3, 1)]: 12, [I(3, 2)]: 12 });
-  assert.deepStrictEqual(TT.validate(g), [], 'grand castles and cathedrals are final');
+  const g = withGrid({ [I(0, 0)]: 8, [I(0, 1)]: 8, [I(0, 2)]: 8, [I(3, 0)]: 14, [I(3, 1)]: 14, [I(3, 2)]: 14 });
+  assert.deepStrictEqual(TT.validate(g), [], 'grand castles and treasures are final');
 });
 
 t('castle trio (via crystal) becomes a grand castle', () => {

@@ -122,6 +122,13 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 .card li { margin-bottom: 8px; }
 .card p { margin: 0 0 14px; font-size: 17px; }
 .card .btn { width: 100%; }
+.card h3 { margin: 10px 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); text-align: left; }
+.chain { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; margin-bottom: 4px; }
+.chip { display: flex; flex-direction: column; align-items: center; min-width: 50px; max-width: 74px; }
+.chip .ce { font-size: 30px; line-height: 1.15; }
+.chip small, .arrow small { font-size: 10px; color: var(--muted); line-height: 1.1; text-align: center; }
+.arrow { display: flex; flex-direction: column; align-items: center; color: var(--muted); font-size: 16px; }
+.gnote { font-size: 13px !important; color: var(--muted); margin: 10px 0 12px !important; }
 
 /* wide screens: board on the left, controls on the right, board as large as the height allows */
 @media (min-width: 900px) and (min-aspect-ratio: 5/4) {
@@ -180,7 +187,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 
     <footer class="foot">
       <span id="turn">Turn 0</span> · <span id="seed">seed</span> ·
-      <a href="#" id="helpLink">How to play</a>
+      <a href="#" id="helpLink">How to play</a> · <a href="#" id="guideLink">Item guide</a>
     </footer>
   </div>
 </main>
@@ -193,13 +200,21 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   </div>
 </div>
 
+<div id="guide" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Item guide">
+  <div class="card">
+    <h2>Item guide</h2>
+    <div id="guideBody"></div>
+    <button id="guideClose" class="btn primary">Close</button>
+  </div>
+</div>
+
 <div id="help" class="overlay hidden" role="dialog" aria-modal="true">
   <div class="card">
     <h2>How to play</h2>
     <ul>
       <li>On a computer, hover a tile to preview the move (the result shows faintly, merged items are outlined) and click to place the item shown in <b>Place</b>. On a touch screen, tap to preview and tap again to place. Turn <b>Preview</b> off to place with one tap.</li>
       <li>Connect <b>3 or more</b> identical items (up, down, left, right) and <i>all</i> of them merge into one of the next tier on the tile you tapped (4 or 5 pay more points and coins, nothing is left over):<br>🌱 → 🌿 → 🌳 → 🛖 → 🏠 → 🏡 → 🏰 → 🏯</li>
-      <li>🐻 <b>Bears</b> wander one step each turn. Box one in so it cannot move and it becomes a 🪦. Three connected 🪦 merge into ⛪, three ⛪ into 🕌.</li>
+      <li>🐻 <b>Bears</b> wander one step each turn. Box one in so it cannot move and it becomes a 🪦. Three connected 🪦 merge into ⛪, three ⛪ into 🕌, three 🕌 into a 💰 <b>treasure</b>: tap it to open it for coins.</li>
       <li>💎 The <b>crystal</b> is a wildcard: it turns into whatever makes the best merge. If it cannot merge yet it waits, and merges as soon as a group of 3 is possible next to it.</li>
       <li>🪙 <b>Coins</b> come from merges. Spend them in the shop: buy 🌱 🌿 🌳 as your current item (the old one moves to Next), or use the 🪤 <b>bear trap</b> to kill a bear on the spot (it turns into a 🪦), or the 🔨 hammer to remove any placed item. Shop actions are free.</li>
       <li>The <b>Reserve</b> tray (top left) stores the current item for later (free swap). <b>Undo</b> takes back your last move.</li>
@@ -217,20 +232,22 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   'use strict';
   var W = 6, H = 6, N = W * H;
 
-  // Cell / item codes. 0 empty. 1..8 building chain. 9 bear, 10 tombstone, 11 church, 12 cathedral, 13 crystal.
-  var EMPTY = 0, BEAR = 9, TOMB = 10, CRYSTAL = 13;
-  var EMOJI = ['', '🌱', '🌿', '🌳', '🛖', '🏠', '🏡', '🏰', '🏯', '🐻', '🪦', '⛪', '🕌', '💎'];
-  var NAME = ['empty', 'grass', 'bush', 'tree', 'hut', 'house', 'mansion', 'castle', 'grand castle', 'bear', 'tombstone', 'church', 'cathedral', 'crystal'];
+  // Cell / item codes. 0 empty. 1..8 building chain. 9 bear, 10 tombstone, 11 church, 12 cathedral, 13 crystal, 14 treasure
+  // (final tier of the bear chain: tap it to open it for coins).
+  var EMPTY = 0, BEAR = 9, TOMB = 10, CRYSTAL = 13, TREASURE = 14;
+  var EMOJI = ['', '🌱', '🌿', '🌳', '🛖', '🏠', '🏡', '🏰', '🏯', '🐻', '🪦', '⛪', '🕌', '💎', '💰'];
+  var NAME = ['empty', 'grass', 'bush', 'tree', 'hut', 'house', 'mansion', 'castle', 'grand castle', 'bear', 'tombstone', 'church', 'cathedral', 'crystal', 'treasure'];
   // code -> code it becomes when 3+ connect. Final tiers (8 grand castle, 12 cathedral), bear and crystal are absent.
-  var NEXT = { 1: 2, 2: 3, 3: 4, 4: 5, 5: 6, 6: 7, 7: 8, 10: 11, 11: 12 };
+  var NEXT = { 1: 2, 2: 3, 3: 4, 4: 5, 5: 6, 6: 7, 7: 8, 10: 11, 11: 12, 12: 14 };
   // points per item consumed by a merge, keyed by the consumed code
-  var BASE = { 1: 10, 2: 30, 3: 90, 4: 270, 5: 810, 6: 2430, 7: 7290, 10: 150, 11: 1500 };
+  var BASE = { 1: 10, 2: 30, 3: 90, 4: 270, 5: 810, 6: 2430, 7: 7290, 10: 150, 11: 1500, 12: 15000 };
   // item queue draw weights (sum 100): mostly grass, sometimes bush/tree/bear, rare crystal
   var WEIGHTS = [[1, 62], [2, 16], [3, 6], [BEAR, 12], [CRYSTAL, 4]];
   var QUEUE_ITEMS = [1, 2, 3, BEAR, CRYSTAL];
   // coins: earned per merge (COIN[consumed code] * (group size - 2)), spent in the shop (free actions, no turn passes)
   var START_COINS = 10;
-  var COIN = { 1: 2, 2: 4, 3: 8, 4: 16, 5: 30, 6: 60, 7: 120, 10: 20, 11: 100 };
+  var COIN = { 1: 2, 2: 4, 3: 8, 4: 16, 5: 30, 6: 60, 7: 120, 10: 20, 11: 100, 12: 500 };
+  var TREASURE_COINS = 250; // paid when a treasure is opened
   var PRICE = { 1: 6, 2: 15, 3: 35, hammer: 20, trap: 12 };
   var BUYABLE = [1, 2, 3];
 
@@ -387,6 +404,14 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     return { state: s, events: [{ type: 'hammer', at: idx, item: item }] };
   }
 
+  // Open the treasure on cell idx: it disappears and pays TREASURE_COINS (free action). Returns {state, events} or null.
+  function open(state, idx) {
+    if (state.over || !(idx >= 0 && idx < N) || state.grid[idx] !== TREASURE) return null;
+    var s = clone(state);
+    s.grid[idx] = EMPTY; s.coins += TREASURE_COINS;
+    return { state: s, events: [{ type: 'open', at: idx, coins: TREASURE_COINS }] };
+  }
+
   // Shop: the bear trap kills the bear on cell idx on the spot: it becomes a tombstone (which may merge into a church
   // right away). Free action, costs coins. Returns {state, events} or null (no bear there, too poor, or it would
   // leave a full board without hammer money).
@@ -424,7 +449,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     if (!s || !Array.isArray(s.grid) || s.grid.length !== N) return ['bad grid'];
     for (i = 0; i < N; i++) {
       var v = s.grid[i];
-      if (v !== (v | 0) || v < 0 || v > CRYSTAL) p.push('bad code at ' + i + ': ' + v);
+      if (v !== (v | 0) || v < 0 || v > TREASURE) p.push('bad code at ' + i + ': ' + v);
     }
     if (p.length) return p;
     if (QUEUE_ITEMS.indexOf(s.cur) < 0) p.push('bad current item ' + s.cur);
@@ -452,12 +477,12 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   function wouldMerge(state, idx) { var p = preview(state, idx); return !!p && p.merged; }
 
   return {
-    W: W, H: H, N: N, EMPTY: EMPTY, BEAR: BEAR, TOMB: TOMB, CRYSTAL: CRYSTAL,
+    W: W, H: H, N: N, EMPTY: EMPTY, BEAR: BEAR, TOMB: TOMB, CRYSTAL: CRYSTAL, TREASURE: TREASURE, TREASURE_COINS: TREASURE_COINS,
     EMOJI: EMOJI, NAME: NAME, NEXT: NEXT, BASE: BASE, WEIGHTS: WEIGHTS,
     START_COINS: START_COINS, COIN: COIN, PRICE: PRICE, BUYABLE: BUYABLE,
     rand: rand, drawItem: drawItem, newGame: newGame, neighbors: neighbors, group: group,
     place: place, swap: swap, undo: undo, validate: validate, wouldMerge: wouldMerge, emptyCount: emptyCount,
-    buy: buy, hammer: hammer, trap: trap, preview: preview, isOver: isOver
+    buy: buy, hammer: hammer, trap: trap, open: open, preview: preview, isOver: isOver
   };
 });
 </script>
@@ -528,7 +553,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   // Is idx a legal target for the armed tool (or for placement when none is armed)?
   function targetOk(idx) {
     var v = state.grid[idx];
-    return mode === 'hammer' ? v !== 0 : mode === 'trap' ? v === TT.BEAR : v === 0;
+    return mode === 'hammer' ? v !== 0 : mode === 'trap' ? v === TT.BEAR : (v === 0 || v === TT.TREASURE);
   }
   function doAction(idx) {
     return mode === 'hammer' ? TT.hammer(state, idx) : mode === 'trap' ? TT.trap(state, idx) : TT.place(state, idx);
@@ -539,6 +564,11 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   function tap(idx) {
     if (!state || state.over) return;
     if (!targetOk(idx)) { bump(idx); return; }
+    if (!mode && state.grid[idx] === TT.TREASURE) { // opening a treasure is always good news: no confirmation step
+      var o = TT.open(state, idx);
+      state = o.state; sel = -1; save(); render(o.events); vibrate(25);
+      return;
+    }
     if (previewOn && lastPointer !== 'mouse' && sel !== idx) { sel = idx; hover = -1; updatePreview(); return; }
     sel = -1;
     var r = doAction(idx);
@@ -621,6 +651,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
         note = (lastPointer !== 'mouse' && sel === pi ? 'Tap again to smash ' : 'Smash ') + TT.NAME[state.grid[pi]] + ' (-' + TT.PRICE.hammer + ' coins)';
         hot = sel === pi;
       } else note = '🔨 Tap an item to remove it';
+    } else if (pi >= 0 && state.grid[pi] === TT.TREASURE) {
+      note = '💰 Click to open the treasure: +' + TT.TREASURE_COINS + ' coins'; hot = true;
     } else if (TT.emptyCount(state.grid) === 0) {
       note = 'Board full - use the 🔨 hammer (' + TT.PRICE.hammer + ' coins) to clear a tile'; hot = true;
     } else if (previewOn && pi >= 0 && (p = TT.preview(state, pi))) {
@@ -662,6 +694,10 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
         c.classList.add('slide');
       } else if (ev.type === 'trapped') {
         cells[ev.at].classList.add('shake');
+      } else if (ev.type === 'open') {
+        var oc = cellCenter(ev.at), oe = document.createElement('div');
+        oe.className = 'pts'; oe.textContent = '💰 +' + ev.coins + '🪙'; oe.style.left = oc.x + 'px'; oe.style.top = oc.y + 'px';
+        fxEl.appendChild(oe);
       } else if (ev.type === 'trap') {
         var tp = cellCenter(ev.at), tel = document.createElement('div');
         tel.className = 'pts'; tel.textContent = '🪤 -' + TT.PRICE.trap + '🪙'; tel.style.left = tp.x + 'px'; tel.style.top = tp.y + 'px';
@@ -713,6 +749,28 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     if (state.over || state.turn === 0 || confirm('Start a new game?')) startNew();
   });
   $('againBtn').addEventListener('click', function () { startNew(); });
+  // item guide: built from the logic tables so it can never drift from the real merge chains
+  function chip(code, label) {
+    return '<div class="chip"><span class="ce">' + TT.EMOJI[code] + '</span><small>' + (label || TT.NAME[code]) + '</small></div>';
+  }
+  function chain(start, firstLabel, finalLabel) {
+    var out = [], c = start, first = true;
+    while (c) {
+      var last = !TT.NEXT[c];
+      out.push(chip(c, last && finalLabel ? finalLabel : (first && firstLabel) || null));
+      if (!last) out.push('<span class="arrow">&rarr;<small>x3</small></span>');
+      c = TT.NEXT[c]; first = false;
+    }
+    return out.join('');
+  }
+  $('guideBody').innerHTML =
+    '<h3>Buildings</h3><div class="chain">' + chain(1, null, 'grand castle (final)') + '</div>' +
+    '<h3>Bears</h3><div class="chain">' + chip(TT.BEAR, 'trap it') + '<span class="arrow">&rarr;</span>' +
+    chain(TT.TOMB, null, 'treasure: tap to open, +' + TT.TREASURE_COINS + ' coins') + '</div>' +
+    '<h3>Special</h3><div class="chain">' + chip(TT.CRYSTAL, 'wildcard') + '</div>' +
+    '<p class="gnote">Three or more connected items of the same kind merge into the next one. Bigger groups pay more points and coins.</p>';
+  $('guideLink').addEventListener('click', function (e) { e.preventDefault(); $('guide').classList.remove('hidden'); });
+  $('guideClose').addEventListener('click', function () { $('guide').classList.add('hidden'); });
   $('helpLink').addEventListener('click', function (e) { e.preventDefault(); $('help').classList.remove('hidden'); });
   $('helpClose').addEventListener('click', function () { $('help').classList.add('hidden'); store.set('tt-seen-help', 1); });
 

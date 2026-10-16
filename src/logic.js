@@ -6,20 +6,22 @@
   'use strict';
   var W = 6, H = 6, N = W * H;
 
-  // Cell / item codes. 0 empty. 1..8 building chain. 9 bear, 10 tombstone, 11 church, 12 cathedral, 13 crystal.
-  var EMPTY = 0, BEAR = 9, TOMB = 10, CRYSTAL = 13;
-  var EMOJI = ['', '🌱', '🌿', '🌳', '🛖', '🏠', '🏡', '🏰', '🏯', '🐻', '🪦', '⛪', '🕌', '💎'];
-  var NAME = ['empty', 'grass', 'bush', 'tree', 'hut', 'house', 'mansion', 'castle', 'grand castle', 'bear', 'tombstone', 'church', 'cathedral', 'crystal'];
+  // Cell / item codes. 0 empty. 1..8 building chain. 9 bear, 10 tombstone, 11 church, 12 cathedral, 13 crystal, 14 treasure
+  // (final tier of the bear chain: tap it to open it for coins).
+  var EMPTY = 0, BEAR = 9, TOMB = 10, CRYSTAL = 13, TREASURE = 14;
+  var EMOJI = ['', '🌱', '🌿', '🌳', '🛖', '🏠', '🏡', '🏰', '🏯', '🐻', '🪦', '⛪', '🕌', '💎', '💰'];
+  var NAME = ['empty', 'grass', 'bush', 'tree', 'hut', 'house', 'mansion', 'castle', 'grand castle', 'bear', 'tombstone', 'church', 'cathedral', 'crystal', 'treasure'];
   // code -> code it becomes when 3+ connect. Final tiers (8 grand castle, 12 cathedral), bear and crystal are absent.
-  var NEXT = { 1: 2, 2: 3, 3: 4, 4: 5, 5: 6, 6: 7, 7: 8, 10: 11, 11: 12 };
+  var NEXT = { 1: 2, 2: 3, 3: 4, 4: 5, 5: 6, 6: 7, 7: 8, 10: 11, 11: 12, 12: 14 };
   // points per item consumed by a merge, keyed by the consumed code
-  var BASE = { 1: 10, 2: 30, 3: 90, 4: 270, 5: 810, 6: 2430, 7: 7290, 10: 150, 11: 1500 };
+  var BASE = { 1: 10, 2: 30, 3: 90, 4: 270, 5: 810, 6: 2430, 7: 7290, 10: 150, 11: 1500, 12: 15000 };
   // item queue draw weights (sum 100): mostly grass, sometimes bush/tree/bear, rare crystal
   var WEIGHTS = [[1, 62], [2, 16], [3, 6], [BEAR, 12], [CRYSTAL, 4]];
   var QUEUE_ITEMS = [1, 2, 3, BEAR, CRYSTAL];
   // coins: earned per merge (COIN[consumed code] * (group size - 2)), spent in the shop (free actions, no turn passes)
   var START_COINS = 10;
-  var COIN = { 1: 2, 2: 4, 3: 8, 4: 16, 5: 30, 6: 60, 7: 120, 10: 20, 11: 100 };
+  var COIN = { 1: 2, 2: 4, 3: 8, 4: 16, 5: 30, 6: 60, 7: 120, 10: 20, 11: 100, 12: 500 };
+  var TREASURE_COINS = 250; // paid when a treasure is opened
   var PRICE = { 1: 6, 2: 15, 3: 35, hammer: 20, trap: 12 };
   var BUYABLE = [1, 2, 3];
 
@@ -176,6 +178,14 @@
     return { state: s, events: [{ type: 'hammer', at: idx, item: item }] };
   }
 
+  // Open the treasure on cell idx: it disappears and pays TREASURE_COINS (free action). Returns {state, events} or null.
+  function open(state, idx) {
+    if (state.over || !(idx >= 0 && idx < N) || state.grid[idx] !== TREASURE) return null;
+    var s = clone(state);
+    s.grid[idx] = EMPTY; s.coins += TREASURE_COINS;
+    return { state: s, events: [{ type: 'open', at: idx, coins: TREASURE_COINS }] };
+  }
+
   // Shop: the bear trap kills the bear on cell idx on the spot: it becomes a tombstone (which may merge into a church
   // right away). Free action, costs coins. Returns {state, events} or null (no bear there, too poor, or it would
   // leave a full board without hammer money).
@@ -213,7 +223,7 @@
     if (!s || !Array.isArray(s.grid) || s.grid.length !== N) return ['bad grid'];
     for (i = 0; i < N; i++) {
       var v = s.grid[i];
-      if (v !== (v | 0) || v < 0 || v > CRYSTAL) p.push('bad code at ' + i + ': ' + v);
+      if (v !== (v | 0) || v < 0 || v > TREASURE) p.push('bad code at ' + i + ': ' + v);
     }
     if (p.length) return p;
     if (QUEUE_ITEMS.indexOf(s.cur) < 0) p.push('bad current item ' + s.cur);
@@ -241,11 +251,11 @@
   function wouldMerge(state, idx) { var p = preview(state, idx); return !!p && p.merged; }
 
   return {
-    W: W, H: H, N: N, EMPTY: EMPTY, BEAR: BEAR, TOMB: TOMB, CRYSTAL: CRYSTAL,
+    W: W, H: H, N: N, EMPTY: EMPTY, BEAR: BEAR, TOMB: TOMB, CRYSTAL: CRYSTAL, TREASURE: TREASURE, TREASURE_COINS: TREASURE_COINS,
     EMOJI: EMOJI, NAME: NAME, NEXT: NEXT, BASE: BASE, WEIGHTS: WEIGHTS,
     START_COINS: START_COINS, COIN: COIN, PRICE: PRICE, BUYABLE: BUYABLE,
     rand: rand, drawItem: drawItem, newGame: newGame, neighbors: neighbors, group: group,
     place: place, swap: swap, undo: undo, validate: validate, wouldMerge: wouldMerge, emptyCount: emptyCount,
-    buy: buy, hammer: hammer, trap: trap, preview: preview, isOver: isOver
+    buy: buy, hammer: hammer, trap: trap, open: open, preview: preview, isOver: isOver
   };
 });

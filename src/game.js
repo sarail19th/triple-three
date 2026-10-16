@@ -65,7 +65,7 @@
   // Is idx a legal target for the armed tool (or for placement when none is armed)?
   function targetOk(idx) {
     var v = state.grid[idx];
-    return mode === 'hammer' ? v !== 0 : mode === 'trap' ? v === TT.BEAR : v === 0;
+    return mode === 'hammer' ? v !== 0 : mode === 'trap' ? v === TT.BEAR : (v === 0 || v === TT.TREASURE);
   }
   function doAction(idx) {
     return mode === 'hammer' ? TT.hammer(state, idx) : mode === 'trap' ? TT.trap(state, idx) : TT.place(state, idx);
@@ -76,6 +76,11 @@
   function tap(idx) {
     if (!state || state.over) return;
     if (!targetOk(idx)) { bump(idx); return; }
+    if (!mode && state.grid[idx] === TT.TREASURE) { // opening a treasure is always good news: no confirmation step
+      var o = TT.open(state, idx);
+      state = o.state; sel = -1; save(); render(o.events); vibrate(25);
+      return;
+    }
     if (previewOn && lastPointer !== 'mouse' && sel !== idx) { sel = idx; hover = -1; updatePreview(); return; }
     sel = -1;
     var r = doAction(idx);
@@ -158,6 +163,8 @@
         note = (lastPointer !== 'mouse' && sel === pi ? 'Tap again to smash ' : 'Smash ') + TT.NAME[state.grid[pi]] + ' (-' + TT.PRICE.hammer + ' coins)';
         hot = sel === pi;
       } else note = '🔨 Tap an item to remove it';
+    } else if (pi >= 0 && state.grid[pi] === TT.TREASURE) {
+      note = '💰 Click to open the treasure: +' + TT.TREASURE_COINS + ' coins'; hot = true;
     } else if (TT.emptyCount(state.grid) === 0) {
       note = 'Board full - use the 🔨 hammer (' + TT.PRICE.hammer + ' coins) to clear a tile'; hot = true;
     } else if (previewOn && pi >= 0 && (p = TT.preview(state, pi))) {
@@ -199,6 +206,10 @@
         c.classList.add('slide');
       } else if (ev.type === 'trapped') {
         cells[ev.at].classList.add('shake');
+      } else if (ev.type === 'open') {
+        var oc = cellCenter(ev.at), oe = document.createElement('div');
+        oe.className = 'pts'; oe.textContent = '💰 +' + ev.coins + '🪙'; oe.style.left = oc.x + 'px'; oe.style.top = oc.y + 'px';
+        fxEl.appendChild(oe);
       } else if (ev.type === 'trap') {
         var tp = cellCenter(ev.at), tel = document.createElement('div');
         tel.className = 'pts'; tel.textContent = '🪤 -' + TT.PRICE.trap + '🪙'; tel.style.left = tp.x + 'px'; tel.style.top = tp.y + 'px';
@@ -250,6 +261,28 @@
     if (state.over || state.turn === 0 || confirm('Start a new game?')) startNew();
   });
   $('againBtn').addEventListener('click', function () { startNew(); });
+  // item guide: built from the logic tables so it can never drift from the real merge chains
+  function chip(code, label) {
+    return '<div class="chip"><span class="ce">' + TT.EMOJI[code] + '</span><small>' + (label || TT.NAME[code]) + '</small></div>';
+  }
+  function chain(start, firstLabel, finalLabel) {
+    var out = [], c = start, first = true;
+    while (c) {
+      var last = !TT.NEXT[c];
+      out.push(chip(c, last && finalLabel ? finalLabel : (first && firstLabel) || null));
+      if (!last) out.push('<span class="arrow">&rarr;<small>x3</small></span>');
+      c = TT.NEXT[c]; first = false;
+    }
+    return out.join('');
+  }
+  $('guideBody').innerHTML =
+    '<h3>Buildings</h3><div class="chain">' + chain(1, null, 'grand castle (final)') + '</div>' +
+    '<h3>Bears</h3><div class="chain">' + chip(TT.BEAR, 'trap it') + '<span class="arrow">&rarr;</span>' +
+    chain(TT.TOMB, null, 'treasure: tap to open, +' + TT.TREASURE_COINS + ' coins') + '</div>' +
+    '<h3>Special</h3><div class="chain">' + chip(TT.CRYSTAL, 'wildcard') + '</div>' +
+    '<p class="gnote">Three or more connected items of the same kind merge into the next one. Bigger groups pay more points and coins.</p>';
+  $('guideLink').addEventListener('click', function (e) { e.preventDefault(); $('guide').classList.remove('hidden'); });
+  $('guideClose').addEventListener('click', function () { $('guide').classList.add('hidden'); });
   $('helpLink').addEventListener('click', function (e) { e.preventDefault(); $('help').classList.remove('hidden'); });
   $('helpClose').addEventListener('click', function () { $('help').classList.add('hidden'); store.set('tt-seen-help', 1); });
 

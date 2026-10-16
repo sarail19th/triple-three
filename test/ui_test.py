@@ -249,6 +249,24 @@ with sync_playwright() as p:
     after = check_consistent(page, 'trap by mouse')
     assert after['grid'][14] == 11 and after['turn'] == 3
 
+    # ---- treasure: one tap opens it for coins (no confirmation), free action
+    g = [0] * 36
+    g[14] = 14
+    load(g, coins=5)
+    page.tap('#board .cell[data-i="14"]')
+    after = check_consistent(page, 'treasure')
+    assert after['grid'][14] == 0 and after['coins'] == 5 + 250 and after['turn'] == 3, 'treasure opens for coins'
+
+    # ---- item guide lists both merge chains
+    page.tap('#guideLink')
+    assert page.locator('#guide').is_visible()
+    guide = page.inner_text('#guideBody')
+    for e in ['🌱', '🏯', '🐻', '🪦', '⛪', '🕌', '💰', '💎']:
+        assert e in guide, f'guide misses {e}'
+    page.screenshot(path=os.path.join(args.shots, '4_guide.png'))
+    page.tap('#guideClose')
+    assert page.locator('#guide').is_hidden()
+
     # corrupt save is ignored, not crashed on
     page.evaluate("localStorage.setItem('tt-save', JSON.stringify({grid:[1,2,3]}))")
     page.reload()

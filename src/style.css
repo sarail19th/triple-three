@@ -111,6 +111,13 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 .card li { margin-bottom: 8px; }
 .card p { margin: 0 0 14px; font-size: 17px; }
 .card .btn { width: 100%; }
+.card h3 { margin: 10px 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); text-align: left; }
+.chain { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; margin-bottom: 4px; }
+.chip { display: flex; flex-direction: column; align-items: center; min-width: 50px; max-width: 74px; }
+.chip .ce { font-size: 30px; line-height: 1.15; }
+.chip small, .arrow small { font-size: 10px; color: var(--muted); line-height: 1.1; text-align: center; }
+.arrow { display: flex; flex-direction: column; align-items: center; color: var(--muted); font-size: 16px; }
+.gnote { font-size: 13px !important; color: var(--muted); margin: 10px 0 12px !important; }
 
 /* wide screens: board on the left, controls on the right, board as large as the height allows */
 @media (min-width: 900px) and (min-aspect-ratio: 5/4) {
