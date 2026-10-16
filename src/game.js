@@ -9,6 +9,8 @@
 
   var boardEl = $('board'), fxEl = $('fx');
   var state, best = store.get('tt-best', 0), hints = false;
+  var previewOn = store.get('tt-preview', true) !== false;
+  var sel = -1, hover = -1, hammerMode = false; // UI-only: selected tile awaiting confirmation, mouse hover, hammer armed
   var cells = [];
 
   function seedFromHash() {
@@ -19,6 +21,7 @@
 
   function startNew(seed) {
     state = TT.newGame(seed || randomSeed());
+    sel = -1; hover = -1; hammerMode = false;
     $('overlay').classList.add('hidden');
     save();
     render([]);
@@ -27,6 +30,8 @@
 
   function loadSaved() {
     var s = store.get('tt-save', null);
+    // saves from before the shop existed have no coins
+    if (s && typeof s.coins !== 'number') { s.coins = TT.START_COINS; if (s.undo) s.undo.coins = TT.START_COINS; }
     try { if (s && TT.validate(s).length === 0 && typeof s.rng === 'number') return s; } catch (e) {}
     return null;
   }
@@ -43,15 +48,34 @@
     var t = ev.target.closest ? ev.target.closest('.cell') : null;
     if (t) tap(+t.dataset.i);
   });
+  // mouse hover shows the preview without clicking (touch uses tap-to-select, tap-again-to-confirm)
+  boardEl.addEventListener('pointerover', function (ev) {
+    if (ev.pointerType !== 'mouse') return;
+    var t = ev.target.closest ? ev.target.closest('.cell') : null;
+    var i = t ? +t.dataset.i : -1;
+    if (i !== hover) { hover = i; updatePreview(); }
+  });
+  boardEl.addEventListener('pointerleave', function (ev) {
+    if (ev.pointerType === 'mouse' && hover !== -1) { hover = -1; updatePreview(); }
+  });
 
+  function vibrate(ms) { if (navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } }
+
+  // First tap selects and previews (when Preview is on), a second tap on the same tile commits.
   function tap(idx) {
     if (!state || state.over) return;
-    var r = TT.place(state, idx);
-    if (!r) { bump(idx); return; }
+    var occupied = state.grid[idx] !== 0;
+    if (hammerMode ? !occupied : occupied) { bump(idx); return; }
+    if (previewOn && sel !== idx) { sel = idx; hover = -1; updatePreview(); return; }
+    sel = -1;
+    var r;
+    if (hammerMode) { r = TT.hammer(state, idx); hammerMode = false; }
+    else r = TT.place(state, idx);
+    if (!r) { bump(idx); render([]); return; }
     state = r.state;
     save();
     render(r.events);
-    if (navigator.vibrate) { try { navigator.vibrate(r.events.some(function (e) { return e.type === 'merge'; }) ? 25 : 8); } catch (e) {} }
+    vibrate(r.events.some(function (e) { return e.type === 'merge'; }) ? 25 : 8);
   }
   function bump(idx) { var c = cells[idx]; c.classList.remove('shake'); void c.offsetWidth; c.classList.add('shake'); }
 
@@ -75,7 +99,10 @@
       c.classList.toggle('hint', hints && !state.over && TT.wouldMerge(state, i));
       c.setAttribute('aria-label', 'row ' + (((i / TT.W) | 0) + 1) + ' column ' + ((i % TT.W) + 1) + ' ' + TT.NAME[code]);
     });
+    if (sel >= 0 && (state.over || (hammerMode ? g[sel] === 0 : g[sel] !== 0))) sel = -1;
+    if (hammerMode && (state.over || state.coins < TT.PRICE.hammer)) hammerMode = false;
     $('score').textContent = state.score;
+    $('coins').textContent = state.coins;
     if (state.score > best) { best = state.score; store.set('tt-best', best); }
     $('best').textContent = best;
     $('curItem').textContent = TT.EMOJI[state.cur];
@@ -83,10 +110,47 @@
     $('nextItem').textContent = TT.EMOJI[state.next];
     $('holdItem').textContent = state.hold ? TT.EMOJI[state.hold] : '·';
     $('undoBtn').disabled = !state.undo;
+    document.querySelectorAll('.tool').forEach(function (b) {
+      var t = b.dataset.tool;
+      if (t === 'hammer') {
+        b.disabled = state.over || state.coins < TT.PRICE.hammer || TT.emptyCount(g) === TT.N;
+        b.setAttribute('aria-pressed', hammerMode);
+      } else b.disabled = !TT.buy(state, +t);
+    });
     $('turn').textContent = 'Turn ' + state.turn;
     $('seed').textContent = 'seed ' + state.seed;
     animate(events);
+    updatePreview();
     if (state.over) showOver();
+  }
+
+  // ---- move preview: ghost of the resulting item, merged tiles outlined, plus a one-line explanation
+  function updatePreview() {
+    cells.forEach(function (c) {
+      c.classList.remove('pv', 'eat', 'target');
+      if (c.hasAttribute('data-pv')) c.removeAttribute('data-pv');
+    });
+    var note = '', hot = false, pi = sel >= 0 ? sel : (previewOn ? hover : -1), p;
+    if (state.over) note = '';
+    else if (hammerMode) {
+      if (pi >= 0 && state.grid[pi] !== 0) {
+        cells[pi].classList.add('target');
+        note = (sel === pi ? 'Tap again to smash ' : 'Smash ') + TT.NAME[state.grid[pi]] + ' (-' + TT.PRICE.hammer + ' coins)';
+        hot = sel === pi;
+      } else note = '🔨 Tap an item to remove it';
+    } else if (TT.emptyCount(state.grid) === 0) {
+      note = 'Board full - use the 🔨 hammer (' + TT.PRICE.hammer + ' coins) to clear a tile'; hot = true;
+    } else if (previewOn && pi >= 0 && (p = TT.preview(state, pi))) {
+      cells[pi].classList.add('pv'); cells[pi].setAttribute('data-pv', TT.EMOJI[p.final]);
+      p.eaten.forEach(function (i) { cells[i].classList.add('eat'); });
+      var verb = sel === pi ? 'Tap again to ' : '';
+      note = p.merged
+        ? (verb ? verb + 'merge' : 'Merges') + ' into ' + TT.NAME[p.final] + ' · +' + p.points + ' pts · +' + p.coins + ' coins'
+        : (verb ? verb + 'place ' : 'Place ') + TT.NAME[state.cur] + ' here';
+      hot = sel === pi;
+    } else if (previewOn) note = 'Tap a tile to preview, tap again to place';
+    $('note').textContent = note;
+    $('note').classList.toggle('hot', hot);
   }
 
   function animate(events) {
@@ -106,7 +170,8 @@
           fxEl.appendChild(gh);
         });
         var p = document.createElement('div');
-        p.className = 'pts'; p.textContent = '+' + ev.points; p.style.left = to.x + 'px'; p.style.top = to.y + 'px';
+        p.className = 'pts'; p.textContent = '+' + ev.points + (ev.coins ? ' · +' + ev.coins + '🪙' : '');
+        p.style.left = to.x + 'px'; p.style.top = to.y + 'px';
         fxEl.appendChild(p);
       } else if (ev.type === 'bear') {
         var a = cellCenter(ev.from), b = cellCenter(ev.to), c = cells[ev.to];
@@ -114,6 +179,10 @@
         c.classList.add('slide');
       } else if (ev.type === 'trapped') {
         cells[ev.at].classList.add('shake');
+      } else if (ev.type === 'hammer') {
+        var h = cellCenter(ev.at), hp = document.createElement('div');
+        hp.className = 'pts'; hp.textContent = '🔨 -' + TT.PRICE.hammer + '🪙'; hp.style.left = h.x + 'px'; hp.style.top = h.y + 'px';
+        fxEl.appendChild(hp);
       }
     });
     setTimeout(function () { if (fxEl.childNodes.length) fxEl.textContent = ''; }, 1000);
@@ -130,6 +199,21 @@
   $('holdBtn').addEventListener('click', function () {
     var s = TT.swap(state);
     if (s) { state = s; save(); render([]); }
+  });
+  document.querySelectorAll('.tool').forEach(function (b) {
+    var t = b.dataset.tool;
+    b.querySelector('.tp').textContent = '🪙' + TT.PRICE[t];
+    b.addEventListener('click', function () {
+      if (t === 'hammer') { hammerMode = !hammerMode; sel = -1; render([]); return; }
+      var s = TT.buy(state, +t);
+      if (s) { state = s; save(); render([]); }
+    });
+  });
+  $('previewBtn').setAttribute('aria-pressed', previewOn);
+  $('previewBtn').addEventListener('click', function () {
+    previewOn = !previewOn; sel = -1; hover = -1;
+    store.set('tt-preview', previewOn);
+    this.setAttribute('aria-pressed', previewOn); updatePreview();
   });
   $('undoBtn').addEventListener('click', function () {
     var s = TT.undo(state);

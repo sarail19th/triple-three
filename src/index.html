@@ -14,9 +14,13 @@
 <body>
 <main id="app">
   <header class="hud">
+    <button id="holdBtn" class="tray" aria-label="Reserve tray: tap to swap with the stored item">
+      <small>Reserve</small><span class="emoji" id="holdItem"></span>
+    </button>
     <div class="brand">Triple <span>Town</span></div>
     <div class="stat"><small>Score</small><b id="score">0</b></div>
     <div class="stat"><small>Best</small><b id="best">0</b></div>
+    <div class="stat coins"><small>Coins</small><b id="coins">0</b></div>
   </header>
 
   <div id="boardWrap">
@@ -24,25 +28,35 @@
     <div id="fx" aria-hidden="true"></div>
   </div>
 
-  <section class="panel">
-    <button id="holdBtn" class="slot" aria-label="Swap with stored item">
-      <small>Swap</small><span class="emoji" id="holdItem"></span>
-    </button>
-    <div class="slot current" aria-live="polite">
-      <small>Place</small><span class="emoji" id="curItem"></span><em id="curName"></em>
-    </div>
-    <div class="slot next"><small>Next</small><span class="emoji" id="nextItem"></span></div>
+  <div class="side">
+    <p id="note" class="note" aria-live="polite"></p>
+
+    <section class="panel">
+      <div class="slot current" aria-live="polite">
+        <small>Place</small><span class="emoji" id="curItem"></span><em id="curName"></em>
+      </div>
+      <div class="slot next"><small>Next</small><span class="emoji" id="nextItem"></span></div>
+    </section>
+
+    <section class="tools" aria-label="Shop">
+      <button class="tool" data-tool="1" aria-label="Buy grass"><span class="te">🌱</span><span class="tp"></span></button>
+      <button class="tool" data-tool="2" aria-label="Buy bush"><span class="te">🌿</span><span class="tp"></span></button>
+      <button class="tool" data-tool="3" aria-label="Buy tree"><span class="te">🌳</span><span class="tp"></span></button>
+      <button class="tool" data-tool="hammer" id="hammerBtn" aria-pressed="false" aria-label="Hammer: remove a placed item"><span class="te">🔨</span><span class="tp"></span></button>
+    </section>
+
     <div class="actions">
       <button id="undoBtn" class="btn" aria-label="Undo last move">↶ Undo</button>
+      <button id="previewBtn" class="btn" aria-pressed="true" aria-label="Toggle move preview">👁 Preview</button>
       <button id="hintBtn" class="btn" aria-pressed="false" aria-label="Toggle merge hints">💡 Hints</button>
       <button id="newBtn" class="btn" aria-label="New game">⟳ New</button>
     </div>
-  </section>
 
-  <footer class="foot">
-    <span id="turn">Turn 0</span> · <span id="seed">seed</span> ·
-    <a href="#" id="helpLink">How to play</a>
-  </footer>
+    <footer class="foot">
+      <span id="turn">Turn 0</span> · <span id="seed">seed</span> ·
+      <a href="#" id="helpLink">How to play</a>
+    </footer>
+  </div>
 </main>
 
 <div id="overlay" class="overlay hidden" role="dialog" aria-modal="true">
@@ -57,12 +71,13 @@
   <div class="card">
     <h2>How to play</h2>
     <ul>
-      <li>Tap an empty tile to place the item shown in <b>Place</b>.</li>
-      <li>Connect <b>3 or more</b> identical items (up, down, left, right) and they merge into the next tier on the tile you tapped:<br>🌱 → 🌿 → 🌳 → 🛖 → 🏠 → 🏡 → 🏰 → 🏯</li>
+      <li>Tap an empty tile to <b>preview</b> the move (the result shows faintly, merged items are outlined), tap it again to place the item shown in <b>Place</b>. Turn <b>Preview</b> off to place with one tap.</li>
+      <li>Connect <b>3 or more</b> identical items (up, down, left, right) and <i>all</i> of them merge into one of the next tier on the tile you tapped (4 or 5 pay more points and coins, nothing is left over):<br>🌱 → 🌿 → 🌳 → 🛖 → 🏠 → 🏡 → 🏰 → 🏯</li>
       <li>🐻 <b>Bears</b> wander one step each turn. Box one in so it cannot move and it becomes a 🪦. Three connected 🪦 merge into ⛪, three ⛪ into 🕌.</li>
-      <li>💎 The <b>crystal</b> becomes whatever item makes the best merge where you drop it.</li>
-      <li><b>Swap</b> stores the current item for later (free). <b>Undo</b> takes back your last move.</li>
-      <li>The game ends when the board is full.</li>
+      <li>💎 The <b>crystal</b> is a wildcard: it turns into whatever makes the best merge. If it cannot merge yet it waits, and merges as soon as a group of 3 is possible next to it.</li>
+      <li>🪙 <b>Coins</b> come from merges. Spend them in the shop: buy 🌱 🌿 🌳 as your current item (the old one moves to Next), or use the 🔨 hammer to remove any placed item. Shop actions are free.</li>
+      <li>The <b>Reserve</b> tray (top left) stores the current item for later (free swap). <b>Undo</b> takes back your last move.</li>
+      <li>The game ends when the board is full and you cannot afford a hammer.</li>
     </ul>
     <button id="helpClose" class="btn primary">Got it</button>
   </div>

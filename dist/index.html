@@ -11,39 +11,55 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <style>:root {
   --bg: #0f2418; --bg2: #14301f; --ink: #eaf6e6; --muted: #8fb39a; --accent: #ffd45a;
-  --t1: #5f9f55; --t2: #6aae5f; --bs: min(94vw, calc(100dvh - 306px), 470px);
+  --g1: #86c862; --g2: #74b550; --line: #3f7a2a;
+  /* board side: as wide as the phone allows, as tall as the screen allows after the controls underneath */
+  --bs: max(280px, min(100vw - 12px, calc(100dvh - 352px), 640px));
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; height: 100%; background: radial-gradient(circle at 50% 0, var(--bg2), var(--bg)); color: var(--ink);
   font: 15px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overscroll-behavior: none; user-select: none; -webkit-user-select: none; }
 body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
-#app { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 10px 0 8px; min-height: 100%; }
+#app { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 8px 0; min-height: 100%; }
 .hidden { display: none !important; }
 
-.hud { width: var(--bs); display: flex; align-items: center; gap: 10px; }
-.brand { flex: 1; font-size: 22px; font-weight: 800; letter-spacing: .3px; }
+.hud { width: var(--bs); display: flex; align-items: center; gap: 8px; }
+.brand { flex: 1; font-size: 22px; font-weight: 800; letter-spacing: .3px; min-width: 0; }
 .brand span { color: var(--accent); }
-.stat { text-align: right; min-width: 64px; }
-.stat small { display: block; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .8px; }
-.stat b { font-size: 20px; font-variant-numeric: tabular-nums; }
+.stat { text-align: right; min-width: 0; margin-left: 6px; }
+.stat small { display: block; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .8px; }
+.stat b { font-size: 19px; font-variant-numeric: tabular-nums; }
+.stat.coins b { color: var(--accent); }
+@media (max-width: 460px) { .brand { display: none; } .hud { justify-content: space-between; } .stat { flex: 1; text-align: center; } }
+
+/* reserve tray: top-left of the play area */
+.tray { position: relative; flex: none; width: 62px; height: 62px; display: flex; align-items: center; justify-content: center;
+  background: #0b1a11; border: 2px dashed #3f8a5a; border-radius: 12px; color: inherit; font: inherit; padding: 0; cursor: pointer; }
+.tray small { position: absolute; top: 2px; left: 0; right: 0; text-align: center; color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .6px; }
+.tray .emoji { font-size: 32px; line-height: 1; margin-top: 10px; }
+.tray:active { filter: brightness(1.3); }
 
 #boardWrap { position: relative; width: var(--bs); height: var(--bs); }
-#board { width: 100%; height: 100%; display: grid; grid-template: repeat(6, 1fr) / repeat(6, 1fr); gap: 4px; padding: 6px;
-  background: #0b1a11; border-radius: 16px; box-shadow: 0 8px 28px #0008, inset 0 0 0 2px #1d4a30; touch-action: manipulation; }
-.cell { position: relative; border-radius: 10px; display: flex; align-items: center; justify-content: center;
-  font-size: calc(var(--bs) / 6 * .58); line-height: 1; cursor: pointer; background: var(--t1);
-  box-shadow: inset 0 -3px 0 #0003, inset 0 2px 0 #fff2; transition: background .2s; }
-.cell.alt { background: var(--t2); }
-/* tinted tiles by content */
-.cell[data-c="2"], .cell[data-c="3"] { background: #4e8f4a; }
-.cell[data-c="4"], .cell[data-c="5"], .cell[data-c="6"], .cell[data-c="7"], .cell[data-c="8"] { background: #b58d5a; }
-.cell[data-c="9"] { background: #7a5236; }
-.cell[data-c="10"] { background: #666e78; }
-.cell[data-c="11"], .cell[data-c="12"] { background: #8a78b8; }
-.cell[data-c="13"] { background: #4a8fb8; }
-.cell.empty:active { filter: brightness(1.25); }
-.cell.hint::after { content: ""; position: absolute; inset: 30%; border-radius: 50%; background: var(--accent); opacity: .85; box-shadow: 0 0 10px var(--accent); }
-.cell .e { display: block; pointer-events: none; }
+/* plain checkerboard field: flat squares, no gaps, no rounded bubbles */
+#board { width: 100%; height: 100%; display: grid; grid-template: repeat(6, 1fr) / repeat(6, 1fr); gap: 0; padding: 0;
+  background: var(--g1); border-radius: 4px; overflow: hidden; box-shadow: 0 8px 28px #0008, 0 0 0 3px #1d4a30; touch-action: manipulation; }
+.cell { position: relative; display: flex; align-items: center; justify-content: center;
+  font-size: calc(var(--bs) / 6 * .62); line-height: 1; cursor: pointer; background: var(--g1);
+  outline: 1px solid #0000001a; outline-offset: -1px; }
+.cell.alt { background: var(--g2); }
+.cell.empty:active { filter: brightness(1.12); }
+.cell.hint::after { content: ""; position: absolute; inset: 36%; border-radius: 50%; background: var(--accent); opacity: .85; box-shadow: 0 0 10px var(--accent); }
+.cell .e { display: block; pointer-events: none; filter: drop-shadow(0 2px 1.5px #0005); }
+
+/* preview of the move before it is committed */
+.cell.pv::before { content: attr(data-pv); position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  opacity: .6; pointer-events: none; z-index: 1; animation: breathe 1s ease-in-out infinite alternate; }
+.cell.pv { box-shadow: inset 0 0 0 3px var(--accent); z-index: 1; }
+.cell.eat { box-shadow: inset 0 0 0 3px #fff9; }
+.cell.eat .e { opacity: .45; transform: scale(.8); transition: transform .15s, opacity .15s; }
+.cell.target { box-shadow: inset 0 0 0 3px #ff5a5a; background-image: linear-gradient(#ff5a5a44, #ff5a5a44); }
+.cell.target .e { animation: wobble .5s infinite alternate; }
+@keyframes breathe { from { transform: scale(.9); } to { transform: scale(1.05); } }
+@keyframes wobble { from { transform: rotate(-8deg); } to { transform: rotate(8deg); } }
 
 /* animations (cells are not scaled as layout; only the inner emoji is) */
 .cell.drop .e { animation: drop .22s ease-out; }
@@ -56,52 +72,80 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   55% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
 @keyframes slide { from { transform: translate(var(--dx), var(--dy)); } to { transform: none; } }
 
-#fx { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
-.ghost { position: absolute; display: flex; align-items: center; justify-content: center; font-size: calc(var(--bs) / 6 * .58);
+#fx { position: absolute; inset: 0; pointer-events: none; overflow: visible; z-index: 2; }
+.ghost { position: absolute; display: flex; align-items: center; justify-content: center; font-size: calc(var(--bs) / 6 * .62);
   animation: fly .3s ease-in forwards; }
 @keyframes fly { to { transform: translate(var(--dx), var(--dy)); opacity: 0; } }
-.pts { position: absolute; font-weight: 800; color: var(--accent); text-shadow: 0 2px 4px #000a; transform: translate(-50%, -50%);
-  animation: rise .9s ease-out forwards; font-size: 16px; }
+.pts { position: absolute; font-weight: 800; color: var(--accent); text-shadow: 0 2px 4px #000c; transform: translate(-50%, -50%);
+  animation: rise .9s ease-out forwards; font-size: 16px; white-space: nowrap; }
 @keyframes rise { to { transform: translate(-50%, -190%); opacity: 0; } }
 
-.panel { width: var(--bs); display: grid; grid-template-columns: 1fr 1.5fr 1fr; gap: 8px; }
-.slot { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 98px;
+.side { width: var(--bs); display: flex; flex-direction: column; gap: 8px; }
+.note { margin: 0; min-height: 1.35em; text-align: center; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.note.hot { color: var(--accent); }
+
+.panel { display: grid; grid-template-columns: 1.5fr 1fr; gap: 8px; }
+.slot { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 84px;
   background: #0b1a11; border: 2px solid #1d4a30; border-radius: 14px; color: inherit; font: inherit; padding: 4px; }
 .slot small { position: absolute; top: 4px; left: 8px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .8px; }
-.slot .emoji { font-size: 38px; line-height: 1; margin-top: 10px; min-height: 38px; }
+.slot .emoji { font-size: 34px; line-height: 1; margin-top: 10px; min-height: 34px; }
 .slot em { position: absolute; bottom: 3px; font-style: normal; font-size: 11px; color: var(--muted); }
 .slot.current { border-color: var(--accent); }
-.slot.current .emoji { font-size: 44px; margin-top: 6px; }
+.slot.current .emoji { font-size: 40px; margin-top: 6px; }
 .slot.next { opacity: .85; }
 .slot.next .emoji { font-size: 30px; }
-button.slot { cursor: pointer; }
-button.slot:active { filter: brightness(1.3); }
-.actions { grid-column: 1 / -1; display: flex; gap: 8px; }
-.btn { flex: 1; padding: 12px 8px; border-radius: 12px; border: 2px solid #1d4a30; background: #153322; color: var(--ink); font: 600 15px inherit; cursor: pointer; }
+
+/* shop */
+.tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.tool { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 6px 2px; border-radius: 12px;
+  border: 2px solid #8a6d1c; background: #2a2410; color: var(--ink); font: inherit; cursor: pointer; }
+.tool .te { font-size: 24px; line-height: 1.1; }
+.tool .tp { font-size: 12px; font-weight: 700; color: var(--accent); }
+.tool:active:not(:disabled) { filter: brightness(1.3); }
+.tool:disabled { opacity: .35; }
+.tool[aria-pressed="true"] { background: #5a1f1f; border-color: #ff5a5a; }
+
+.actions { display: flex; gap: 6px; }
+.btn { flex: 1; padding: 11px 4px; border-radius: 12px; border: 2px solid #1d4a30; background: #153322; color: var(--ink); font: 600 14px inherit; cursor: pointer; white-space: nowrap; }
 .btn:active:not(:disabled) { filter: brightness(1.3); }
 .btn:disabled { opacity: .4; }
 .btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
 .btn.primary { background: var(--accent); color: #2b2100; border-color: var(--accent); }
 
-.foot { color: var(--muted); font-size: 12px; }
+.foot { color: var(--muted); font-size: 12px; text-align: center; }
 .foot a { color: var(--muted); }
 
 .overlay { position: fixed; inset: 0; background: #000b; display: flex; align-items: center; justify-content: center; z-index: 10; padding: 16px; }
-.card { background: #14301f; border: 2px solid var(--accent); border-radius: 18px; padding: 20px; max-width: 380px; width: 100%; text-align: center; }
+.card { background: #14301f; border: 2px solid var(--accent); border-radius: 18px; padding: 20px; max-width: 380px; width: 100%; text-align: center; max-height: 100%; overflow: auto; }
 .card h2 { margin: 0 0 8px; font-size: 24px; }
 .card ul { text-align: left; padding-left: 18px; margin: 0 0 14px; }
 .card li { margin-bottom: 8px; }
 .card p { margin: 0 0 14px; font-size: 17px; }
 .card .btn { width: 100%; }
-@media (prefers-reduced-motion: reduce) { .cell .e, .cell, .ghost, .pts { animation-duration: .01s !important; } }
+
+/* wide screens: board on the left, controls on the right, board as large as the height allows */
+@media (min-width: 900px) and (min-aspect-ratio: 5/4) {
+  :root { --bs: max(320px, min(calc(100dvh - 124px), calc(100vw - 460px), 820px)); }
+  #app { display: grid; grid-template-columns: var(--bs) 340px; justify-content: center; align-content: start; align-items: start; column-gap: 28px; row-gap: 10px; padding-top: 14px; }
+  .hud { grid-column: 1; grid-row: 1; }
+  #boardWrap { grid-column: 1; grid-row: 2; }
+  .side { grid-column: 2; grid-row: 1 / span 2; width: 340px; padding-top: 4px; }
+  .tray { width: 72px; height: 72px; }
+  .tray .emoji { font-size: 38px; }
+}
+@media (prefers-reduced-motion: reduce) { .cell .e, .cell, .ghost, .pts, .cell::before { animation-duration: .01s !important; } }
 </style>
 </head>
 <body>
 <main id="app">
   <header class="hud">
+    <button id="holdBtn" class="tray" aria-label="Reserve tray: tap to swap with the stored item">
+      <small>Reserve</small><span class="emoji" id="holdItem"></span>
+    </button>
     <div class="brand">Triple <span>Town</span></div>
     <div class="stat"><small>Score</small><b id="score">0</b></div>
     <div class="stat"><small>Best</small><b id="best">0</b></div>
+    <div class="stat coins"><small>Coins</small><b id="coins">0</b></div>
   </header>
 
   <div id="boardWrap">
@@ -109,25 +153,35 @@ button.slot:active { filter: brightness(1.3); }
     <div id="fx" aria-hidden="true"></div>
   </div>
 
-  <section class="panel">
-    <button id="holdBtn" class="slot" aria-label="Swap with stored item">
-      <small>Swap</small><span class="emoji" id="holdItem"></span>
-    </button>
-    <div class="slot current" aria-live="polite">
-      <small>Place</small><span class="emoji" id="curItem"></span><em id="curName"></em>
-    </div>
-    <div class="slot next"><small>Next</small><span class="emoji" id="nextItem"></span></div>
+  <div class="side">
+    <p id="note" class="note" aria-live="polite"></p>
+
+    <section class="panel">
+      <div class="slot current" aria-live="polite">
+        <small>Place</small><span class="emoji" id="curItem"></span><em id="curName"></em>
+      </div>
+      <div class="slot next"><small>Next</small><span class="emoji" id="nextItem"></span></div>
+    </section>
+
+    <section class="tools" aria-label="Shop">
+      <button class="tool" data-tool="1" aria-label="Buy grass"><span class="te">🌱</span><span class="tp"></span></button>
+      <button class="tool" data-tool="2" aria-label="Buy bush"><span class="te">🌿</span><span class="tp"></span></button>
+      <button class="tool" data-tool="3" aria-label="Buy tree"><span class="te">🌳</span><span class="tp"></span></button>
+      <button class="tool" data-tool="hammer" id="hammerBtn" aria-pressed="false" aria-label="Hammer: remove a placed item"><span class="te">🔨</span><span class="tp"></span></button>
+    </section>
+
     <div class="actions">
       <button id="undoBtn" class="btn" aria-label="Undo last move">↶ Undo</button>
+      <button id="previewBtn" class="btn" aria-pressed="true" aria-label="Toggle move preview">👁 Preview</button>
       <button id="hintBtn" class="btn" aria-pressed="false" aria-label="Toggle merge hints">💡 Hints</button>
       <button id="newBtn" class="btn" aria-label="New game">⟳ New</button>
     </div>
-  </section>
 
-  <footer class="foot">
-    <span id="turn">Turn 0</span> · <span id="seed">seed</span> ·
-    <a href="#" id="helpLink">How to play</a>
-  </footer>
+    <footer class="foot">
+      <span id="turn">Turn 0</span> · <span id="seed">seed</span> ·
+      <a href="#" id="helpLink">How to play</a>
+    </footer>
+  </div>
 </main>
 
 <div id="overlay" class="overlay hidden" role="dialog" aria-modal="true">
@@ -142,12 +196,13 @@ button.slot:active { filter: brightness(1.3); }
   <div class="card">
     <h2>How to play</h2>
     <ul>
-      <li>Tap an empty tile to place the item shown in <b>Place</b>.</li>
-      <li>Connect <b>3 or more</b> identical items (up, down, left, right) and they merge into the next tier on the tile you tapped:<br>🌱 → 🌿 → 🌳 → 🛖 → 🏠 → 🏡 → 🏰 → 🏯</li>
+      <li>Tap an empty tile to <b>preview</b> the move (the result shows faintly, merged items are outlined), tap it again to place the item shown in <b>Place</b>. Turn <b>Preview</b> off to place with one tap.</li>
+      <li>Connect <b>3 or more</b> identical items (up, down, left, right) and <i>all</i> of them merge into one of the next tier on the tile you tapped (4 or 5 pay more points and coins, nothing is left over):<br>🌱 → 🌿 → 🌳 → 🛖 → 🏠 → 🏡 → 🏰 → 🏯</li>
       <li>🐻 <b>Bears</b> wander one step each turn. Box one in so it cannot move and it becomes a 🪦. Three connected 🪦 merge into ⛪, three ⛪ into 🕌.</li>
-      <li>💎 The <b>crystal</b> becomes whatever item makes the best merge where you drop it.</li>
-      <li><b>Swap</b> stores the current item for later (free). <b>Undo</b> takes back your last move.</li>
-      <li>The game ends when the board is full.</li>
+      <li>💎 The <b>crystal</b> is a wildcard: it turns into whatever makes the best merge. If it cannot merge yet it waits, and merges as soon as a group of 3 is possible next to it.</li>
+      <li>🪙 <b>Coins</b> come from merges. Spend them in the shop: buy 🌱 🌿 🌳 as your current item (the old one moves to Next), or use the 🔨 hammer to remove any placed item. Shop actions are free.</li>
+      <li>The <b>Reserve</b> tray (top left) stores the current item for later (free swap). <b>Undo</b> takes back your last move.</li>
+      <li>The game ends when the board is full and you cannot afford a hammer.</li>
     </ul>
     <button id="helpClose" class="btn primary">Got it</button>
   </div>
@@ -172,6 +227,11 @@ button.slot:active { filter: brightness(1.3); }
   // item queue draw weights (sum 100): mostly grass, sometimes bush/tree/bear, rare crystal
   var WEIGHTS = [[1, 62], [2, 16], [3, 6], [BEAR, 12], [CRYSTAL, 4]];
   var QUEUE_ITEMS = [1, 2, 3, BEAR, CRYSTAL];
+  // coins: earned per merge (COIN[consumed code] * (group size - 2)), spent in the shop (free actions, no turn passes)
+  var START_COINS = 10;
+  var COIN = { 1: 2, 2: 4, 3: 8, 4: 16, 5: 30, 6: 60, 7: 120, 10: 20, 11: 100 };
+  var PRICE = { 1: 6, 2: 15, 3: 35, hammer: 20 };
+  var BUYABLE = [1, 2, 3];
 
   // ---- seeded RNG (mulberry32). The state is one uint32 kept inside the game state, so undo/replay is exact.
   function rand(s) {
@@ -189,13 +249,13 @@ button.slot:active { filter: brightness(1.3); }
   }
 
   function clone(s) {
-    return { grid: s.grid.slice(), cur: s.cur, next: s.next, hold: s.hold, score: s.score, turn: s.turn,
+    return { grid: s.grid.slice(), cur: s.cur, next: s.next, hold: s.hold, score: s.score, coins: s.coins, turn: s.turn,
       over: s.over, rng: s.rng, seed: s.seed, undo: s.undo };
   }
 
   function newGame(seed) {
     seed = (seed >>> 0) || 1;
-    var s = { grid: new Array(N).fill(EMPTY), cur: 1, next: 1, hold: 0, score: 0, turn: 0, over: false, rng: seed, seed: seed, undo: null };
+    var s = { grid: new Array(N).fill(EMPTY), cur: 1, next: 1, hold: 0, score: 0, coins: START_COINS, turn: 0, over: false, rng: seed, seed: seed, undo: null };
     s.next = drawItem(s); // always open with grass
     return s;
   }
@@ -231,21 +291,42 @@ button.slot:active { filter: brightness(1.3); }
       if (!NEXT[code]) return;
       var g = group(s.grid, at, code);
       if (g.length < 3) return;
-      var pts = g.length * BASE[code];
+      var pts = g.length * BASE[code], coins = (g.length - 2) * COIN[code];
       for (var k = 0; k < g.length; k++) s.grid[g[k]] = EMPTY;
       s.grid[at] = NEXT[code];
-      s.score += pts;
-      events.push({ type: 'merge', at: at, cells: g, from: code, to: NEXT[code], points: pts });
+      s.score += pts; s.coins += coins;
+      events.push({ type: 'merge', at: at, cells: g, from: code, to: NEXT[code], points: pts, coins: coins });
     }
   }
 
-  // The crystal becomes the highest building tier that forms a 3+ group here; otherwise it stays as an inert item.
-  function placeCrystal(s, at, events) {
-    for (var t = 7; t >= 1; t--) {
-      s.grid[at] = t;
-      if (group(s.grid, at, t).length >= 3) { events.push({ type: 'crystal', at: at, as: t }); resolveAt(s, at, events); return; }
+  // Highest building tier the crystal at `at` could stand in for to form a 3+ group; 0 if none (grid is left unchanged).
+  function crystalTier(grid, at) {
+    var keep = grid[at], found = 0;
+    for (var t = 7; t >= 1 && !found; t--) { grid[at] = t; if (group(grid, at, t).length >= 3) found = t; }
+    grid[at] = keep;
+    return found;
+  }
+
+  // Every crystal on the board turns into the best building tier that merges at its cell; one that cannot merge yet
+  // stays as an inert wildcard and is re-checked after every placement. `first` (the crystal just placed) goes first.
+  function settleCrystals(s, events, first) {
+    for (var again = true; again;) {
+      again = false;
+      var order = [], i;
+      if (first !== undefined && s.grid[first] === CRYSTAL) order.push(first);
+      for (i = 0; i < N; i++) if (s.grid[i] === CRYSTAL && i !== first) order.push(i);
+      for (var k = 0; k < order.length && !again; k++) {
+        var t = crystalTier(s.grid, order[k]);
+        if (t) { s.grid[order[k]] = t; events.push({ type: 'crystal', at: order[k], as: t }); resolveAt(s, order[k], events); again = true; }
+      }
     }
-    s.grid[at] = CRYSTAL;
+  }
+
+  // Put `item` on empty cell idx and resolve every merge it causes (no bear movement). Mutates s.
+  function applyItem(s, idx, item, events) {
+    s.grid[idx] = item;
+    if (item === CRYSTAL) settleCrystals(s, events, idx);
+    else { resolveAt(s, idx, events); settleCrystals(s, events); }
   }
 
   // Each bear takes one random step into an empty neighbour; a bear with none is trapped and becomes a tombstone.
@@ -263,6 +344,8 @@ button.slot:active { filter: brightness(1.3); }
   }
 
   function emptyCount(grid) { var n = 0; for (var i = 0; i < N; i++) if (grid[i] === EMPTY) n++; return n; }
+  // A full board only ends the game when the player cannot afford a hammer to clear a tile.
+  function isOver(s) { return emptyCount(s.grid) === 0 && s.coins < PRICE.hammer; }
 
   // Play one turn: put s.cur on empty cell idx. Returns {state, events}, or null if the move is illegal.
   function place(state, idx) {
@@ -270,11 +353,10 @@ button.slot:active { filter: brightness(1.3); }
     var s = clone(state), events = [], item = s.cur;
     s.undo = clone(state); s.undo.undo = null; // one level of undo, no nesting
     events.push({ type: 'place', at: idx, item: item });
-    if (item === CRYSTAL) placeCrystal(s, idx, events);
-    else { s.grid[idx] = item; resolveAt(s, idx, events); }
+    applyItem(s, idx, item, events);
     moveBears(s, events);
     s.cur = s.next; s.next = drawItem(s); s.turn++;
-    if (emptyCount(s.grid) === 0) { s.over = true; events.push({ type: 'over', score: s.score }); }
+    if (isOver(s)) { s.over = true; events.push({ type: 'over', score: s.score }); }
     return { state: s, events: events };
   }
 
@@ -285,6 +367,34 @@ button.slot:active { filter: brightness(1.3); }
     if (!s.hold) { s.hold = s.cur; s.cur = s.next; s.next = drawItem(s); }
     else { var t = s.cur; s.cur = s.hold; s.hold = t; }
     return s;
+  }
+
+  // Shop: swap the current item for a bought one (cost in coins, free action). The old current item becomes `next`;
+  // the old `next` is discarded. Returns a new state or null (cannot afford, not sold, already current, game over).
+  function buy(state, item) {
+    if (state.over || BUYABLE.indexOf(item) < 0 || state.coins < PRICE[item] || state.cur === item) return null;
+    var s = clone(state);
+    s.coins -= PRICE[item]; s.next = s.cur; s.cur = item;
+    return isOver(s) ? null : s; // never let a purchase strand a full board without hammer money
+  }
+
+  // Shop: the hammer removes whatever stands on cell idx (free action, costs coins). Returns {state, events} or null.
+  function hammer(state, idx) {
+    if (state.over || !(idx >= 0 && idx < N) || state.grid[idx] === EMPTY || state.coins < PRICE.hammer) return null;
+    var s = clone(state), item = s.grid[idx];
+    s.grid[idx] = EMPTY; s.coins -= PRICE.hammer; s.over = isOver(s);
+    return { state: s, events: [{ type: 'hammer', at: idx, item: item }] };
+  }
+
+  // What would placing the current item at idx do? Pure (no bear movement, no rng use). Returns null for an illegal move,
+  // else {item, final (code left on idx), eaten (other cells emptied by merges), points, coins, merged}.
+  function preview(state, idx) {
+    if (state.over || !(idx >= 0 && idx < N) || state.grid[idx] !== EMPTY) return null;
+    var s = clone(state), events = [], eaten = [], pts = 0, coins = 0;
+    applyItem(s, idx, s.cur, events);
+    for (var i = 0; i < N; i++) if (i !== idx && state.grid[i] !== EMPTY && s.grid[i] === EMPTY) eaten.push(i);
+    events.forEach(function (e) { if (e.type === 'merge') { pts += e.points; coins += e.coins; } });
+    return { item: state.cur, final: s.grid[idx], eaten: eaten, points: pts, coins: coins, merged: pts > 0 };
   }
 
   // Revert the last placement (one level, including any swap made since). Returns null if there is nothing to undo.
@@ -308,7 +418,8 @@ button.slot:active { filter: brightness(1.3); }
     if (QUEUE_ITEMS.indexOf(s.next) < 0) p.push('bad next item ' + s.next);
     if (s.hold && QUEUE_ITEMS.indexOf(s.hold) < 0) p.push('bad hold ' + s.hold);
     if (typeof s.score !== 'number' || s.score < 0 || s.score !== (s.score | 0)) p.push('bad score ' + s.score);
-    if (s.over !== (emptyCount(s.grid) === 0)) p.push('over flag inconsistent with grid');
+    if (typeof s.coins !== 'number' || s.coins < 0 || s.coins !== (s.coins | 0)) p.push('bad coins ' + s.coins);
+    if (s.over !== isOver(s)) p.push('over flag inconsistent with grid/coins');
     // after a resolved turn no mergeable group of 3+ may remain
     var seen = {};
     for (i = 0; i < N; i++) {
@@ -319,27 +430,21 @@ button.slot:active { filter: brightness(1.3); }
         if (g.length >= 3) p.push('unmerged group of ' + NAME[c] + ' at ' + i);
       }
     }
+    // a crystal that could merge must already have done so
+    for (i = 0; i < N; i++) if (s.grid[i] === CRYSTAL && crystalTier(s.grid.slice(), i)) p.push('crystal at ' + i + ' could merge');
     return p;
   }
 
   // Would placing the current item at idx trigger a merge? (for the tap hint). Does not mutate.
-  function wouldMerge(state, idx) {
-    if (state.grid[idx] !== EMPTY) return false;
-    var item = state.cur, g = state.grid.slice(), t;
-    if (item === CRYSTAL) {
-      for (t = 7; t >= 1; t--) { g[idx] = t; if (group(g, idx, t).length >= 3) return true; }
-      return false;
-    }
-    if (!NEXT[item]) return false;
-    g[idx] = item;
-    return group(g, idx, item).length >= 3;
-  }
+  function wouldMerge(state, idx) { var p = preview(state, idx); return !!p && p.merged; }
 
   return {
     W: W, H: H, N: N, EMPTY: EMPTY, BEAR: BEAR, TOMB: TOMB, CRYSTAL: CRYSTAL,
     EMOJI: EMOJI, NAME: NAME, NEXT: NEXT, BASE: BASE, WEIGHTS: WEIGHTS,
+    START_COINS: START_COINS, COIN: COIN, PRICE: PRICE, BUYABLE: BUYABLE,
     rand: rand, drawItem: drawItem, newGame: newGame, neighbors: neighbors, group: group,
-    place: place, swap: swap, undo: undo, validate: validate, wouldMerge: wouldMerge, emptyCount: emptyCount
+    place: place, swap: swap, undo: undo, validate: validate, wouldMerge: wouldMerge, emptyCount: emptyCount,
+    buy: buy, hammer: hammer, preview: preview, isOver: isOver
   };
 });
 </script>
@@ -354,6 +459,8 @@ button.slot:active { filter: brightness(1.3); }
 
   var boardEl = $('board'), fxEl = $('fx');
   var state, best = store.get('tt-best', 0), hints = false;
+  var previewOn = store.get('tt-preview', true) !== false;
+  var sel = -1, hover = -1, hammerMode = false; // UI-only: selected tile awaiting confirmation, mouse hover, hammer armed
   var cells = [];
 
   function seedFromHash() {
@@ -364,6 +471,7 @@ button.slot:active { filter: brightness(1.3); }
 
   function startNew(seed) {
     state = TT.newGame(seed || randomSeed());
+    sel = -1; hover = -1; hammerMode = false;
     $('overlay').classList.add('hidden');
     save();
     render([]);
@@ -372,6 +480,8 @@ button.slot:active { filter: brightness(1.3); }
 
   function loadSaved() {
     var s = store.get('tt-save', null);
+    // saves from before the shop existed have no coins
+    if (s && typeof s.coins !== 'number') { s.coins = TT.START_COINS; if (s.undo) s.undo.coins = TT.START_COINS; }
     try { if (s && TT.validate(s).length === 0 && typeof s.rng === 'number') return s; } catch (e) {}
     return null;
   }
@@ -388,15 +498,34 @@ button.slot:active { filter: brightness(1.3); }
     var t = ev.target.closest ? ev.target.closest('.cell') : null;
     if (t) tap(+t.dataset.i);
   });
+  // mouse hover shows the preview without clicking (touch uses tap-to-select, tap-again-to-confirm)
+  boardEl.addEventListener('pointerover', function (ev) {
+    if (ev.pointerType !== 'mouse') return;
+    var t = ev.target.closest ? ev.target.closest('.cell') : null;
+    var i = t ? +t.dataset.i : -1;
+    if (i !== hover) { hover = i; updatePreview(); }
+  });
+  boardEl.addEventListener('pointerleave', function (ev) {
+    if (ev.pointerType === 'mouse' && hover !== -1) { hover = -1; updatePreview(); }
+  });
 
+  function vibrate(ms) { if (navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } }
+
+  // First tap selects and previews (when Preview is on), a second tap on the same tile commits.
   function tap(idx) {
     if (!state || state.over) return;
-    var r = TT.place(state, idx);
-    if (!r) { bump(idx); return; }
+    var occupied = state.grid[idx] !== 0;
+    if (hammerMode ? !occupied : occupied) { bump(idx); return; }
+    if (previewOn && sel !== idx) { sel = idx; hover = -1; updatePreview(); return; }
+    sel = -1;
+    var r;
+    if (hammerMode) { r = TT.hammer(state, idx); hammerMode = false; }
+    else r = TT.place(state, idx);
+    if (!r) { bump(idx); render([]); return; }
     state = r.state;
     save();
     render(r.events);
-    if (navigator.vibrate) { try { navigator.vibrate(r.events.some(function (e) { return e.type === 'merge'; }) ? 25 : 8); } catch (e) {} }
+    vibrate(r.events.some(function (e) { return e.type === 'merge'; }) ? 25 : 8);
   }
   function bump(idx) { var c = cells[idx]; c.classList.remove('shake'); void c.offsetWidth; c.classList.add('shake'); }
 
@@ -420,7 +549,10 @@ button.slot:active { filter: brightness(1.3); }
       c.classList.toggle('hint', hints && !state.over && TT.wouldMerge(state, i));
       c.setAttribute('aria-label', 'row ' + (((i / TT.W) | 0) + 1) + ' column ' + ((i % TT.W) + 1) + ' ' + TT.NAME[code]);
     });
+    if (sel >= 0 && (state.over || (hammerMode ? g[sel] === 0 : g[sel] !== 0))) sel = -1;
+    if (hammerMode && (state.over || state.coins < TT.PRICE.hammer)) hammerMode = false;
     $('score').textContent = state.score;
+    $('coins').textContent = state.coins;
     if (state.score > best) { best = state.score; store.set('tt-best', best); }
     $('best').textContent = best;
     $('curItem').textContent = TT.EMOJI[state.cur];
@@ -428,10 +560,47 @@ button.slot:active { filter: brightness(1.3); }
     $('nextItem').textContent = TT.EMOJI[state.next];
     $('holdItem').textContent = state.hold ? TT.EMOJI[state.hold] : '·';
     $('undoBtn').disabled = !state.undo;
+    document.querySelectorAll('.tool').forEach(function (b) {
+      var t = b.dataset.tool;
+      if (t === 'hammer') {
+        b.disabled = state.over || state.coins < TT.PRICE.hammer || TT.emptyCount(g) === TT.N;
+        b.setAttribute('aria-pressed', hammerMode);
+      } else b.disabled = !TT.buy(state, +t);
+    });
     $('turn').textContent = 'Turn ' + state.turn;
     $('seed').textContent = 'seed ' + state.seed;
     animate(events);
+    updatePreview();
     if (state.over) showOver();
+  }
+
+  // ---- move preview: ghost of the resulting item, merged tiles outlined, plus a one-line explanation
+  function updatePreview() {
+    cells.forEach(function (c) {
+      c.classList.remove('pv', 'eat', 'target');
+      if (c.hasAttribute('data-pv')) c.removeAttribute('data-pv');
+    });
+    var note = '', hot = false, pi = sel >= 0 ? sel : (previewOn ? hover : -1), p;
+    if (state.over) note = '';
+    else if (hammerMode) {
+      if (pi >= 0 && state.grid[pi] !== 0) {
+        cells[pi].classList.add('target');
+        note = (sel === pi ? 'Tap again to smash ' : 'Smash ') + TT.NAME[state.grid[pi]] + ' (-' + TT.PRICE.hammer + ' coins)';
+        hot = sel === pi;
+      } else note = '🔨 Tap an item to remove it';
+    } else if (TT.emptyCount(state.grid) === 0) {
+      note = 'Board full - use the 🔨 hammer (' + TT.PRICE.hammer + ' coins) to clear a tile'; hot = true;
+    } else if (previewOn && pi >= 0 && (p = TT.preview(state, pi))) {
+      cells[pi].classList.add('pv'); cells[pi].setAttribute('data-pv', TT.EMOJI[p.final]);
+      p.eaten.forEach(function (i) { cells[i].classList.add('eat'); });
+      var verb = sel === pi ? 'Tap again to ' : '';
+      note = p.merged
+        ? (verb ? verb + 'merge' : 'Merges') + ' into ' + TT.NAME[p.final] + ' · +' + p.points + ' pts · +' + p.coins + ' coins'
+        : (verb ? verb + 'place ' : 'Place ') + TT.NAME[state.cur] + ' here';
+      hot = sel === pi;
+    } else if (previewOn) note = 'Tap a tile to preview, tap again to place';
+    $('note').textContent = note;
+    $('note').classList.toggle('hot', hot);
   }
 
   function animate(events) {
@@ -451,7 +620,8 @@ button.slot:active { filter: brightness(1.3); }
           fxEl.appendChild(gh);
         });
         var p = document.createElement('div');
-        p.className = 'pts'; p.textContent = '+' + ev.points; p.style.left = to.x + 'px'; p.style.top = to.y + 'px';
+        p.className = 'pts'; p.textContent = '+' + ev.points + (ev.coins ? ' · +' + ev.coins + '🪙' : '');
+        p.style.left = to.x + 'px'; p.style.top = to.y + 'px';
         fxEl.appendChild(p);
       } else if (ev.type === 'bear') {
         var a = cellCenter(ev.from), b = cellCenter(ev.to), c = cells[ev.to];
@@ -459,6 +629,10 @@ button.slot:active { filter: brightness(1.3); }
         c.classList.add('slide');
       } else if (ev.type === 'trapped') {
         cells[ev.at].classList.add('shake');
+      } else if (ev.type === 'hammer') {
+        var h = cellCenter(ev.at), hp = document.createElement('div');
+        hp.className = 'pts'; hp.textContent = '🔨 -' + TT.PRICE.hammer + '🪙'; hp.style.left = h.x + 'px'; hp.style.top = h.y + 'px';
+        fxEl.appendChild(hp);
       }
     });
     setTimeout(function () { if (fxEl.childNodes.length) fxEl.textContent = ''; }, 1000);
@@ -475,6 +649,21 @@ button.slot:active { filter: brightness(1.3); }
   $('holdBtn').addEventListener('click', function () {
     var s = TT.swap(state);
     if (s) { state = s; save(); render([]); }
+  });
+  document.querySelectorAll('.tool').forEach(function (b) {
+    var t = b.dataset.tool;
+    b.querySelector('.tp').textContent = '🪙' + TT.PRICE[t];
+    b.addEventListener('click', function () {
+      if (t === 'hammer') { hammerMode = !hammerMode; sel = -1; render([]); return; }
+      var s = TT.buy(state, +t);
+      if (s) { state = s; save(); render([]); }
+    });
+  });
+  $('previewBtn').setAttribute('aria-pressed', previewOn);
+  $('previewBtn').addEventListener('click', function () {
+    previewOn = !previewOn; sel = -1; hover = -1;
+    store.set('tt-preview', previewOn);
+    this.setAttribute('aria-pressed', previewOn); updatePreview();
   });
   $('undoBtn').addEventListener('click', function () {
     var s = TT.undo(state);

@@ -2,7 +2,7 @@
 
 Serves dist/ over http://localhost (so the service worker can register), then:
   - checks PWA bits (manifest, icons, service worker controls the page),
-  - plays random turns (swap / undo mixed in) on a seeded game, asserting after EVERY action that the game state
+  - plays random turns (swap / undo / shop purchases / hammer / preview on+off mixed in) on a seeded game, asserting after EVERY action that the game state
     is valid and the DOM mirrors it,
   - keeps playing until the board is full, checks the game-over screen, new game, and reload-resume.
 
@@ -54,14 +54,28 @@ def check_consistent(page, where):
         cur: document.getElementById('curItem').textContent,
         next: document.getElementById('nextItem').textContent,
         hold: document.getElementById('holdItem').textContent,
+        coins: document.getElementById('coins').textContent,
         undoDisabled: document.getElementById('undoBtn').disabled })""")
     assert len(dom['cells']) == 36, f'{where}: board must have 36 cells'
     assert dom['cells'] == [EMOJI[v] for v in st['grid']], f'{where}: DOM board differs from state'
     assert dom['score'] == str(st['score']), f'{where}: score text'
+    assert dom['coins'] == str(st['coins']), f'{where}: coins text'
     assert dom['cur'] == EMOJI[st['cur']] and dom['next'] == EMOJI[st['next']], f'{where}: queue display'
     assert dom['hold'] == (EMOJI[st['hold']] if st['hold'] else '·'), f'{where}: hold display'
     assert dom['undoDisabled'] == (st['undo'] is None), f'{where}: undo button state'
     return st
+
+
+def tap_cell(page, idx, preview_on):
+    """Preview on: the first tap only previews (state unchanged), the second commits."""
+    sel = f'#board .cell[data-i="{idx}"]'
+    if preview_on:
+        before = state(page)
+        page.tap(sel)
+        mid = state(page)
+        assert mid['grid'] == before['grid'] and mid['turn'] == before['turn'] and mid['coins'] == before['coins'], 'first tap must only preview'
+        assert page.locator('#board .cell.pv, #board .cell.target').count() == 1, 'exactly one previewed tile'
+    page.tap(sel)
 
 
 with sync_playwright() as p:
@@ -94,38 +108,74 @@ with sync_playwright() as p:
     # no horizontal overflow on a phone
     assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), 'horizontal scroll on mobile'
     st = check_consistent(page, 'initial')
-    assert st['turn'] == 0 and st['seed'] == 12345 and st['grid'] == [0] * 36
+    assert st['turn'] == 0 and st['seed'] == 12345 and st['grid'] == [0] * 36 and st['coins'] == 10
+    # board is large on a phone and the reserve tray sits at the top-left, above the board
+    box = page.evaluate("""() => { const b = document.getElementById('board').getBoundingClientRect(), t = document.getElementById('holdBtn').getBoundingClientRect();
+        return { w: b.width, bt: b.top, tl: t.left, tt: t.top, tb: t.bottom } }""")
+    assert box['w'] >= 380, f"board too small: {box['w']}"
+    assert box['tl'] < 20 and box['tb'] <= box['bt'] + 1 and box['tt'] < box['bt'], f'reserve tray should be top-left: {box}'
     assert page.locator('#undoBtn').is_disabled()
     page.screenshot(path=os.path.join(args.shots, '1_start.png'))
 
     # ---- play random turns until game over
-    turns = swaps = undos = merges = pops = 0
+    turns = swaps = undos = merges = pops = buys = hammers = 0
+    preview_on = True
+    assert page.get_attribute('#previewBtn', 'aria-pressed') == 'true'
     prev = st
     while not state(page)['over']:
         assert turns < MAX_TURNS, f'no game over after {MAX_TURNS} turns'
         st = state(page)
         roll = rng.random()
-        if roll < 0.06:
+        if roll < 0.04:
+            page.tap('#previewBtn'); preview_on = not preview_on
+            assert (page.get_attribute('#previewBtn', 'aria-pressed') == 'true') == preview_on
+            continue
+        if roll < 0.10:
             page.tap('#holdBtn'); swaps += 1
             after = check_consistent(page, f'swap@{turns}')
             assert after['turn'] == st['turn'], 'swap must be free'
             assert sorted([after['cur'], after['hold']]) == sorted([st['cur'], st['hold']]) or st['hold'] == 0, 'swap exchanges items'
             continue
-        if roll < 0.10 and st['undo'] is not None and not page.locator('#undoBtn').is_disabled():
+        if roll < 0.14 and st['undo'] is not None and not page.locator('#undoBtn').is_disabled():
             before_turn = st['turn']
             page.tap('#undoBtn'); undos += 1
             after = check_consistent(page, f'undo@{turns}')
             assert after['turn'] == before_turn - 1, 'undo reverts one turn'
             assert after['undo'] is None and page.locator('#undoBtn').is_disabled(), 'single-level undo'
             continue
+        if roll < 0.20:  # shop: buy grass / bush / tree if enabled
+            tool = rng.choice(['1', '2', '3'])
+            btn = page.locator(f'.tool[data-tool="{tool}"]')
+            if btn.is_enabled():
+                btn.tap(); buys += 1
+                after = check_consistent(page, f'buy@{turns}')
+                assert after['cur'] == int(tool) and after['next'] == st['cur'] and after['turn'] == st['turn'], 'buy replaces current, free'
+                assert after['coins'] < st['coins'], 'buying costs coins'
+            else:
+                assert st['coins'] < {'1': 6, '2': 15, '3': 35}[tool] or st['cur'] == int(tool) or 0 not in st['grid'], 'tool disabled only when unaffordable/useless'
+            continue
         empties = [i for i, v in enumerate(st['grid']) if v == 0]
+        hammer_btn = page.locator('#hammerBtn')
+        if not empties or (roll < 0.26 and hammer_btn.is_enabled()):  # hammer (forced when the board is full but affordable)
+            assert hammer_btn.is_enabled(), 'full board but not over means the hammer must be usable'
+            occ = [i for i, v in enumerate(st['grid']) if v != 0]
+            hammer_btn.tap()
+            assert hammer_btn.get_attribute('aria-pressed') == 'true'
+            idx = rng.choice(occ)
+            tap_cell(page, idx, preview_on)
+            after = check_consistent(page, f'hammer@{turns}')
+            assert after['grid'][idx] == 0 and after['coins'] == st['coins'] - 20 and after['turn'] == st['turn'], 'hammer clears the tile, free action'
+            assert hammer_btn.get_attribute('aria-pressed') == 'false', 'hammer disarms after use'
+            hammers += 1
+            continue
         idx = rng.choice(empties)
-        page.tap(f'#board .cell[data-i="{idx}"]')
+        tap_cell(page, idx, preview_on)
         turns += 1
         after = check_consistent(page, f'turn {turns}')
-        assert after['turn'] == st['turn'] + 1, 'a tap on an empty tile plays exactly one turn'
+        assert after['turn'] == st['turn'] + 1, 'a confirmed tap on an empty tile plays exactly one turn'
         if after['score'] > st['score']:
             merges += 1
+            assert after['coins'] > st['coins'], 'merges pay coins'
             if page.locator('#board .cell.pop').count(): pops += 1
         if turns == 8: page.screenshot(path=os.path.join(args.shots, '2_midgame.png'))
         # tapping an occupied tile must be a no-op
@@ -136,7 +186,7 @@ with sync_playwright() as p:
             assert same['grid'] == after['grid'] and same['turn'] == after['turn'], 'tapping an occupied tile must do nothing'
 
     final = check_consistent(page, 'final')
-    assert final['over'] and 0 not in final['grid'], 'game over means a full board'
+    assert final['over'] and 0 not in final['grid'] and final['coins'] < 20, 'game over means a full board and no hammer money'
     assert turns >= MIN_TURNS, f'only {turns} random turns before game over (want >= {MIN_TURNS})'
     assert page.locator('#overlay').is_visible(), 'game-over overlay'
     assert str(final['score']) in page.inner_text('#overText')
@@ -153,7 +203,7 @@ with sync_playwright() as p:
     page.tap('#againBtn')
     fresh = check_consistent(page, 'new game')
     assert fresh['turn'] == 0 and fresh['grid'] == [0] * 36 and not fresh['over'] and page.locator('#overlay').is_hidden()
-    page.tap('#board .cell[data-i="14"]')
+    tap_cell(page, 14, page.get_attribute('#previewBtn', 'aria-pressed') == 'true')
     mid = check_consistent(page, 'one move')
     page.goto(URL)  # no seed in hash -> resume saved game
     page.wait_for_selector('#board .cell')
@@ -169,5 +219,5 @@ with sync_playwright() as p:
     browser.close()
 
 print(f'OK: random game reached game over after {turns} turns (+{swaps} swaps, {undos} undos, {merges} scoring turns, '
-      f'{pops} with pop animation), final score {final["score"]}')
+      f'{pops} with pop animation, {buys} purchases, {hammers} hammers), final score {final["score"]}')
 server.shutdown()
