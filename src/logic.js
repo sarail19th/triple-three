@@ -146,6 +146,21 @@
 
   function emptyCount(grid) { var n = 0; for (var i = 0; i < grid.length; i++) if (grid[i] === EMPTY) n++; return n; }
 
+  // Would a fox jumping from `from` to the empty cell `to` still have a free cell in its pocket (counting the cell it leaves)?
+  // A warp never picks a landing that would trap the fox at once, e.g. a single tile walled in on all four sides.
+  function landsWithRoom(s, from, to) {
+    var seen = {}, stack = [to], ok = false;
+    seen[to] = true;
+    while (stack.length && !ok) {
+      var c = stack.pop();
+      if (c !== to && (c === from || s.grid[c] === EMPTY)) { ok = true; break; } // `to` is about to hold the fox; `from` is vacated by the jump
+      neighbors(c).forEach(function (j) {
+        if (!seen[j] && (j === from || s.grid[j] === BEAR || s.grid[j] === FOX || s.grid[j] === EMPTY)) { seen[j] = true; stack.push(j); }
+      });
+    }
+    return ok;
+  }
+
   // Animals are trapped per pocket: a pocket is a connected area of empty cells, bears and foxes. A pocket with no empty
   // cell left turns all its bears and foxes into tombstones (a fox walled in on all sides, or in a corner, or sharing a
   // pocket whose last free cell just got filled). In a pocket that still has room every bear that can step does, and a
@@ -181,9 +196,10 @@
     var foxes = [];
     for (i = 0; i < N; i++) if (s.grid[i] === FOX) foxes.push(i);
     foxes.forEach(function (from) {
-      var empties = [];
-      for (var j = 0; j < N; j++) if (s.grid[j] === EMPTY) empties.push(j);
-      var to = empties[randInt(s, empties.length)]; // never empty: a fox that survived has room in its pocket
+      var safe = [];
+      for (var j = 0; j < N; j++) if (s.grid[j] === EMPTY && landsWithRoom(s, from, j)) safe.push(j);
+      if (!safe.length) return; // nowhere safe to jump (a fox that survived always has its own box to hop around in, so this is rare): it stays
+      var to = safe[randInt(s, safe.length)];
       s.grid[from] = EMPTY; s.grid[to] = FOX;
       events.push({ type: 'fox', from: from, to: to });
     });

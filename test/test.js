@@ -454,6 +454,48 @@ t('fox cornered by two walls becomes a tombstone; with a free neighbour it warps
   assert(!r.events.some((e) => e.type === 'trapped'));
 });
 
+t('a warping fox never lands in a hole it could not get out of (all four sides blocked, or a corner)', () => {
+  // (0,0) and (5,5) are single tiles walled in by buildings; everything else is open
+  const holes = { [I(0, 1)]: 5, [I(1, 0)]: 6, [I(5, 4)]: 7, [I(4, 5)]: 8, [I(3, 3)]: TT.FOX };
+  let landings = 0;
+  for (let seed = 1; seed <= 200; seed++) {
+    const s = withGrid(holes, { rng: seed });
+    const r = TT.place(s, I(2, 1)); // any ordinary move
+    const fox = r.state.grid.indexOf(TT.FOX);
+    assert(fox >= 0, 'the fox is alive (seed ' + seed + ')');
+    assert(fox !== I(0, 0) && fox !== I(5, 5), 'it did not jump into a sealed hole (seed ' + seed + ')');
+    assert(!r.events.some((e) => e.type === 'trapped'));
+    landings++;
+  }
+  assert.strictEqual(landings, 200);
+  // and with a hole in the middle of the board (four walls)
+  const mid = { [I(2, 2)]: 0, [I(1, 2)]: 5, [I(3, 2)]: 6, [I(2, 1)]: 7, [I(2, 3)]: 8, [I(4, 4)]: TT.FOX };
+  for (let seed = 1; seed <= 100; seed++) assert.notStrictEqual(TT.place(withGrid(mid, { rng: seed }), I(0, 0)).state.grid.indexOf(TT.FOX), I(2, 2), 'seed ' + seed);
+});
+
+t('a fox may still hop into a bigger box (it is only trapped later if the player fills it) and into its own box', () => {
+  // box of 2 empty tiles (0,0)+(0,1): safe to land in, because one free tile stays
+  const walls = { [I(1, 0)]: 5, [I(1, 1)]: 6, [I(0, 2)]: 7, [I(3, 3)]: TT.FOX };
+  let boxed = 0;
+  for (let seed = 1; seed <= 300; seed++) {
+    const r = TT.place(withGrid(walls, { rng: seed }), I(5, 5));
+    const f = r.state.grid.indexOf(TT.FOX);
+    if (f === I(0, 0) || f === I(0, 1)) boxed++;
+    assert(f >= 0);
+  }
+  assert(boxed > 0, 'landing in a two-tile box is allowed');
+  // only its own box and two sealed holes are free: the fox has to stay in its box, it never picks a hole
+  const cb = {};
+  for (let i = 0; i < 36; i++) cb[i] = (((i / 6) | 0) + (i % 6)) % 2 ? 5 : 6; // checkerboard of two buildings: nothing merges
+  cb[I(0, 0)] = TT.FOX; cb[I(0, 1)] = 0; cb[I(5, 5)] = 0; cb[I(5, 0)] = 0; cb[I(3, 3)] = 0;
+  for (let seed = 1; seed <= 100; seed++) {
+    const r = TT.place(withGrid(cb, { rng: seed, cur: 2, coins: 0 }), I(3, 3));
+    assert.strictEqual(r.state.grid[I(0, 1)], TT.FOX, 'hopped within its own box (seed ' + seed + ')');
+    assert.strictEqual(r.state.grid.filter((v) => v === TT.FOX).length, 1);
+    assert(!r.events.some((e) => e.type === 'trapped'));
+  }
+});
+
 t('fox in a two-cell box lives until the second cell is filled', () => {
   const walls = { [I(1, 0)]: 5, [I(1, 1)]: 6, [I(0, 2)]: 7 }; // box = (0,0) fox + (0,1) empty
   const open = withGrid(Object.assign({ [I(0, 0)]: TT.FOX }, walls), { cur: 2 });
