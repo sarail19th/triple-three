@@ -351,6 +351,11 @@ with sync_playwright() as p:
     # ---- Wild bears: the New game dialog picks the mode; boxed-in bears escalate (growl) and then maul a low-tier building
     page.tap('#newBtn')
     assert page.locator('#newGame').is_visible()
+    cur = state(page)
+    assert cur['turn'] > 0 and page.locator('#newWarn').is_visible(), 'a game in progress gets a warning before New'
+    warn = page.inner_text('#newWarn')
+    assert 'lost' in warn and f"turn {cur['turn']}" in warn and f"score {cur['score']}" in warn, warn
+    assert page.inner_text('#newStart') == 'Erase game & start' and 'danger' in page.get_attribute('#newStart', 'class')
     page.tap('#newCancel'); assert page.locator('#newGame').is_hidden()
     page.tap('#newBtn'); page.tap('.opt[data-bears="wild"]'); page.tap('#newStart')
     wild = check_consistent(page, 'new wild game')
@@ -378,6 +383,8 @@ with sync_playwright() as p:
 
     # ---- Maps: picked in the New game dialog; water tiles are blue, fixed and unusable
     page.tap('#newBtn')
+    assert state(page)['turn'] == 0 and page.locator('#newWarn').is_hidden(), 'nothing to lose on a fresh game: no warning'
+    assert page.inner_text('#newStart') == 'Start' and 'danger' not in page.get_attribute('#newStart', 'class')
     for m in ['easy', 'standard', 'medium', 'hard']:
         page.tap(f'.opt[data-map="{m}"]')
         assert page.get_attribute(f'.opt[data-map="{m}"]', 'aria-pressed') == 'true' and page.inner_text('#mapNote') != ''

@@ -451,7 +451,12 @@
   var MAP_NOTES = { easy: 'A plain grass field.', standard: 'A plain field with a few grass, bushes and trees already growing.', medium: 'A river runs across the field and splits it in two.', hard: 'Random ponds eat into the field (different every game).' };
   function openNewGame() {
     dlg.map = mapPref(); dlg.wild = wildPref();
-    $('newNote').textContent = state.over || state.turn === 0 ? '' : 'Your current game will be replaced.';
+    // a game in progress would be erased: say so loudly, with what is at stake, and make the button say it too
+    var inProgress = !state.over && state.turn > 0, warn = $('newWarn');
+    warn.classList.toggle('hidden', !inProgress);
+    if (inProgress) warn.textContent = '⚠️ Your current game will be lost: score ' + state.score + ' · turn ' + state.turn + (state.map !== 'easy' ? ' · ' + state.map + ' map' : '') + (state.wild ? ' · wild bears' : '') + '. This cannot be undone.';
+    $('newStart').textContent = inProgress ? 'Erase game & start' : 'Start';
+    $('newStart').classList.toggle('danger', inProgress); $('newStart').classList.toggle('primary', !inProgress);
     showDialog();
     $('newGame').classList.remove('hidden');
   }
