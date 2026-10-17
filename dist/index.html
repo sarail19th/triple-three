@@ -68,6 +68,16 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 @keyframes breathe { from { transform: scale(.9); } to { transform: scale(1.05); } }
 @keyframes wobble { from { transform: rotate(-8deg); } to { transform: rotate(8deg); } }
 
+/* Wild bears: the warning stages of a boxed-in bear (growling, then angry) */
+.cell[data-c="19"] .e, .cell[data-c="20"] .e { position: relative; }
+.cell[data-c="19"] .e { filter: drop-shadow(0 0 5px #ffb347) saturate(1.25); animation: grumble 1.1s ease-in-out infinite alternate; }
+.cell[data-c="20"] .e { filter: drop-shadow(0 0 7px #ff3b30) saturate(1.7); animation: grumble .3s ease-in-out infinite alternate; }
+.cell[data-c="19"] .e::after, .cell[data-c="20"] .e::after { content: "💢"; position: absolute; top: -8%; right: -14%; font-size: .42em; }
+.cell[data-c="20"] .e::after { content: "💢💢"; right: -26%; }
+@keyframes grumble { from { transform: rotate(-4deg); } to { transform: rotate(4deg); } }
+#newGame .btn { margin: 4px 0 0; }
+#newGame .gnote { margin: 4px 0 12px !important; }
+
 /* animations (cells are not scaled as layout; only the inner emoji is) */
 .cell.drop .e { animation: drop .22s ease-out; }
 .cell.pop .e { animation: pop .38s cubic-bezier(.2, 1.6, .4, 1); }
@@ -231,6 +241,18 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   </div>
 </div>
 
+<div id="newGame" class="overlay hidden" role="dialog" aria-modal="true" aria-label="New game">
+  <div class="card">
+    <h2>New game</h2>
+    <button id="newClassic" class="btn primary">Classic</button>
+    <p class="gnote">The standard game.</p>
+    <button id="newWild" class="btn">🐻 Wild bears</button>
+    <p class="gnote">Harder: a bear boxed in (but not sealed) gets angry for 2 turns, then mauls a 🌱🌿🌳🏕️🛖 next to it one tier down, and again every 3 turns. Has its own best score.</p>
+    <p id="newNote" class="gnote"></p>
+    <button id="newCancel" class="btn">Cancel</button>
+  </div>
+</div>
+
 <div id="guide" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Item guide">
   <div class="card">
     <h2>Item guide</h2>
@@ -246,6 +268,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       <li>On a computer, hover a tile to preview the move (the result shows faintly, merged items are outlined) and click to place the item shown in <b>Place</b>. On a touch screen, tap to preview and tap again to place. Turn <b>Preview</b> off to place with one tap.</li>
       <li>Connect <b>3 or more</b> identical items (up, down, left, right) and <i>all</i> of them merge into one of the next tier on the tile you tapped (4 or 5 pay more points and coins, nothing is left over):<br>🌱 → 🌿 → 🌳 → 🏕️ → 🛖 → 🏠 → 🏘️ → 🏫 → 🏥 → 🏬 → 💵 <b>cash</b>: tap it to collect coins.</li>
       <li>🐻 <b>Bears</b> wander one step each turn. Box one in so it cannot move and it becomes a 🪦 (bears sharing a pocket that still has room are safe). Three connected 🪦 merge into ⛪, three ⛪ into 🕌, three 🕌 into a 💰 <b>treasure</b>: tap it to open it for coins.</li>
+      <li>🐻💢 <b>Wild bears</b> (pick it in <b>New</b>): a bear that cannot step but is not sealed in gets angry (💢, then 💢💢) and on the third turn <b>mauls</b> a 🌱🌿🌳🏕️🛖 next to it one tier down (a 🌱 is destroyed, which opens an escape hole), then starts over. Houses and everything above are safe.</li>
       <li>🦊 The <b>fox</b> never walks: every turn it <b>warps</b> to a random empty tile (never into a hole it could not get out of). Corner it, though: when walls and items close it in on every side (or you fill the last free tile of its box) it becomes a 🪦, and so does a fox on a full board. The 🪤 trap kills it anywhere.</li>
       <li>💎 The <b>crystal</b> is a wildcard: it turns into whatever makes the best merge (any building tier up to 🏬 which makes 💵 cash, 🪦, ⛪ or 🕌 which makes a 💰 treasure). If no tier fits it waits as a wildcard, and <b>three 💎 touching each other merge into a 💰 treasure</b> on the tile you tapped.</li>
       <li>🪙 <b>Coins</b> come from merges. Spend them in the shop: buy an item as your current one (the old one moves to Next). You can buy 🌱 🌿 🌳, and any higher tier once you have built one. Stock is limited (the ×N badge): after it runs out the price <b>doubles</b> with every purchase, and score milestones restock it.</li>
@@ -268,12 +291,17 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   var DEFAULT_W = 6, DEFAULT_H = 6, W = DEFAULT_W, H = DEFAULT_H, N = W * H;
   function dim(s) { W = s.w || DEFAULT_W; H = s.h || DEFAULT_H; N = W * H; }
   var VERSION = 2;
+  // Wild bears (a per-game option): a bear that cannot step for 3 turns in a row (boxed in, but its pocket still has room) mauls
+  // one neighbouring building of tier 1..MAUL_MAX (grass .. hut) one tier down (grass is destroyed), then starts over.
+  var MAUL_MAX = 5;
+  function isBear(v) { return v === BEAR || v === BEAR_GROWL || v === BEAR_ANGRY; }
 
   // Cell / item codes. 0 empty. 1..10 building chain (10 = mall), 11 cash (collectible, final), 12 bear, 13 tombstone,
-  // 14 church, 15 cathedral, 16 crystal, 17 treasure (final tier of the bear chain: collectible), 18 fox.
-  var EMPTY = 0, LAST_BUILDING = 10, CASH = 11, BEAR = 12, TOMB = 13, CHURCH = 14, CATHEDRAL = 15, CRYSTAL = 16, TREASURE = 17, FOX = 18;
-  var EMOJI = ['', '🌱', '🌿', '🌳', '🏕️', '🛖', '🏠', '🏘️', '🏫', '🏥', '🏬', '💵', '🐻', '🪦', '⛪', '🕌', '💎', '💰', '🦊'];
-  var NAME = ['empty', 'grass', 'bush', 'tree', 'camp', 'hut', 'house', 'village', 'school', 'hospital', 'mall', 'cash', 'bear', 'tombstone', 'church', 'cathedral', 'crystal', 'treasure', 'fox'];
+  // 14 church, 15 cathedral, 16 crystal, 17 treasure (final tier of the bear chain: collectible), 18 fox,
+  // 19/20 a bear that was boxed in for 1 / 2 turns in a row (Wild bears games only: the warning stages before it mauls).
+  var EMPTY = 0, LAST_BUILDING = 10, CASH = 11, BEAR = 12, TOMB = 13, CHURCH = 14, CATHEDRAL = 15, CRYSTAL = 16, TREASURE = 17, FOX = 18, BEAR_GROWL = 19, BEAR_ANGRY = 20;
+  var EMOJI = ['', '🌱', '🌿', '🌳', '🏕️', '🛖', '🏠', '🏘️', '🏫', '🏥', '🏬', '💵', '🐻', '🪦', '⛪', '🕌', '💎', '💰', '🦊', '🐻', '🐻'];
+  var NAME = ['empty', 'grass', 'bush', 'tree', 'camp', 'hut', 'house', 'village', 'school', 'hospital', 'mall', 'cash', 'bear', 'tombstone', 'church', 'cathedral', 'crystal', 'treasure', 'fox', 'growling bear', 'angry bear'];
   // code -> code it becomes when 3+ connect. Final tiers (11 cash, 15->17 treasure), bear, fox and crystal are absent / collectible.
   var NEXT = { 1: 2, 2: 3, 3: 4, 4: 5, 5: 6, 6: 7, 7: 8, 8: 9, 9: 10, 10: 11, 13: 14, 14: 15, 15: 17 };
   // points per item consumed by a merge, keyed by the consumed code (buildings x3 per tier)
@@ -318,13 +346,13 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   }
 
   function clone(s) {
-    return { ver: s.ver, w: s.w, h: s.h, land: s.land.slice(), top: s.top, grid: s.grid.slice(), cur: s.cur, next: s.next, hold: s.hold, score: s.score, coins: s.coins,
+    return { ver: s.ver, wild: s.wild, w: s.w, h: s.h, land: s.land.slice(), top: s.top, grid: s.grid.slice(), cur: s.cur, next: s.next, hold: s.hold, score: s.score, coins: s.coins,
       stock: Object.assign({}, s.stock), milestone: s.milestone, turn: s.turn, over: s.over, rng: s.rng, seed: s.seed, undo: s.undo };
   }
 
-  function newGame(seed) {
+  function newGame(seed, opts) {
     seed = (seed >>> 0) || 1;
-    var s = { ver: VERSION, w: DEFAULT_W, h: DEFAULT_H, land: [], top: 1, grid: new Array(DEFAULT_W * DEFAULT_H).fill(EMPTY), cur: 1, next: 1, hold: 0, score: 0, coins: START_COINS,
+    var s = { ver: VERSION, wild: !!(opts && opts.wild), w: DEFAULT_W, h: DEFAULT_H, land: [], top: 1, grid: new Array(DEFAULT_W * DEFAULT_H).fill(EMPTY), cur: 1, next: 1, hold: 0, score: 0, coins: START_COINS,
       stock: Object.assign({}, START_STOCK), milestone: 0, turn: 0, over: false, rng: seed, seed: seed, undo: null };
     s.next = drawItem(s); // always open with grass
     return s;
@@ -414,7 +442,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       var c = stack.pop();
       if (c !== to && (c === from || s.grid[c] === EMPTY)) { ok = true; break; } // `to` is about to hold the fox; `from` is vacated by the jump
       neighbors(c).forEach(function (j) {
-        if (!seen[j] && (j === from || s.grid[j] === BEAR || s.grid[j] === FOX || s.grid[j] === EMPTY)) { seen[j] = true; stack.push(j); }
+        if (!seen[j] && (j === from || isBear(s.grid[j]) || s.grid[j] === FOX || s.grid[j] === EMPTY)) { seen[j] = true; stack.push(j); }
       });
     }
     return ok;
@@ -429,7 +457,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   // last animal went in), then the rest in board order.
   function moveBears(s, events, last) {
     var seen = {}, trapped = [], bears = [], i;
-    function roaming(v) { return v === BEAR || v === FOX || v === EMPTY; }
+    function roaming(v) { return isBear(v) || v === FOX || v === EMPTY; }
     for (i = 0; i < N; i++) {
       if (seen[i] || !roaming(s.grid[i])) continue;
       var stack = [i], pocket = [], room = false;
@@ -444,12 +472,13 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     }
     trapped.sort(function (a, b) { return (b === last) - (a === last) || a - b; });
     trapped.forEach(function (at) { s.grid[at] = TOMB; events.push({ type: 'trapped', at: at }); });
-    for (i = 0; i < N; i++) if (s.grid[i] === BEAR) bears.push(i);
+    for (i = 0; i < N; i++) if (isBear(s.grid[i])) bears.push(i);
+    var mauled = [];
     bears.forEach(function (from) {
       var free = neighbors(from).filter(function (j) { return s.grid[j] === EMPTY; });
-      if (!free.length) return;
+      if (!free.length) { if (s.wild) boxedBear(s, from, events, mauled); return; }
       var to = free[randInt(s, free.length)];
-      s.grid[from] = EMPTY; s.grid[to] = BEAR;
+      s.grid[from] = EMPTY; s.grid[to] = BEAR; // a bear that walks calms down again
       events.push({ type: 'bear', from: from, to: to });
     });
     var foxes = [];
@@ -463,6 +492,22 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       events.push({ type: 'fox', from: from, to: to });
     });
     trapped.forEach(function (at) { if (s.grid[at] === TOMB) resolveAt(s, at, events); });
+    mauled.forEach(function (at) { if (s.grid[at] !== EMPTY) resolveAt(s, at, events); }); // a lowered tile may complete a group
+  }
+
+  // Wild bears: a bear that could not step this turn gets one stage angrier (2 warning turns); on the third boxed-in turn it
+  // mauls one adjacent tile of tier 1..MAUL_MAX one tier down (a grass becomes an empty tile, an escape hole) and starts over.
+  function boxedBear(s, at, events, mauled) {
+    var code = s.grid[at];
+    if (code === BEAR) { s.grid[at] = BEAR_GROWL; events.push({ type: 'growl', at: at, level: 1 }); return; }
+    if (code === BEAR_GROWL) { s.grid[at] = BEAR_ANGRY; events.push({ type: 'growl', at: at, level: 2 }); return; }
+    var prey = neighbors(at).filter(function (j) { return s.grid[j] >= 1 && s.grid[j] <= MAUL_MAX; });
+    s.grid[at] = BEAR;
+    if (!prey.length) return;
+    var t = prey[randInt(s, prey.length)], from = s.grid[t], to = from - 1;
+    s.grid[t] = to; // 0 (empty) for grass
+    mauled.push(t);
+    events.push({ type: 'maul', at: t, bear: at, from: from, to: to });
   }
 
   // ---- shop helpers
@@ -563,7 +608,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   // leave a full board without hammer money).
   function trap(state, idx) {
     dim(state);
-    if (state.over || !(idx >= 0 && idx < N) || (state.grid[idx] !== BEAR && state.grid[idx] !== FOX) || state.coins < PRICE.trap || !(state.stock.trap > 0)) return null;
+    if (state.over || !(idx >= 0 && idx < N) || (!isBear(state.grid[idx]) && state.grid[idx] !== FOX) || state.coins < PRICE.trap || !(state.stock.trap > 0)) return null;
     var s = clone(state), events = [{ type: 'trap', at: idx }];
     s.coins -= PRICE.trap; s.stock.trap--; s.grid[idx] = TOMB;
     resolveAt(s, idx, events);
@@ -577,7 +622,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   // Shop: the mover picks up the item on `from` and drops it on the empty cell `to` (free action, costs coins, limited stock).
   // It merges there exactly as a placed item would. Bears and foxes cannot be moved (only the trap deals with them).
   // Returns {state, events} or null.
-  function isMovable(code) { return code !== EMPTY && code !== BEAR && code !== FOX; }
+  function isMovable(code) { return code !== EMPTY && !isBear(code) && code !== FOX; }
   function canMove(s) { return s.coins >= PRICE.move && s.stock.move > 0; }
   function moveLegal(state, from, to) {
     return !state.over && from >= 0 && from < N && to >= 0 && to < N && from !== to && isMovable(state.grid[from]) && state.grid[to] === EMPTY;
@@ -678,6 +723,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       if (old) upgradeV1(x);
       if (!x.stock || typeof x.stock !== 'object') x.stock = Object.assign({}, START_STOCK);
       for (var sk in START_STOCK) if (typeof x.stock[sk] !== 'number') x.stock[sk] = START_STOCK[sk]; // items added since the save was made
+      if (typeof x.wild !== 'boolean') x.wild = false; // Wild bears is chosen per game; every older game is a classic one
       if (typeof x.milestone !== 'number') { x.milestone = 0; while (x.score >= milestoneScore(x.milestone)) x.milestone++; }
       if (Array.isArray(x.grid) && x.grid.length === (x.w || DEFAULT_W) * (x.h || DEFAULT_H)) {
         dim(x);
@@ -697,6 +743,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     if (!s || typeof s !== 'object') return ['bad state'];
     var ok = function (v) { return v === (v | 0) && v >= DEFAULT_W && v <= DEFAULT_W + 2; };
     if (!ok(s.w) || !ok(s.h) || !Array.isArray(s.land)) return ['bad board size'];
+    if (typeof s.wild !== 'boolean') return ['bad wild flag'];
     dim(s);
     if (!Array.isArray(s.grid) || s.grid.length !== N) return ['bad grid'];
     var lr = 0, tb = 0;
@@ -707,7 +754,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     if (s.w !== DEFAULT_W + lr || s.h !== DEFAULT_H + tb) p.push('board size does not match the land bought');
     for (i = 0; i < N; i++) {
       var v = s.grid[i];
-      if (v !== (v | 0) || v < 0 || v > FOX) p.push('bad code at ' + i + ': ' + v);
+      if (v !== (v | 0) || v < 0 || v > BEAR_ANGRY) p.push('bad code at ' + i + ': ' + v);
+      else if (!s.wild && (v === BEAR_GROWL || v === BEAR_ANGRY)) p.push('angry bear in a classic game at ' + i);
     }
     if (p.length) return p;
     if (QUEUE_ITEMS.indexOf(s.cur) < 0) p.push('bad current item ' + s.cur);
@@ -745,7 +793,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 
   return {
     W: DEFAULT_W, H: DEFAULT_H, N: DEFAULT_W * DEFAULT_H, MAX_LAND: SIDES.length, SIDES: SIDES, LAND_PRICE: LAND_PRICE, LAST_BUILDING: LAST_BUILDING, VERSION: VERSION,
-    EMPTY: EMPTY, CASH: CASH, BEAR: BEAR, TOMB: TOMB, CHURCH: CHURCH, CATHEDRAL: CATHEDRAL, CRYSTAL: CRYSTAL, TREASURE: TREASURE, FOX: FOX,
+    EMPTY: EMPTY, CASH: CASH, BEAR: BEAR, BEAR_GROWL: BEAR_GROWL, BEAR_ANGRY: BEAR_ANGRY, MAUL_MAX: MAUL_MAX, isBear: isBear, TOMB: TOMB, CHURCH: CHURCH, CATHEDRAL: CATHEDRAL, CRYSTAL: CRYSTAL, TREASURE: TREASURE, FOX: FOX,
     TREASURE_COINS: TREASURE_COINS, CASH_COINS: CASH_COINS,
     EMOJI: EMOJI, NAME: NAME, NEXT: NEXT, BASE: BASE, WEIGHTS: WEIGHTS,
     START_COINS: START_COINS, COIN: COIN, PRICE: PRICE, BUYABLE: BUYABLE, UNDO_COST: UNDO_COST, START_STOCK: START_STOCK,
@@ -767,7 +815,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   };
 
   var boardEl = $('board'), fxEl = $('fx'), wrapEl = $('boardWrap'), shopEl = $('shop'), critEl = $('critters');
-  var state, best = store.get('tt-best', 0), hints = false;
+  var state, hints = false;
   var previewOn = store.get('tt-preview', true) !== false;
   var sel = -1, hover = -1, mode = null, moveFrom = -1, lastPointer = 'touch'; // UI-only: tile awaiting confirmation, mouse hover, armed tool ('hammer'|'trap'|'move'), tile picked up by the mover, last input type
   var cells = [], bw = 0, bh = 0, shopKey = '';
@@ -780,8 +828,12 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   function randomSeed() { return ((Math.random() * 4294967295) >>> 0) || 1; }
   function fmt(n) { return n >= 10000 ? Math.round(n / 1000) + 'k' : n >= 1000 ? (Math.round(n / 100) / 10) + 'k' : String(n); }
 
-  function startNew(seed) {
-    state = TT.newGame(seed || randomSeed());
+  // best scores are kept per mode: Wild bears is harder, so it gets its own board
+  function bestKey() { return state && state.wild ? 'tt-best-wild' : 'tt-best'; }
+  function wildPref() { return store.get('tt-wild', false) === true; } // the mode picked last in the New game dialog
+  function startNew(seed, wild) {
+    if (wild === undefined) wild = wildPref();
+    state = TT.newGame(seed || randomSeed(), { wild: !!wild });
     sel = -1; hover = -1; mode = null; moveFrom = -1;
     $('overlay').classList.add('hidden');
     save();
@@ -831,7 +883,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   function vibrate(ms) { if (navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } }
 
   function isCollectible(v) { return v === TT.TREASURE || v === TT.CASH; }
-  function isAnimal(v) { return v === TT.BEAR || v === TT.FOX; }
+  function isAnimal(v) { return TT.isBear(v) || v === TT.FOX; }
   // Is idx a legal target for the armed tool (or for placement when none is armed)?
   function targetOk(idx) {
     var v = state.grid[idx];
@@ -924,7 +976,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     if (sel >= 0 && (state.over || !targetOk(sel))) sel = -1;
     $('score').textContent = state.score;
     $('coins').textContent = state.coins;
-    if (state.score > best) { best = state.score; store.set('tt-best', best); }
+    var best = store.get(bestKey(), 0);
+    if (state.score > best) { best = state.score; store.set(bestKey(), best); }
     $('best').textContent = best;
     $('curItem').textContent = TT.EMOJI[state.cur];
     $('curName').textContent = TT.NAME[state.cur];
@@ -941,7 +994,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
         b.disabled = state.over || !TT.canMove(state) || !g.some(TT.isMovable) || TT.emptyCount(g) === 0;
         b.setAttribute('aria-pressed', mode === 'move');
       } else if (t === 'trap') {
-        b.disabled = state.over || state.coins < TT.PRICE.trap || !(state.stock.trap > 0) || (g.indexOf(TT.BEAR) < 0 && g.indexOf(TT.FOX) < 0);
+        b.disabled = state.over || state.coins < TT.PRICE.trap || !(state.stock.trap > 0) || !g.some(isAnimal);
         b.setAttribute('aria-pressed', mode === 'trap');
       } else {
         b.disabled = !TT.buy(state, +t);
@@ -963,7 +1016,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       (TT.unlockedTop(state) > 3 ? ' +1 each higher tier' : '') + ' +1🪤 +1🔨';
     $('undoBtn').textContent = '↶ Undo 🪙' + TT.UNDO_COST;
     $('turn').textContent = 'Turn ' + state.turn;
-    $('seed').textContent = 'seed ' + state.seed;
+    $('seed').textContent = 'seed ' + state.seed + (state.wild ? ' · wild bears' : '');
     animate(events);
     updatePreview();
     syncCritters();
@@ -1070,6 +1123,12 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
         cells[ev.to].classList.add('warp');
       } else if (ev.type === 'trapped') {
         cells[ev.at].classList.add('shake');
+      } else if (ev.type === 'growl') { // the boxed-in bear gets angrier
+        cells[ev.at].classList.add('shake');
+        floatAt(ev.at, ev.level === 1 ? '💢' : '💢💢');
+      } else if (ev.type === 'maul') { // it takes it out on the building next to it
+        cells[ev.at].classList.add('shake'); cells[ev.bear].classList.add('shake');
+        floatAt(ev.at, '🐻💢 ' + TT.EMOJI[ev.from] + '→' + (ev.to ? TT.EMOJI[ev.to] : '💨'));
       } else if (ev.type === 'unlock') {
         toast('🛒 Shop restocked!');
       } else if (ev.type === 'tierunlock') {
@@ -1148,7 +1207,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   window.addEventListener('resize', function () { critters.forEach(function (c) { hop(c, true); }); });
 
   function showOver() {
-    var newBest = state.score >= best && state.score > 0;
+    var best = store.get(bestKey(), 0), newBest = state.score >= best && state.score > 0;
     $('overTitle').textContent = newBest ? 'New best!' : 'Town full!';
     $('overText').textContent = 'Score ' + state.score + ' in ' + state.turn + ' turns' + (newBest ? '' : ' · best ' + best);
     $('overlay').classList.remove('hidden');
@@ -1183,10 +1242,18 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   $('hintBtn').addEventListener('click', function () {
     hints = !hints; this.setAttribute('aria-pressed', hints); render([]);
   });
-  $('newBtn').addEventListener('click', function () {
-    if (state.over || state.turn === 0 || confirm('Start a new game?')) startNew();
-  });
-  $('againBtn').addEventListener('click', function () { startNew(); });
+  // New game: pick the mode in a small dialog (the last pick is remembered); Play again repeats the mode just played
+  function openNewGame() {
+    $('newClassic').classList.toggle('primary', !wildPref()); $('newWild').classList.toggle('primary', wildPref());
+    $('newNote').textContent = state.over || state.turn === 0 ? '' : 'Your current game will be replaced.';
+    $('newGame').classList.remove('hidden');
+  }
+  function pickMode(wild) { store.set('tt-wild', wild); $('newGame').classList.add('hidden'); startNew(0, wild); }
+  $('newBtn').addEventListener('click', openNewGame);
+  $('newClassic').addEventListener('click', function () { pickMode(false); });
+  $('newWild').addEventListener('click', function () { pickMode(true); });
+  $('newCancel').addEventListener('click', function () { $('newGame').classList.add('hidden'); });
+  $('againBtn').addEventListener('click', function () { startNew(0, state.wild); });
   // item guide: built from the logic tables so it can never drift from the real merge chains
   function chip(code, label) {
     return '<div class="chip"><span class="ce">' + TT.EMOJI[code] + '</span><small>' + (label || TT.NAME[code]) + '</small></div>';
@@ -1206,7 +1273,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     '<p class="gnote">💵 Cash is collectible: tap it for +' + TT.CASH_COINS + ' coins. 🐇🐤 hop around the homes (camp to village).</p>' +
     '<h3>Bears</h3><div class="chain">' + chip(TT.BEAR, 'trap it') + '<span class="arrow">&rarr;</span>' +
     chain(TT.TOMB, null, 'treasure: tap to open, +' + TT.TREASURE_COINS + ' coins') + '</div>' +
-    '<p class="gnote">👻🐈‍⬛ haunt the tombstones and churches.</p>' +
+    '<p class="gnote">👻🐈‍⬛ haunt the tombstones and churches. <b>Wild bears</b> mode: a bear that cannot step but is not sealed in gets angry (💢, then 💢💢) and on the third turn mauls a 🌱🌿🌳🏕️🛖 next to it, one tier down (a 🌱 is destroyed), then starts over.</p>' +
     '<h3>Special</h3><div class="chain">' + chip(TT.CRYSTAL, 'wildcard') + chip(TT.FOX, 'warps, walls trap it') + '</div>' +
     '<p class="gnote">💎 stands in for any tier, including 🏬 (making 💵 cash) and 🕌 (making a 💰 treasure). Three or more 💎 touching each other merge into a 💰 treasure. 🚚 moves one item to an empty tile for coins.</p>' +
     '<p class="gnote">Three or more connected items of the same kind merge into the next one. Bigger groups pay more points and coins.</p>';

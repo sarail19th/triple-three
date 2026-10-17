@@ -44,3 +44,9 @@ Recommendations given
 - Limits are needed or it becomes a tombstone farm / fills the open board: only in pockets of at most about 6 cells (never on the
   open board), cubs only into free tiles of that pocket, a cap on total bears on the board (about 8), foxes never breed.
 - Open question: which tile resolves the tombstone merge when a cub seals the pen (the cub's tile is the natural choice).
+
+## Bear pens: mauling (built) and breeding (still open)
+Owner's answers for mauling: only 🌱🌿🌳🏕️🛖 can be mauled; one tier down; every 3 turns while the bear still cannot move;
+2 warning turns, maul on turn 3; a mauled 🌱 leaves an escape hole; offered as an extra-difficulty option ("Wild bears"), not in
+every game. Built as the per-game `wild` flag. Breeding (see above) is not built; if it is, it should probably also live under
+Wild bears, since both act on bears waiting in a pocket.

@@ -57,6 +57,16 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 @keyframes breathe { from { transform: scale(.9); } to { transform: scale(1.05); } }
 @keyframes wobble { from { transform: rotate(-8deg); } to { transform: rotate(8deg); } }
 
+/* Wild bears: the warning stages of a boxed-in bear (growling, then angry) */
+.cell[data-c="19"] .e, .cell[data-c="20"] .e { position: relative; }
+.cell[data-c="19"] .e { filter: drop-shadow(0 0 5px #ffb347) saturate(1.25); animation: grumble 1.1s ease-in-out infinite alternate; }
+.cell[data-c="20"] .e { filter: drop-shadow(0 0 7px #ff3b30) saturate(1.7); animation: grumble .3s ease-in-out infinite alternate; }
+.cell[data-c="19"] .e::after, .cell[data-c="20"] .e::after { content: "💢"; position: absolute; top: -8%; right: -14%; font-size: .42em; }
+.cell[data-c="20"] .e::after { content: "💢💢"; right: -26%; }
+@keyframes grumble { from { transform: rotate(-4deg); } to { transform: rotate(4deg); } }
+#newGame .btn { margin: 4px 0 0; }
+#newGame .gnote { margin: 4px 0 12px !important; }
+
 /* animations (cells are not scaled as layout; only the inner emoji is) */
 .cell.drop .e { animation: drop .22s ease-out; }
 .cell.pop .e { animation: pop .38s cubic-bezier(.2, 1.6, .4, 1); }

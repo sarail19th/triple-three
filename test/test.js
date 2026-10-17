@@ -708,6 +708,100 @@ t('migrate adds stock entries for shop items introduced after the save was made'
   assert.deepStrictEqual(TT.validate(s), []);
 });
 
+// Wild bears: a bear that cannot step (boxed in, but its pocket still has room through the fox next to it) escalates
+// 12 -> growl (turn 1) -> angry (turn 2) -> mauls a neighbouring grass..hut one tier down (turn 3) and starts over.
+// The fox next to the bear keeps the pocket open for the test (it warps away at the end of every turn, so each turn is set up fresh).
+const boxed = (bearCode, walls, over = {}) => withGrid(Object.assign({ [I(0, 0)]: bearCode, [I(1, 0)]: TT.FOX }, walls), Object.assign({ wild: true, cur: 2, rng: 5 }, over));
+
+t('wild bears: boxed in for turn 1 and 2 only warns (growl, angry); nothing is damaged', () => {
+  let r = TT.place(boxed(TT.BEAR, { [I(0, 1)]: 6 }), I(5, 5));
+  assert.strictEqual(r.state.grid[I(0, 0)], TT.BEAR_GROWL);
+  assert.deepStrictEqual(r.events.filter((e) => e.type === 'growl'), [{ type: 'growl', at: I(0, 0), level: 1 }]);
+  assert.deepStrictEqual(TT.validate(r.state), []);
+  r = TT.place(boxed(TT.BEAR_GROWL, { [I(0, 1)]: 5 }), I(5, 5));
+  assert.strictEqual(r.state.grid[I(0, 0)], TT.BEAR_ANGRY); assert.strictEqual(r.state.grid[I(0, 1)], 5, 'a hut next to a growling bear is still a hut');
+  assert.deepStrictEqual(r.events.filter((e) => e.type === 'growl'), [{ type: 'growl', at: I(0, 0), level: 2 }]);
+  assert(!r.events.some((e) => e.type === 'maul'));
+});
+
+t('wild bears: on the third boxed-in turn it mauls ONE tier down (hut -> camp) and starts over', () => {
+  const r = TT.place(boxed(TT.BEAR_ANGRY, { [I(0, 1)]: 5 }), I(5, 5));
+  assert.strictEqual(r.state.grid[I(0, 1)], 4, 'hut -> camp'); assert.strictEqual(r.state.grid[I(0, 0)], TT.BEAR, 'calm again');
+  assert.deepStrictEqual(r.events.find((e) => e.type === 'maul'), { type: 'maul', at: I(0, 1), bear: I(0, 0), from: 5, to: 4 });
+  assert.deepStrictEqual(TT.validate(r.state), []);
+  // every low tier drops exactly one step
+  for (let tier = 2; tier <= 5; tier++) assert.strictEqual(TT.place(boxed(TT.BEAR_ANGRY, { [I(0, 1)]: tier }), I(5, 5)).state.grid[I(0, 1)], tier - 1, 'tier ' + tier);
+});
+
+t('wild bears: a mauled grass is destroyed, leaving an escape hole', () => {
+  const r = TT.place(boxed(TT.BEAR_ANGRY, { [I(0, 1)]: 1 }), I(5, 5));
+  assert.strictEqual(r.state.grid[I(0, 1)], 0);
+  assert.deepStrictEqual(TT.validate(r.state), []);
+  const next = TT.place(Object.assign(r.state, { cur: 2 }), I(5, 4)); // next turn the bear walks out through the hole
+  assert.strictEqual(next.state.grid[I(0, 0)], 0, 'the bear left its corner');
+  assert.strictEqual(next.state.grid.filter((v) => v === TT.BEAR).length, 1, 'calm again');
+  assert(next.events.some((e) => e.type === 'bear' && e.from === I(0, 0)));
+});
+
+t('wild bears: houses and everything above are never mauled; with nothing to maul it just calms down', () => {
+  const walls = { [I(0, 1)]: 6 }; // house
+  const r = TT.place(boxed(TT.BEAR_ANGRY, walls), I(5, 5));
+  assert.strictEqual(r.state.grid[I(0, 1)], 6); assert.strictEqual(r.state.grid[I(0, 0)], TT.BEAR);
+  assert(!r.events.some((e) => e.type === 'maul'));
+  [TT.TOMB, TT.CHURCH, 10, TT.CASH].forEach((code) => {
+    const q = TT.place(boxed(TT.BEAR_ANGRY, { [I(0, 1)]: code }), I(5, 5));
+    assert.strictEqual(q.state.grid[I(0, 1)], code, 'code ' + code + ' is safe');
+  });
+});
+
+t('wild bears: with several neighbours it picks a mauled-able one at random, never a safe one', () => {
+  const seen = {};
+  for (let seed = 1; seed <= 60; seed++) {
+    const s = withGrid({ [I(1, 1)]: TT.BEAR_ANGRY, [I(0, 1)]: 1, [I(1, 0)]: 5, [I(1, 2)]: 6, [I(2, 1)]: TT.FOX }, { wild: true, cur: 2, rng: seed });
+    const r = TT.place(s, I(5, 5));
+    const m = r.events.find((e) => e.type === 'maul');
+    assert(m && (m.at === I(0, 1) || m.at === I(1, 0)), 'hit grass or hut, seed ' + seed);
+    assert.strictEqual(r.state.grid[I(1, 2)], 6, 'the house is untouched');
+    seen[m.at] = true;
+  }
+  assert.strictEqual(Object.keys(seen).length, 2, 'both candidates get picked sometimes');
+});
+
+t('wild bears: a lowered tile that completes a group merges at once', () => {
+  const s = boxed(TT.BEAR_ANGRY, { [I(0, 1)]: 5, [I(0, 2)]: 4, [I(1, 1)]: 4 });
+  const r = TT.place(s, I(5, 5));
+  assert.strictEqual(r.state.grid[I(0, 1)], 5, 'hut -> camp, then camp trio -> hut on the mauled tile');
+  assert.strictEqual(r.state.grid[I(0, 2)], 0); assert.strictEqual(r.state.grid[I(1, 1)], 0);
+  assert.strictEqual(r.state.score, 3 * TT.BASE[4]);
+  assert.deepStrictEqual(TT.validate(r.state), []);
+});
+
+t('wild bears: a bear that can step walks and is calm again; a sealed bear still dies on the spot', () => {
+  const walker = withGrid({ [I(3, 3)]: TT.BEAR_ANGRY }, { wild: true, cur: 2 });
+  const r = TT.place(walker, I(0, 0));
+  const at = r.state.grid.findIndex((v) => TT.isBear(v));
+  assert.strictEqual(r.state.grid[at], TT.BEAR); assert(TT.neighbors(I(3, 3)).includes(at));
+  const sealed = withGrid({ [I(0, 0)]: TT.BEAR_ANGRY, [I(0, 1)]: 5, [I(1, 0)]: 6 }, { wild: true, cur: 2 });
+  assert.strictEqual(TT.place(sealed, I(5, 5)).state.grid[I(0, 0)], TT.TOMB);
+});
+
+t('wild bears: classic games never escalate; the trap kills any stage; stages cannot be carried; validate guards the mode', () => {
+  const c = TT.place(boxed(TT.BEAR, { [I(0, 1)]: 5 }, { wild: false }), I(5, 5));
+  assert.strictEqual(c.state.grid[I(0, 0)], TT.BEAR); assert(!c.events.some((e) => e.type === 'growl' || e.type === 'maul'));
+  [TT.BEAR_GROWL, TT.BEAR_ANGRY].forEach((code) => {
+    const s = withGrid({ [I(2, 2)]: code }, { wild: true, coins: 100 });
+    assert.strictEqual(TT.trap(s, I(2, 2)).state.grid[I(2, 2)], TT.TOMB);
+    assert.strictEqual(TT.move(s, I(2, 2), I(0, 0)), null, 'bears cannot be carried');
+    assert(!TT.isMovable(code) && TT.isBear(code));
+    assert.deepStrictEqual(TT.validate(s), []);
+    assert(TT.validate(Object.assign({}, s, { wild: false })).length, 'an angry bear in a classic game is invalid');
+  });
+  assert.strictEqual(TT.newGame(5).wild, false); assert.strictEqual(TT.newGame(5, { wild: true }).wild, true);
+  const old = JSON.parse(JSON.stringify(TT.newGame(3))); delete old.wild;
+  TT.migrate(old);
+  assert.strictEqual(old.wild, false); assert.deepStrictEqual(TT.validate(old), []);
+});
+
 t('swap stores the item, then exchanges', () => {
   let s = TT.newGame(3);
   const c0 = s.cur, n0 = s.next;
@@ -759,9 +853,9 @@ t('wouldMerge agrees with place', () => {
 });
 
 t('fuzz: 400 random games keep state valid and always terminate', () => {
-  let maxTurns = 0, merges = 0, trapped = 0, churches = 0, hammers = 0, lands = 0, foxMoves = 0, maxTier = 0, moves = 0;
+  let maxTurns = 0, merges = 0, trapped = 0, churches = 0, hammers = 0, lands = 0, foxMoves = 0, maxTier = 0, moves = 0, growls = 0, mauls = 0;
   for (let seed = 1; seed <= 400; seed++) {
-    let s = TT.newGame(seed);
+    let s = TT.newGame(seed, { wild: seed % 2 === 0 });
     const pick = TT.newGame(seed * 7919 + 1); // independent chooser rng
     let guard = 0;
     while (!s.over) {
@@ -797,7 +891,7 @@ t('fuzz: 400 random games keep state valid and always terminate', () => {
       const prob = TT.validate(r.state);
       assert.deepStrictEqual(prob, [], `seed ${seed} turn ${s.turn}: ${prob.join(', ')}`);
       assert(r.state.score >= s.score);
-      r.events.forEach((e) => { if (e.type === 'merge') { merges++; if (e.to === TT.CHURCH) churches++; } if (e.type === 'trapped') trapped++; if (e.type === 'fox') foxMoves++; if (e.type === 'merge') maxTier = Math.max(maxTier, e.to); });
+      r.events.forEach((e) => { if (e.type === 'merge') { merges++; if (e.to === TT.CHURCH) churches++; } if (e.type === 'trapped') trapped++; if (e.type === 'fox') foxMoves++; if (e.type === 'growl') growls++; if (e.type === 'maul') mauls++; if (e.type === 'merge') maxTier = Math.max(maxTier, e.to); });
       if (TT.rand(pick) < 0.05) {
         const u = TT.undo(r.state);
         assert.strictEqual(!!u, TT.canUndo(r.state));
@@ -808,7 +902,7 @@ t('fuzz: 400 random games keep state valid and always terminate', () => {
     maxTurns = Math.max(maxTurns, s.turn);
   }
   assert(merges > 0 && trapped > 0 && foxMoves > 0, 'fuzz exercised merges, trapped bears and fox warps');
-  console.log(`  fuzz: max ${maxTurns} turns, ${merges} merges, ${trapped} trapped bears, ${churches} churches, ${hammers} hammers, ${lands} land purchases, ${moves} moves, ${foxMoves} fox warps, best tier ${maxTier}`);
+  console.log(`  fuzz: max ${maxTurns} turns, ${merges} merges, ${trapped} trapped bears, ${churches} churches, ${hammers} hammers, ${lands} land purchases, ${moves} moves, ${foxMoves} fox warps, ${growls} growls, ${mauls} mauls, best tier ${maxTier}`);
 });
 
 console.log(`OK: ${n} logic tests passed`);
