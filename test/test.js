@@ -557,14 +557,56 @@ t('validate rejects a board whose size does not match the land bought', () => {
   assert(TT.validate(Object.assign({}, s, { grid: s.grid.slice(1) })).length);
 });
 
-t('crystal turns into a mall (-> cash) or a cathedral (-> treasure); three crystals alone stay inert', () => {
+t('crystal turns into a mall (-> cash) or a cathedral (-> treasure)', () => {
   let r = TT.place(withGrid({ [I(2, 1)]: 10, [I(2, 3)]: 10 }, { cur: TT.CRYSTAL }), I(2, 2));
   assert.strictEqual(r.state.grid[I(2, 2)], TT.CASH, 'crystal as mall -> cash');
   assert.strictEqual(TT.preview(withGrid({ [I(2, 1)]: 10, [I(2, 3)]: 10 }, { cur: TT.CRYSTAL }), I(2, 2)).final, TT.CASH);
   r = TT.place(withGrid({ [I(2, 1)]: TT.CATHEDRAL, [I(2, 3)]: TT.CATHEDRAL }, { cur: TT.CRYSTAL }), I(2, 2));
   assert.strictEqual(r.state.grid[I(2, 2)], TT.TREASURE, 'crystal as cathedral -> treasure');
-  r = TT.place(withGrid({ [I(2, 1)]: TT.CRYSTAL, [I(2, 3)]: TT.CRYSTAL }, { cur: TT.CRYSTAL }), I(2, 2));
-  assert.deepStrictEqual([2, 3, 4].map((c) => r.state.grid[I(2, c - 1)]), [TT.CRYSTAL, TT.CRYSTAL, TT.CRYSTAL]);
+});
+
+t('three connected gems merge into a treasure on the tile where the last one lands (no points, no coins)', () => {
+  const s = withGrid({ [I(2, 1)]: TT.CRYSTAL, [I(2, 3)]: TT.CRYSTAL }, { cur: TT.CRYSTAL, coins: 7 });
+  const pv = TT.preview(s, I(2, 2));
+  assert(pv.merged && pv.final === TT.TREASURE && pv.points === 0 && pv.coins === 0, 'preview shows the merge');
+  assert.deepStrictEqual(pv.eaten.sort(), [I(2, 1), I(2, 3)].sort());
+  assert(TT.wouldMerge(s, I(2, 2)), 'the merge hint lights up');
+  const r = TT.place(s, I(2, 2));
+  assert.strictEqual(r.state.grid[I(2, 2)], TT.TREASURE);
+  assert.strictEqual(r.state.grid[I(2, 1)], 0); assert.strictEqual(r.state.grid[I(2, 3)], 0);
+  assert.strictEqual(r.state.score, 0); assert.strictEqual(r.state.coins, 7);
+  const m = r.events.find((e) => e.type === 'merge');
+  assert(m && m.from === TT.CRYSTAL && m.to === TT.TREASURE && m.at === I(2, 2) && m.cells.length === 3);
+  assert.deepStrictEqual(TT.validate(r.state), []);
+  assert.strictEqual(TT.open(r.state, I(2, 2)).state.coins, 7 + TT.TREASURE_COINS, 'worth exactly one treasure');
+  // 4 gems -> still ONE treasure; diagonal gems do not connect; two gems alone just wait
+  const four = TT.place(withGrid({ [I(2, 0)]: TT.CRYSTAL, [I(2, 1)]: TT.CRYSTAL, [I(2, 3)]: TT.CRYSTAL }, { cur: TT.CRYSTAL }), I(2, 2)).state;
+  assert.strictEqual(four.grid.filter((v) => v === TT.TREASURE).length, 1); assert.strictEqual(four.grid.filter((v) => v === TT.CRYSTAL).length, 0);
+  const diag = TT.place(withGrid({ [I(1, 1)]: TT.CRYSTAL, [I(3, 3)]: TT.CRYSTAL }, { cur: TT.CRYSTAL }), I(2, 2)).state;
+  assert.strictEqual(diag.grid.filter((v) => v === TT.CRYSTAL).length, 3);
+  const two = TT.place(withGrid({ [I(2, 1)]: TT.CRYSTAL }, { cur: TT.CRYSTAL }), I(2, 2)).state;
+  assert.strictEqual(two.grid.filter((v) => v === TT.CRYSTAL).length, 2);
+  assert.deepStrictEqual(TT.validate(two), []);
+});
+
+t('a gem that can stand in for a tier does that first; the gem trio only forms when no tier fits', () => {
+  // placed gem touches two cathedrals and two waiting gems: it becomes a cathedral (-> treasure), the other gems keep waiting
+  const s = withGrid({ [I(2, 1)]: TT.CATHEDRAL, [I(2, 3)]: TT.CATHEDRAL, [I(1, 2)]: TT.CRYSTAL, [I(3, 2)]: TT.CRYSTAL }, { cur: TT.CRYSTAL });
+  const r = TT.place(s, I(2, 2));
+  assert.strictEqual(r.state.grid[I(2, 2)], TT.TREASURE);
+  assert.strictEqual(r.state.grid.filter((v) => v === TT.CRYSTAL).length, 2);
+  assert.deepStrictEqual(TT.validate(r.state), []);
+});
+
+t('a gem trio is also made by the mover, and a save with an inert trio is settled on load', () => {
+  const s = withGrid({ [I(2, 1)]: TT.CRYSTAL, [I(2, 3)]: TT.CRYSTAL, [I(5, 5)]: TT.CRYSTAL }, { coins: 100 });
+  const r = TT.move(s, I(5, 5), I(2, 2));
+  assert.strictEqual(r.state.grid[I(2, 2)], TT.TREASURE); assert.deepStrictEqual(TT.validate(r.state), []);
+  const old = withGrid({ [I(0, 0)]: TT.CRYSTAL, [I(0, 1)]: TT.CRYSTAL, [I(0, 2)]: TT.CRYSTAL });
+  assert(TT.validate(old).length, 'an unmerged gem trio is invalid');
+  TT.migrate(old);
+  assert.deepStrictEqual(TT.validate(old), []);
+  assert.strictEqual(old.grid.filter((v) => v === TT.TREASURE).length, 1);
 });
 
 t('mover: picks up an item and drops it on an empty tile for coins; free action, limited stock', () => {

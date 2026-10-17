@@ -243,7 +243,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       <li>Connect <b>3 or more</b> identical items (up, down, left, right) and <i>all</i> of them merge into one of the next tier on the tile you tapped (4 or 5 pay more points and coins, nothing is left over):<br>🌱 → 🌿 → 🌳 → 🏕️ → 🛖 → 🏠 → 🏘️ → 🏫 → 🏥 → 🏬 → 💵 <b>cash</b>: tap it to collect coins.</li>
       <li>🐻 <b>Bears</b> wander one step each turn. Box one in so it cannot move and it becomes a 🪦 (bears sharing a pocket that still has room are safe). Three connected 🪦 merge into ⛪, three ⛪ into 🕌, three 🕌 into a 💰 <b>treasure</b>: tap it to open it for coins.</li>
       <li>🦊 The <b>fox</b> never walks: every turn it <b>warps</b> to a random empty tile. Corner it, though: when walls and items close it in on every side (or you fill the last free tile of its box) it becomes a 🪦, and so does a fox on a full board. The 🪤 trap kills it anywhere.</li>
-      <li>💎 The <b>crystal</b> is a wildcard: it turns into whatever makes the best merge (any building tier up to 🏬 which makes 💵 cash, 🪦, ⛪ or 🕌 which makes a 💰 treasure). If it cannot merge yet it waits, and merges as soon as a group of 3 is possible next to it.</li>
+      <li>💎 The <b>crystal</b> is a wildcard: it turns into whatever makes the best merge (any building tier up to 🏬 which makes 💵 cash, 🪦, ⛪ or 🕌 which makes a 💰 treasure). If no tier fits it waits as a wildcard, and <b>three 💎 touching each other merge into a 💰 treasure</b> on the tile you tapped.</li>
       <li>🪙 <b>Coins</b> come from merges. Spend them in the shop: buy an item as your current one (the old one moves to Next). You can buy 🌱 🌿 🌳, and any higher tier once you have built one. Stock is limited (the ×N badge): after it runs out the price <b>doubles</b> with every purchase, and score milestones restock it.</li>
       <li>🪤 kills a bear or fox on the spot, 🔨 removes any placed item, 🚚 <b>moves</b> one item (not animals) to an empty tile, merging it there like a placed item, and ⬆️⬇️⬅️➡️ buy <b>land</b>: one more row or column on that side (each side once, dearer every time).</li>
       <li>The <b>Reserve</b> tray (top left) stores the current item for later (free swap). <b>Undo</b> takes back your last move for a few coins.</li>
@@ -353,15 +353,15 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   // Resolve merges triggered at cell `at`, chaining while the result keeps matching. Mutates s.
   function resolveAt(s, at, events) {
     for (;;) {
-      var code = s.grid[at];
-      if (!NEXT[code]) return;
+      var code = s.grid[at], next = code === CRYSTAL ? TREASURE : NEXT[code]; // 3+ connected gems merge into a treasure
+      if (!next) return;
       var g = group(s.grid, at, code);
       if (g.length < 3) return;
-      var pts = g.length * BASE[code], coins = (g.length - 2) * COIN[code];
+      var pts = g.length * (BASE[code] || 0), coins = (g.length - 2) * (COIN[code] || 0); // gems themselves pay nothing: the treasure is the prize
       for (var k = 0; k < g.length; k++) s.grid[g[k]] = EMPTY;
-      s.grid[at] = NEXT[code];
+      s.grid[at] = next;
       s.score += pts; s.coins += coins;
-      events.push({ type: 'merge', at: at, cells: g, from: code, to: NEXT[code], points: pts, coins: coins });
+      events.push({ type: 'merge', at: at, cells: g, from: code, to: next, points: pts, coins: coins });
     }
   }
 
@@ -376,7 +376,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   }
 
   // Every crystal on the board turns into the best item kind that merges at its cell; one that cannot merge yet
-  // stays as an inert wildcard and is re-checked after every placement. `first` (the crystal just placed) goes first.
+  // stays as a wildcard (three of them together merge into a treasure, see applyItem) and is re-checked after every placement. `first` (the crystal just placed) goes first.
   function settleCrystals(s, events, first) {
     for (var again = true; again;) {
       again = false;
@@ -393,8 +393,10 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   // Put `item` on empty cell idx and resolve every merge it causes (no animal movement). Mutates s.
   function applyItem(s, idx, item, events) {
     s.grid[idx] = item;
-    if (item === CRYSTAL) settleCrystals(s, events, idx);
-    else { resolveAt(s, idx, events); settleCrystals(s, events); }
+    if (item === CRYSTAL) {
+      settleCrystals(s, events, idx);
+      if (s.grid[idx] === CRYSTAL) { resolveAt(s, idx, events); settleCrystals(s, events); } // no tier to stand in for: 3+ connected gems -> treasure
+    } else { resolveAt(s, idx, events); settleCrystals(s, events); }
   }
 
   function emptyCount(grid) { var n = 0; for (var i = 0; i < grid.length; i++) if (grid[i] === EMPTY) n++; return n; }
@@ -602,7 +604,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     applyItem(s, idx, s.cur, events);
     for (var i = 0; i < N; i++) if (i !== idx && state.grid[i] !== EMPTY && s.grid[i] === EMPTY) eaten.push(i);
     events.forEach(function (e) { if (e.type === 'merge') { pts += e.points; coins += e.coins; } });
-    return { item: state.cur, final: s.grid[idx], eaten: eaten, points: pts, coins: coins, merged: pts > 0 };
+    return { item: state.cur, final: s.grid[idx], eaten: eaten, points: pts, coins: coins, merged: events.some(function (e) { return e.type === 'merge'; }) };
   }
 
   // What would moving the item on `from` to the empty cell `to` do? Pure. Same shape as preview(); `eaten` never lists `from`.
@@ -614,7 +616,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     applyItem(s, to, item, events);
     for (var i = 0; i < N; i++) if (i !== to && i !== from && state.grid[i] !== EMPTY && s.grid[i] === EMPTY) eaten.push(i);
     events.forEach(function (e) { if (e.type === 'merge') { pts += e.points; coins += e.coins; } });
-    return { item: item, final: s.grid[to], eaten: eaten, points: pts, coins: coins, merged: pts > 0 };
+    return { item: item, final: s.grid[to], eaten: eaten, points: pts, coins: coins, merged: events.some(function (e) { return e.type === 'merge'; }) };
   }
 
   // Undo is possible when there is a snapshot and the player can pay UNDO_COST (taken from the restored coins).
@@ -646,7 +648,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   }
 
   // Fill in fields that older saves lack (coins, stock, milestone, land, new codes) on s and its undo snapshot. Mutates s.
-  // Tiers that no longer end the chain (the old grand castles) may now form a group: settle those so the save is valid.
+  // Every save is settled once: tiers that no longer end the chain (the old grand castles) and gems that sat inert in a group of
+  // three may now merge, and a save with such a group would be invalid.
   function migrate(s) {
     [s, s && s.undo].forEach(function (x) {
       if (!x || typeof x !== 'object') return;
@@ -656,7 +659,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       if (!x.stock || typeof x.stock !== 'object') x.stock = Object.assign({}, START_STOCK);
       for (var sk in START_STOCK) if (typeof x.stock[sk] !== 'number') x.stock[sk] = START_STOCK[sk]; // items added since the save was made
       if (typeof x.milestone !== 'number') { x.milestone = 0; while (x.score >= milestoneScore(x.milestone)) x.milestone++; }
-      if (old && Array.isArray(x.grid) && x.grid.length === DEFAULT_W * DEFAULT_H) {
+      if (Array.isArray(x.grid) && x.grid.length === (x.w || DEFAULT_W) * (x.h || DEFAULT_H)) {
         dim(x);
         var ev = [];
         for (var i = 0; i < N; i++) resolveAt(x, i, ev);
@@ -706,7 +709,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     var seen = {};
     for (i = 0; i < N; i++) {
       var c = s.grid[i];
-      if (NEXT[c] && !seen[i]) {
+      if ((NEXT[c] || c === CRYSTAL) && !seen[i]) {
         var g = group(s.grid, i, c);
         g.forEach(function (k) { seen[k] = true; });
         if (g.length >= 3) p.push('unmerged group of ' + NAME[c] + ' at ' + i);
@@ -974,7 +977,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
           p.eaten.forEach(function (i) { cells[i].classList.add('eat'); });
           var mv = sel === pi ? 'Tap again to ' : '';
           note = p.merged
-            ? (mv ? mv + 'move and merge' : 'Moves and merges') + ' into ' + TT.NAME[p.final] + ' · +' + p.points + ' pts · +' + p.coins + ' coins'
+            ? (mv ? mv + 'move and merge' : 'Moves and merges') + ' into ' + TT.NAME[p.final] + gain(p)
             : (mv ? mv + 'drop' : 'Drop') + ' the ' + TT.NAME[state.grid[moveFrom]] + ' here (-' + TT.PRICE.move + ' coins)';
           hot = sel === pi;
         } else note = '🚚 Tap an empty tile to drop the ' + TT.NAME[state.grid[moveFrom]] + ' (tap it again to put it down)';
@@ -995,7 +998,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       p.eaten.forEach(function (i) { cells[i].classList.add('eat'); });
       var verb = sel === pi ? 'Tap again to ' : '';
       note = p.merged
-        ? (verb ? verb + 'merge' : 'Merges') + ' into ' + TT.NAME[p.final] + ' · +' + p.points + ' pts · +' + p.coins + ' coins'
+        ? (verb ? verb + 'merge' : 'Merges') + ' into ' + TT.NAME[p.final] + gain(p)
         : (verb ? verb + 'place ' : 'Place ') + TT.NAME[state.cur] + ' here';
       hot = sel === pi;
     } else if (previewOn) note = 'Tap a tile to preview, tap again to place';
@@ -1003,6 +1006,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     $('note').classList.toggle('hot', hot);
   }
 
+  // ' · +30 pts · +2 coins' for a merge; empty when it pays nothing (three gems -> treasure: the treasure is the prize)
+  function gain(p) { return p.points || p.coins ? ' · +' + p.points + ' pts · +' + p.coins + ' coins' : ''; }
   function toast(text, yFrac) {
     var b = fxEl.getBoundingClientRect(), el = document.createElement('div');
     el.className = 'pts'; el.textContent = text; el.style.left = b.width / 2 + 'px'; el.style.top = b.height * (yFrac || 0.5) + 'px';
@@ -1030,7 +1035,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
             'px;--dx:' + (to.x - f.x) + 'px;--dy:' + (to.y - f.y) + 'px';
           fxEl.appendChild(gh);
         });
-        floatAt(ev.at, '+' + ev.points + (ev.coins ? ' · +' + ev.coins + '🪙' : ''));
+        floatAt(ev.at, ev.points || ev.coins ? '+' + ev.points + (ev.coins ? ' · +' + ev.coins + '🪙' : '') : '💰');
       } else if (ev.type === 'bear') {
         var a = cellCenter(ev.from), b = cellCenter(ev.to), c = cells[ev.to];
         c.style.setProperty('--dx', (a.x - b.x) + 'px'); c.style.setProperty('--dy', (a.y - b.y) + 'px');
@@ -1183,7 +1188,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     chain(TT.TOMB, null, 'treasure: tap to open, +' + TT.TREASURE_COINS + ' coins') + '</div>' +
     '<p class="gnote">👻🐈‍⬛ haunt the tombstones and churches.</p>' +
     '<h3>Special</h3><div class="chain">' + chip(TT.CRYSTAL, 'wildcard') + chip(TT.FOX, 'warps, walls trap it') + '</div>' +
-    '<p class="gnote">💎 stands in for any tier, including 🏬 (making 💵 cash) and 🕌 (making a 💰 treasure). 🚚 moves one item to an empty tile for coins.</p>' +
+    '<p class="gnote">💎 stands in for any tier, including 🏬 (making 💵 cash) and 🕌 (making a 💰 treasure). Three or more 💎 touching each other merge into a 💰 treasure. 🚚 moves one item to an empty tile for coins.</p>' +
     '<p class="gnote">Three or more connected items of the same kind merge into the next one. Bigger groups pay more points and coins.</p>';
   $('guideLink').addEventListener('click', function (e) { e.preventDefault(); $('guide').classList.remove('hidden'); });
   $('guideClose').addEventListener('click', function () { $('guide').classList.add('hidden'); });

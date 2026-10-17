@@ -329,6 +329,17 @@ with sync_playwright() as p:
     assert after['coins'] == 100 - 60 + 2 and after['turn'] == 3 and after['stock']['move'] == 0, 'merged on the drop tile, free action, stock used'
     assert page.locator('#moveBtn').is_disabled() and page.get_attribute('#moveBtn', 'aria-pressed') == 'false'
 
+    # ---- three gems merge into a treasure (no points / coins), shown in the preview note and the hint
+    g = [0] * 36
+    g[13] = CRYSTAL; g[15] = CRYSTAL
+    load(g, cur=CRYSTAL, next=1, coins=30)
+    page.tap('#board .cell[data-i="14"]')
+    assert page.locator('#board .cell.pv').count() == 1 and page.locator('#board .cell.eat').count() == 2
+    assert 'treasure' in page.inner_text('#note') and '+0' not in page.inner_text('#note'), page.inner_text('#note')
+    page.tap('#board .cell[data-i="14"]')
+    after = check_consistent(page, 'gem trio')
+    assert after['grid'][14] == TREASURE and after['grid'][13] == after['grid'][15] == 0 and after['score'] == 0 and after['coins'] == 30, 'three gems -> one treasure'
+
     # ---- fox walled in on every side becomes a tombstone when the next item is placed
     g = [0] * 36
     g[14] = FOX; g[8] = 5; g[20] = 6; g[13] = 7; g[15] = 8
