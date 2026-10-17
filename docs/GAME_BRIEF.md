@@ -12,7 +12,7 @@ Single-file HTML game, (no framework, installable PWA, no image assets).
 - Game ends when the grid is full. Score = sum of merge values; keep a local best.
 
 ## Graphics (emoji, no files)
-grass 🌱, bush 🌿, tree 🌳, camp 🏕️, hut 🛖, house 🏠, village 🏘️, school 🏫, hospital 🏥, mall 🏬, cash 💵, bear 🐻, fox 🦊, tombstone 🪦, church ⛪, cathedral 🕌, crystal 💎, treasure 💰. Small decorative critters wander around homes (🐇🐤) and graves (👻🐈‍⬛). Styled board with tinted tiles, pop animation on merge, shake when a bear is trapped.
+grass 🌱, bush 🌿, tree 🌳, camp 🏕️, hut 🛖, house 🏠, village 🏘️, school 🏫, hospital 🏥, mall 🏬, cash 💵, bear 🐻, fox 🦊, tombstone 🪦, church ⛪, cathedral 🕌, crystal 💎, treasure 💰. Small decorative critters wander around homes (🐇🐤) and graves (👻🐈‍⬛). Plain grass-field board (no checkerboard), pop animation on merge, shake when a bear is trapped.
 
 ## Build order
 1. Pure logic module (grid, merge flood-fill, bear movement, scoring) with Node tests.

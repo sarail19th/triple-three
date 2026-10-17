@@ -45,7 +45,7 @@
     wrapEl.style.setProperty('--m', Math.max(w, h));
     for (var i = 0; i < w * h; i++) {
       var el = document.createElement('div');
-      el.className = 'cell empty' + (((i % w) + ((i / w) | 0)) % 2 ? ' alt' : '');
+      el.className = 'cell empty';
       el.dataset.i = i; el.dataset.c = 0; el.setAttribute('role', 'gridcell');
       var e = document.createElement('span'); e.className = 'e'; el.appendChild(e);
       boardEl.appendChild(el); cells.push(el);

@@ -39,3 +39,4 @@ Serve `dist/` over https or localhost for the service worker (`python -m http.se
 - Service worker is cache-first; the page reloads once when a new version takes over. After a rebuild, hard-refresh (Ctrl+Shift+R) to see changes.
 - Icons are chosen by the owner: 🌱 🌿 🌳 🏕️ 🛖 🏠 🏘️ 🏫 🏥 🏬 💵. Do not swap similar-looking ones (🏡 looked too much like 🏠).
 - Roadmap notes (bank, locked tiles, calendar, pond-style dead tiles) are in `docs/IDEAS.md`.
+- The board is one plain grass field (continuous texture on `#board`, transparent tiles, faint tile edges). Do not bring back the alternating checkerboard tint.
