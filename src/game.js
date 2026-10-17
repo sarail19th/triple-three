@@ -10,7 +10,7 @@
   var boardEl = $('board'), fxEl = $('fx'), wrapEl = $('boardWrap'), shopEl = $('shop'), critEl = $('critters');
   var state, best = store.get('tt-best', 0), hints = false;
   var previewOn = store.get('tt-preview', true) !== false;
-  var sel = -1, hover = -1, mode = null, lastPointer = 'touch'; // UI-only: tile awaiting confirmation, mouse hover, armed tool ('hammer'|'trap'), last input type
+  var sel = -1, hover = -1, mode = null, moveFrom = -1, lastPointer = 'touch'; // UI-only: tile awaiting confirmation, mouse hover, armed tool ('hammer'|'trap'|'move'), tile picked up by the mover, last input type
   var cells = [], bw = 0, bh = 0, shopKey = '';
   var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -23,7 +23,7 @@
 
   function startNew(seed) {
     state = TT.newGame(seed || randomSeed());
-    sel = -1; hover = -1; mode = null;
+    sel = -1; hover = -1; mode = null; moveFrom = -1;
     $('overlay').classList.add('hidden');
     save();
     render([]);
@@ -50,7 +50,7 @@
       var e = document.createElement('span'); e.className = 'e'; el.appendChild(e);
       boardEl.appendChild(el); cells.push(el);
     }
-    bw = w; bh = h; sel = -1; hover = -1;
+    bw = w; bh = h; sel = -1; hover = -1; moveFrom = -1;
     clearCritters();
   }
   boardEl.addEventListener('pointerdown', function (ev) { lastPointer = ev.pointerType || 'touch'; });
@@ -76,6 +76,7 @@
   // Is idx a legal target for the armed tool (or for placement when none is armed)?
   function targetOk(idx) {
     var v = state.grid[idx];
+    if (mode === 'move') return TT.isMovable(v) || (v === 0 && moveFrom >= 0); // pick something up, then an empty tile to drop it on
     return mode === 'hammer' ? v !== 0 : mode === 'trap' ? isAnimal(v) : (v === 0 || isCollectible(v));
   }
   function doAction(idx) {
@@ -87,6 +88,7 @@
   function tap(idx) {
     if (!state || state.over) return;
     if (!targetOk(idx)) { bump(idx); return; }
+    if (mode === 'move') { tapMove(idx); return; }
     if (!mode && isCollectible(state.grid[idx])) { // collecting is always good news: no confirmation step
       var o = TT.open(state, idx);
       state = o.state; sel = -1; save(); render(o.events); vibrate(25);
@@ -100,6 +102,17 @@
     state = r.state;
     save();
     render(r.events);
+    vibrate(r.events.some(function (e) { return e.type === 'merge'; }) ? 25 : 8);
+  }
+  // Mover: the first tap picks an item up (tap it again to put it down, tap another to switch); then an empty tile drops it
+  // there (touch: tap to preview the merge, tap again to confirm; mouse: hover previews and one click drops).
+  function tapMove(idx) {
+    if (state.grid[idx] !== 0) { moveFrom = moveFrom === idx ? -1 : idx; sel = -1; updatePreview(); return; }
+    if (previewOn && lastPointer !== 'mouse' && sel !== idx) { sel = idx; hover = -1; updatePreview(); return; }
+    var from = moveFrom, r = TT.move(state, from, idx);
+    sel = -1; mode = null; moveFrom = -1;
+    if (!r) { bump(idx); render([]); return; }
+    state = r.state; save(); render(r.events);
     vibrate(r.events.some(function (e) { return e.type === 'merge'; }) ? 25 : 8);
   }
   function bump(idx) { var c = cells[idx]; c.classList.remove('shake'); void c.offsetWidth; c.classList.add('shake'); }
@@ -148,6 +161,7 @@
       c.setAttribute('aria-label', 'row ' + (((i / w) | 0) + 1) + ' column ' + ((i % w) + 1) + ' ' + TT.NAME[code]);
     });
     if (mode && (state.over || state.coins < TT.PRICE[mode] || !(state.stock[mode] > 0))) mode = null;
+    if (mode !== 'move' || (moveFrom >= 0 && !TT.isMovable(g[moveFrom]))) moveFrom = -1;
     if (sel >= 0 && (state.over || !targetOk(sel))) sel = -1;
     $('score').textContent = state.score;
     $('coins').textContent = state.coins;
@@ -164,6 +178,9 @@
       if (t === 'hammer') {
         b.disabled = !TT.canHammer(state) || state.over || TT.emptyCount(g) === g.length;
         b.setAttribute('aria-pressed', mode === 'hammer');
+      } else if (t === 'move') {
+        b.disabled = state.over || !TT.canMove(state) || !g.some(TT.isMovable) || TT.emptyCount(g) === 0;
+        b.setAttribute('aria-pressed', mode === 'move');
       } else if (t === 'trap') {
         b.disabled = state.over || state.coins < TT.PRICE.trap || !(state.stock.trap > 0) || (g.indexOf(TT.BEAR) < 0 && g.indexOf(TT.FOX) < 0);
         b.setAttribute('aria-pressed', mode === 'trap');
@@ -197,7 +214,7 @@
   // ---- move preview: ghost of the resulting item, merged tiles outlined, plus a one-line explanation
   function updatePreview() {
     cells.forEach(function (c) {
-      c.classList.remove('pv', 'eat', 'target');
+      c.classList.remove('pv', 'eat', 'target', 'pick');
       if (c.hasAttribute('data-pv')) c.removeAttribute('data-pv');
     });
     var note = '', hot = false, pi = sel >= 0 ? sel : (previewOn ? hover : -1), p;
@@ -210,6 +227,22 @@
         note = (sel === pi ? 'Tap again to trap' : 'Trap') + ' the ' + TT.NAME[state.grid[pi]] + ' -> ' + TT.NAME[res] + ' (-' + TT.PRICE.trap + ' coins)';
         hot = sel === pi;
       } else note = '🪤 Tap a bear or fox to kill it';
+    } else if (mode === 'move') {
+      if (moveFrom < 0) {
+        if (pi >= 0 && TT.isMovable(state.grid[pi])) { cells[pi].classList.add('target'); note = '🚚 Pick up the ' + TT.NAME[state.grid[pi]]; }
+        else note = '🚚 Tap an item to pick it up (-' + TT.PRICE.move + ' coins when you drop it)';
+      } else {
+        cells[moveFrom].classList.add('pick');
+        if (pi >= 0 && state.grid[pi] === 0 && (p = TT.previewMove(state, moveFrom, pi))) {
+          cells[pi].classList.add('pv'); cells[pi].setAttribute('data-pv', TT.EMOJI[p.final]);
+          p.eaten.forEach(function (i) { cells[i].classList.add('eat'); });
+          var mv = sel === pi ? 'Tap again to ' : '';
+          note = p.merged
+            ? (mv ? mv + 'move and merge' : 'Moves and merges') + ' into ' + TT.NAME[p.final] + ' · +' + p.points + ' pts · +' + p.coins + ' coins'
+            : (mv ? mv + 'drop' : 'Drop') + ' the ' + TT.NAME[state.grid[moveFrom]] + ' here (-' + TT.PRICE.move + ' coins)';
+          hot = sel === pi;
+        } else note = '🚚 Tap an empty tile to drop the ' + TT.NAME[state.grid[moveFrom]] + ' (tap it again to put it down)';
+      }
     } else if (mode === 'hammer') {
       if (pi >= 0 && state.grid[pi] !== 0) {
         cells[pi].classList.add('target');
@@ -252,7 +285,7 @@
       if (ev.type === 'place') cells[ev.at].classList.add('drop');
       else if (ev.type === 'merge') {
         var to = cellCenter(ev.at);
-        cells[ev.at].classList.remove('drop'); cells[ev.at].classList.add('pop');
+        cells[ev.at].classList.remove('drop', 'slide'); cells[ev.at].classList.add('pop');
         ev.cells.forEach(function (ci) {
           if (ci === ev.at) return;
           var f = cellCenter(ci), gh = document.createElement('div');
@@ -266,6 +299,11 @@
         var a = cellCenter(ev.from), b = cellCenter(ev.to), c = cells[ev.to];
         c.style.setProperty('--dx', (a.x - b.x) + 'px'); c.style.setProperty('--dy', (a.y - b.y) + 'px');
         c.classList.add('slide');
+      } else if (ev.type === 'move') { // the item glides from where it was picked up
+        var ma = cellCenter(ev.from), mb = cellCenter(ev.to), mc = cells[ev.to];
+        mc.style.setProperty('--dx', (ma.x - mb.x) + 'px'); mc.style.setProperty('--dy', (ma.y - mb.y) + 'px');
+        mc.classList.add('slide');
+        floatAt(ev.to, '🚚 -' + TT.PRICE.move + '🪙');
       } else if (ev.type === 'fox') { // warps: a puff where it left, it spins in where it lands
         floatAt(ev.from, '💨');
         cells[ev.to].classList.add('warp');
@@ -288,11 +326,12 @@
     setTimeout(function () { if (fxEl.childNodes.length) fxEl.textContent = ''; }, 1000);
   }
 
-  // ---- ambient critters: purely decorative (never part of the game state). Rabbits and chicks hop around the
-  // residential tiles (camp .. village), ghosts and black cats drift around the tombstone / church / cathedral tiles.
+  // ---- ambient critters: purely decorative (never part of the game state). Rabbits and chicks live on the residential
+  // tiles (camp .. village), ghosts and black cats on the tombstone / church / cathedral tiles. Each critter belongs to ONE
+  // tile and only wanders inside it; if its tile goes away it is re-homed on another matching tile.
   var AREAS = [
     { codes: [4, 5, 6, 7], kinds: ['🐇', '🐤'] },
-    { codes: [TT.TOMB, TT.CHURCH, TT.CATHEDRAL], kinds: ['👻', '🐈‍⬛'] }
+    { codes: [TT.TOMB, TT.CHURCH, TT.CATHEDRAL], kinds: ['👻', '🐈\u200d⬛'] }
   ];
   var critters = [];
   function areaCells(area) {
@@ -301,29 +340,40 @@
     return out;
   }
   function clearCritters() { critters.forEach(function (c) { c.el.remove(); }); critters = []; }
+  // wander to a random spot inside the critter's own tile (first: snap there without gliding)
   function hop(c, first) {
-    var list = areaCells(c.area);
-    if (!list.length || !cells.length) return;
-    var idx = list[Math.floor(Math.random() * list.length)], p = cellCenter(idx), s = p.w * 0.34;
+    var p = cellCenter(c.cell), s = p.w * 0.34;
     var x = p.x + (Math.random() - 0.5) * (p.w - s) * 0.9, y = p.y + (Math.random() - 0.5) * (p.h - s) * 0.9;
-    c.el.classList.toggle('flip', x < c.x);
-    if (first) { c.el.style.transition = 'none'; }
-    c.el.style.transform = 'translate(' + (x - s / 2) + 'px,' + (y - s / 2) + 'px)';
+    if (first || Math.abs(x - c.x) > 1) c.dir = x < c.x ? -1 : 1; // face the way it is going (the flip lives in the same transform, so it never shifts the position)
+    if (first) c.el.style.transition = 'none';
+    c.el.style.transform = 'translate(' + (x - s / 2) + 'px,' + (y - s / 2) + 'px) scaleX(' + c.dir + ')';
     if (first) { void c.el.offsetWidth; c.el.style.transition = ''; }
-    c.x = x; c.next = Date.now() + 1500 + Math.random() * 2500;
+    c.x = x; c.next = Date.now() + 1200 + Math.random() * 2000;
+  }
+  // a tile of the area with the fewest critters of this kind on it (so they spread over the town instead of piling up)
+  function pickHome(list, kind) {
+    var best = [], bestN = 1e9;
+    list.forEach(function (i) {
+      var n = critters.filter(function (c) { return c.kind === kind && c.cell === i; }).length;
+      if (n < bestN) { bestN = n; best = [i]; } else if (n === bestN) best.push(i);
+    });
+    return best[Math.floor(Math.random() * best.length)];
   }
   function syncCritters() {
     if (reduceMotion) return;
     AREAS.forEach(function (area) {
-      var n = areaCells(area).length, want = Math.min(3, Math.floor(n / 2));
+      var list = areaCells(area), want = Math.min(3, Math.floor(list.length / 2));
       area.kinds.forEach(function (kind) {
         var mine = critters.filter(function (c) { return c.kind === kind; });
         while (mine.length > want) { var gone = mine.pop(); gone.el.remove(); critters.splice(critters.indexOf(gone), 1); }
+        mine.forEach(function (c) { // its tile was merged away or changed into something else: move house
+          if (area.codes.indexOf(state.grid[c.cell]) < 0) { c.cell = pickHome(list, kind); hop(c, true); }
+        });
         while (mine.length < want) {
           var el = document.createElement('span');
           el.className = 'crit'; el.textContent = kind; el.setAttribute('aria-hidden', 'true');
           critEl.appendChild(el);
-          var c = { el: el, kind: kind, area: area, x: 0, next: 0 };
+          var c = { el: el, kind: kind, area: area, cell: pickHome(list, kind), x: 0, dir: 1, next: 0 };
           critters.push(c); mine.push(c); hop(c, true);
         }
       });
@@ -333,8 +383,8 @@
     if (document.hidden || !state) return;
     var now = Date.now();
     critters.forEach(function (c) { if (now >= c.next) hop(c, false); });
-  }, 600);
-  window.addEventListener('resize', function () { critters.forEach(function (c) { c.next = 0; }); });
+  }, 500);
+  window.addEventListener('resize', function () { critters.forEach(function (c) { hop(c, true); }); });
 
   function showOver() {
     var newBest = state.score >= best && state.score > 0;
@@ -348,10 +398,10 @@
     var s = TT.swap(state);
     if (s) { state = s; save(); render([]); }
   });
-  document.querySelectorAll('.tool[data-tool]').forEach(function (b) { // trap and hammer (the item shop is built in buildShop)
+  document.querySelectorAll('.tool[data-tool]').forEach(function (b) { // trap, hammer and mover (the item shop is built in buildShop)
     var t = b.dataset.tool;
     b.querySelector('.tp').textContent = '🪙' + TT.PRICE[t];
-    b.addEventListener('click', function () { mode = mode === t ? null : t; sel = -1; render([]); });
+    b.addEventListener('click', function () { mode = mode === t ? null : t; sel = -1; moveFrom = -1; render([]); });
   });
   document.querySelectorAll('.land').forEach(function (b) {
     b.addEventListener('click', function () {
@@ -396,7 +446,8 @@
     '<h3>Bears</h3><div class="chain">' + chip(TT.BEAR, 'trap it') + '<span class="arrow">&rarr;</span>' +
     chain(TT.TOMB, null, 'treasure: tap to open, +' + TT.TREASURE_COINS + ' coins') + '</div>' +
     '<p class="gnote">👻🐈‍⬛ haunt the tombstones and churches.</p>' +
-    '<h3>Special</h3><div class="chain">' + chip(TT.CRYSTAL, 'wildcard') + chip(TT.FOX, 'warps, trap it') + '</div>' +
+    '<h3>Special</h3><div class="chain">' + chip(TT.CRYSTAL, 'wildcard') + chip(TT.FOX, 'warps, walls trap it') + '</div>' +
+    '<p class="gnote">💎 stands in for any tier, including 🏬 (making 💵 cash) and 🕌 (making a 💰 treasure). 🚚 moves one item to an empty tile for coins.</p>' +
     '<p class="gnote">Three or more connected items of the same kind merge into the next one. Bigger groups pay more points and coins.</p>';
   $('guideLink').addEventListener('click', function (e) { e.preventDefault(); $('guide').classList.remove('hidden'); });
   $('guideClose').addEventListener('click', function () { $('guide').classList.add('hidden'); });
@@ -416,7 +467,8 @@
   window.ttDebug = {
     state: function () { return JSON.parse(JSON.stringify(state)); },
     validate: function () { return TT.validate(state); },
-    critters: function () { return critters.map(function (c) { return c.kind; }); }
+    critters: function () { return critters.map(function (c) { return c.kind; }); },
+    critterHomes: function () { return critters.map(function (c) { return { kind: c.kind, cell: c.cell, code: state.grid[c.cell] }; }); }
   };
 
   if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {

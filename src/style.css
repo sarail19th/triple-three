@@ -46,6 +46,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 .cell.pv { box-shadow: inset 0 0 0 3px var(--accent); z-index: 1; }
 .cell.eat { box-shadow: inset 0 0 0 3px #fff9; }
 .cell.eat .e { opacity: .45; transform: scale(.8); transition: transform .15s, opacity .15s; }
+.cell.pick { box-shadow: inset 0 0 0 3px var(--accent); background-image: linear-gradient(#ffd45a55, #ffd45a55); }
+.cell.pick .e { animation: wobble .5s infinite alternate; }
 .cell.target { box-shadow: inset 0 0 0 3px #ff5a5a; background-image: linear-gradient(#ff5a5a44, #ff5a5a44); }
 .cell.target .e { animation: wobble .5s infinite alternate; }
 @keyframes breathe { from { transform: scale(.9); } to { transform: scale(1.05); } }
@@ -67,8 +69,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 /* ambient critters: decorative only, they wander over the board without ever taking a tap */
 #critters { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 1; }
 .crit { position: absolute; left: 0; top: 0; display: block; font-size: calc(var(--bs) / var(--m) * .3); line-height: 1; opacity: .92;
-  transition: transform 1.6s ease-in-out; filter: drop-shadow(0 1px 1px #0006); }
-.crit.flip { scale: -1 1; }
+  transition: transform 1.2s ease-in-out; filter: drop-shadow(0 1px 1px #0006); }
 #fx { position: absolute; inset: 0; pointer-events: none; overflow: visible; z-index: 2; }
 .ghost { position: absolute; display: flex; align-items: center; justify-content: center; font-size: calc(var(--bs) / var(--m) * .62);
   animation: fly .3s ease-in forwards; }
@@ -94,6 +95,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 
 /* shop: the item row scrolls sideways once many tiers are unlocked; tools and land sit in a fixed row of six */
 .tools { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+.tools.util { grid-template-columns: repeat(7, 1fr); }
 .tools.shop { display: flex; overflow-x: auto; scrollbar-width: thin; padding-bottom: 2px; }
 /* 6.5 buttons wide: the half button peeking in on the right shows that the row scrolls */
 .tools.shop .tool { flex: 0 0 calc((100% - 30px) / 6.5); }
@@ -101,6 +103,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 .tool { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 6px 2px; border-radius: 12px;
   border: 2px solid #8a6d1c; background: #2a2410; color: var(--ink); font: inherit; cursor: pointer; }
 .tool .te { font-size: 22px; line-height: 1.1; }
+.tools.util .tool { padding: 6px 0; }
+.tools.util .tp { font-size: 10px; }
 .tool .tb { position: absolute; top: 1px; right: 3px; font-size: 10px; font-weight: 800; color: var(--ink); opacity: .85; }
 .tool .tp { font-size: 11px; font-weight: 700; color: var(--accent); white-space: nowrap; }
 .tool.pricey .tp { color: #ff9a5a; }

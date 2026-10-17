@@ -435,12 +435,43 @@ t('fox: warps to a random empty cell anywhere, not just to a neighbour', () => {
   assert(far > runs / 2, 'most warps land beyond the neighbouring cells');
 });
 
-t('fox is not trapped by walls (it warps out) as long as any empty cell exists', () => {
-  const s = withGrid({ [I(0, 0)]: TT.FOX, [I(0, 1)]: 5, [I(1, 0)]: 6, [I(1, 1)]: 7 });
+t('fox walled in on all four sides becomes a tombstone (a bear-style trap)', () => {
+  const s = withGrid({ [I(2, 2)]: TT.FOX, [I(1, 2)]: 5, [I(3, 2)]: 6, [I(2, 1)]: 7, [I(2, 3)]: 8 });
   const r = TT.place(s, I(5, 5));
+  assert.strictEqual(r.state.grid[I(2, 2)], TT.TOMB);
+  assert(r.events.some((e) => e.type === 'trapped' && e.at === I(2, 2)));
+  assert(!r.events.some((e) => e.type === 'fox'), 'it never got to warp');
+  assert.deepStrictEqual(TT.validate(r.state), []);
+});
+
+t('fox cornered by two walls becomes a tombstone; with a free neighbour it warps instead', () => {
+  const cornered = withGrid({ [I(0, 0)]: TT.FOX, [I(0, 1)]: 5, [I(1, 0)]: 6 });
+  assert.strictEqual(TT.place(cornered, I(5, 5)).state.grid[I(0, 0)], TT.TOMB);
+  const free = withGrid({ [I(0, 0)]: TT.FOX, [I(0, 1)]: 5 });
+  const r = TT.place(free, I(5, 5));
   assert.strictEqual(r.state.grid.filter((v) => v === TT.FOX).length, 1, 'still alive');
+  assert.strictEqual(r.state.grid[I(0, 0)], 0, 'warped away');
   assert(!r.events.some((e) => e.type === 'trapped'));
-  assert.strictEqual(r.state.grid[I(0, 0)], 0, 'warped out of its walled-in cell');
+});
+
+t('fox in a two-cell box lives until the second cell is filled', () => {
+  const walls = { [I(1, 0)]: 5, [I(1, 1)]: 6, [I(0, 2)]: 7 }; // box = (0,0) fox + (0,1) empty
+  const open = withGrid(Object.assign({ [I(0, 0)]: TT.FOX }, walls), { cur: 2 });
+  const warped = TT.place(open, I(5, 5));
+  assert.strictEqual(warped.state.grid.filter((v) => v === TT.FOX).length, 1, 'room left: the fox warps out');
+  const closed = TT.place(open, I(0, 1)); // the extra item fills the box
+  assert.strictEqual(closed.state.grid[I(0, 0)], TT.TOMB);
+  assert.strictEqual(closed.state.grid[I(0, 1)], 2);
+  assert.deepStrictEqual(TT.validate(closed.state), []);
+});
+
+t('a bear and a fox sharing a pocket with room are safe; filling the last cell kills both', () => {
+  const walls = { [I(1, 0)]: 5, [I(1, 1)]: 6, [I(1, 2)]: 7, [I(0, 3)]: 8 }; // pocket = (0,0) (0,1) (0,2)
+  const s = withGrid(Object.assign({ [I(0, 0)]: TT.BEAR, [I(0, 1)]: TT.FOX }, walls), { cur: 2 });
+  const safe = TT.place(s, I(5, 5));
+  assert.strictEqual(safe.state.grid.filter((v) => v === TT.BEAR || v === TT.FOX).length, 2);
+  const dead = TT.place(s, I(0, 2));
+  assert.strictEqual(dead.state.grid[I(0, 0)], TT.TOMB); assert.strictEqual(dead.state.grid[I(0, 1)], TT.TOMB);
 });
 
 t('fox dies only when the board is completely full (the church forms where the last animal was placed)', () => {
@@ -526,6 +557,73 @@ t('validate rejects a board whose size does not match the land bought', () => {
   assert(TT.validate(Object.assign({}, s, { grid: s.grid.slice(1) })).length);
 });
 
+t('crystal turns into a mall (-> cash) or a cathedral (-> treasure); three crystals alone stay inert', () => {
+  let r = TT.place(withGrid({ [I(2, 1)]: 10, [I(2, 3)]: 10 }, { cur: TT.CRYSTAL }), I(2, 2));
+  assert.strictEqual(r.state.grid[I(2, 2)], TT.CASH, 'crystal as mall -> cash');
+  assert.strictEqual(TT.preview(withGrid({ [I(2, 1)]: 10, [I(2, 3)]: 10 }, { cur: TT.CRYSTAL }), I(2, 2)).final, TT.CASH);
+  r = TT.place(withGrid({ [I(2, 1)]: TT.CATHEDRAL, [I(2, 3)]: TT.CATHEDRAL }, { cur: TT.CRYSTAL }), I(2, 2));
+  assert.strictEqual(r.state.grid[I(2, 2)], TT.TREASURE, 'crystal as cathedral -> treasure');
+  r = TT.place(withGrid({ [I(2, 1)]: TT.CRYSTAL, [I(2, 3)]: TT.CRYSTAL }, { cur: TT.CRYSTAL }), I(2, 2));
+  assert.deepStrictEqual([2, 3, 4].map((c) => r.state.grid[I(2, c - 1)]), [TT.CRYSTAL, TT.CRYSTAL, TT.CRYSTAL]);
+});
+
+t('mover: picks up an item and drops it on an empty tile for coins; free action, limited stock', () => {
+  const s = withGrid({ [I(1, 1)]: 3, [I(4, 4)]: 5 }, { coins: 100 });
+  const r = TT.move(s, I(1, 1), I(2, 3));
+  assert.strictEqual(r.state.grid[I(1, 1)], 0); assert.strictEqual(r.state.grid[I(2, 3)], 3); assert.strictEqual(r.state.grid[I(4, 4)], 5);
+  assert.strictEqual(r.state.coins, 100 - TT.PRICE.move); assert.strictEqual(r.state.stock.move, TT.START_STOCK.move - 1);
+  assert.strictEqual(r.state.turn, s.turn, 'free action'); assert.strictEqual(r.state.rng, s.rng, 'no animal moves, no rng use');
+  assert.deepStrictEqual(r.events[0], { type: 'move', from: I(1, 1), to: I(2, 3), item: 3 });
+  assert.deepStrictEqual(TT.validate(r.state), []);
+  assert.strictEqual(TT.move(r.state, I(4, 4), I(0, 0)), null, 'out of movers');
+  assert.strictEqual(TT.move(withGrid({ [I(1, 1)]: 3 }, { coins: TT.PRICE.move - 1 }), I(1, 1), I(0, 0)), null, 'too poor');
+  assert.strictEqual(TT.move(s, I(0, 0), I(2, 2)), null, 'nothing to pick up');
+  assert.strictEqual(TT.move(s, I(1, 1), I(4, 4)), null, 'destination must be empty');
+  assert.strictEqual(TT.move(s, I(1, 1), I(1, 1)), null, 'must go somewhere else');
+  assert.strictEqual(TT.move(withGrid({ [I(1, 1)]: TT.BEAR }, { coins: 100 }), I(1, 1), I(0, 0)), null, 'bears cannot be moved');
+  assert.strictEqual(TT.move(withGrid({ [I(1, 1)]: TT.FOX }, { coins: 100 }), I(1, 1), I(0, 0)), null, 'foxes cannot be moved');
+  assert.strictEqual(TT.move(Object.assign({}, s, { over: true }), I(1, 1), I(0, 0)), null);
+});
+
+t('mover: the dropped item merges where it lands (chains, points, coins, crystals) and previewMove agrees', () => {
+  const s = withGrid({ [I(5, 5)]: 1, [I(2, 0)]: 1, [I(2, 2)]: 1, [I(0, 4)]: 2, [I(1, 3)]: 2, [I(1, 5)]: 2 }, { coins: 500 });
+  const pv = TT.previewMove(s, I(5, 5), I(2, 1));
+  const r = TT.move(s, I(5, 5), I(2, 1));
+  assert.strictEqual(r.state.grid[I(2, 1)], 2, 'grass trio -> bush on the drop tile');
+  assert.strictEqual(r.state.grid[I(5, 5)], 0);
+  assert.strictEqual(pv.final, 2); assert(pv.merged); assert.deepStrictEqual(pv.eaten.sort(), [I(2, 0), I(2, 2)].sort(), 'the carried item itself is not "eaten"');
+  assert.strictEqual(r.state.score - s.score, pv.points); assert.strictEqual(r.state.coins, 500 - TT.PRICE.move + pv.coins);
+  assert.deepStrictEqual(TT.validate(r.state), []);
+  // a moved crystal settles at its new home
+  const c = withGrid({ [I(0, 0)]: TT.CRYSTAL, [I(3, 1)]: 3, [I(3, 3)]: 3 }, { coins: 500 });
+  const cr = TT.move(c, I(0, 0), I(3, 2));
+  assert.strictEqual(cr.state.grid[I(3, 2)], 4, 'crystal as tree -> camp');
+  assert(cr.events.some((e) => e.type === 'crystal'));
+  assert.strictEqual(TT.previewMove(c, I(0, 0), I(3, 1)), null, 'preview needs an empty destination');
+  assert.strictEqual(JSON.stringify(c), JSON.stringify(withGrid({ [I(0, 0)]: TT.CRYSTAL, [I(3, 1)]: 3, [I(3, 3)]: 3 }, { coins: 500 })), 'previews never mutate');
+  // reaching a new tier by moving unlocks it in the shop
+  const u = withGrid({ [I(0, 0)]: 5, [I(0, 1)]: 5, [I(4, 4)]: 5 }, { coins: 500 });
+  const ur = TT.move(u, I(4, 4), I(0, 2));
+  assert.strictEqual(ur.state.grid[I(0, 2)], 6); assert.strictEqual(ur.state.top, 6);
+  assert(ur.events.some((e) => e.type === 'tierunlock'));
+});
+
+t('mover: tombstones, churches, cash and treasure can all be moved; a trio of tombstones merges', () => {
+  const s = withGrid({ [I(1, 0)]: TT.TOMB, [I(1, 2)]: TT.TOMB, [I(4, 4)]: TT.TOMB, [I(3, 3)]: TT.CASH, [I(2, 4)]: TT.TREASURE }, { coins: 500 });
+  const r = TT.move(s, I(4, 4), I(1, 1));
+  assert.strictEqual(r.state.grid[I(1, 1)], TT.CHURCH);
+  assert(TT.move(s, I(3, 3), I(0, 0)) && TT.move(s, I(2, 4), I(0, 0)));
+});
+
+t('migrate adds stock entries for shop items introduced after the save was made', () => {
+  const s = JSON.parse(JSON.stringify(TT.newGame(4)));
+  delete s.stock.move; delete s.stock[7];
+  assert(TT.validate(s).length, 'an old save without them is invalid as is');
+  TT.migrate(s);
+  assert.strictEqual(s.stock.move, TT.START_STOCK.move); assert.strictEqual(s.stock[7], TT.START_STOCK[7]);
+  assert.deepStrictEqual(TT.validate(s), []);
+});
+
 t('swap stores the item, then exchanges', () => {
   let s = TT.newGame(3);
   const c0 = s.cur, n0 = s.next;
@@ -577,7 +675,7 @@ t('wouldMerge agrees with place', () => {
 });
 
 t('fuzz: 400 random games keep state valid and always terminate', () => {
-  let maxTurns = 0, merges = 0, trapped = 0, churches = 0, hammers = 0, lands = 0, foxMoves = 0, maxTier = 0;
+  let maxTurns = 0, merges = 0, trapped = 0, churches = 0, hammers = 0, lands = 0, foxMoves = 0, maxTier = 0, moves = 0;
   for (let seed = 1; seed <= 400; seed++) {
     let s = TT.newGame(seed);
     const pick = TT.newGame(seed * 7919 + 1); // independent chooser rng
@@ -591,6 +689,10 @@ t('fuzz: 400 random games keep state valid and always terminate', () => {
       }
       const empties = [], occupied = [];
       s.grid.forEach((v, i) => { (v === 0 ? empties : occupied).push(i); });
+      if (TT.rand(pick) < 0.02 && empties.length && occupied.length) { // the mover, now and then
+        const mv = TT.move(s, occupied[Math.floor(TT.rand(pick) * occupied.length)], empties[Math.floor(TT.rand(pick) * empties.length)]);
+        if (mv) { moves++; s = mv.state; assert.deepStrictEqual(TT.validate(s), []); continue; }
+      }
       if (TT.rand(pick) < 0.01 || !empties.length) { // buy land now and then, and whenever stuck
         const side = TT.SIDES[Math.floor(TT.rand(pick) * TT.SIDES.length)];
         const l = TT.buyLand(s, side);
@@ -622,7 +724,7 @@ t('fuzz: 400 random games keep state valid and always terminate', () => {
     maxTurns = Math.max(maxTurns, s.turn);
   }
   assert(merges > 0 && trapped > 0 && foxMoves > 0, 'fuzz exercised merges, trapped bears and fox warps');
-  console.log(`  fuzz: max ${maxTurns} turns, ${merges} merges, ${trapped} trapped bears, ${churches} churches, ${hammers} hammers, ${lands} land purchases, ${foxMoves} fox warps, best tier ${maxTier}`);
+  console.log(`  fuzz: max ${maxTurns} turns, ${merges} merges, ${trapped} trapped bears, ${churches} churches, ${hammers} hammers, ${lands} land purchases, ${moves} moves, ${foxMoves} fox warps, best tier ${maxTier}`);
 });
 
 console.log(`OK: ${n} logic tests passed`);
