@@ -13,7 +13,7 @@ from playwright.sync_api import sync_playwright
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 DIST = os.path.join(ROOT, 'dist')
-EMOJI = ['', '🌱', '🌿', '🌳', '🏕️', '🛖', '🏠', '🏘️', '🏫', '🏥', '🏬', '💵', '🐻', '🪦', '⛪', '🕌', '💎', '💰', '🦊']
+EMOJI = ['', '🌱', '🌿', '🌳', '🏕️', '🛖', '🏠', '🏘️', '🏫', '🏥', '🏬', '💵', '🐻', '🪦', '⛪', '🕌', '💎', '💰', '🦊', '🐻', '🐻']
 BEAR, TOMB, CHURCH, CRYSTAL, TREASURE, FOX = 12, 13, 14, 16, 17, 18
 LAND_PRICE = [150, 400, 1000, 2500]
 MIN_TURNS = 50   # random turns that must be played
@@ -246,7 +246,7 @@ with sync_playwright() as p:
     assert resumed['grid'] == mid['grid'] and resumed['turn'] == mid['turn'] and resumed['rng'] == mid['rng'], 'saved game resumes'
     # ---- mouse: hover previews, ONE click places (touch needs preview + confirm, covered above)
     def load(grid, **kw):
-        s = {'ver': 2, 'w': 6, 'h': 6, 'land': [], 'top': 3, 'grid': grid, 'cur': 1, 'next': 2, 'hold': 0, 'score': 0, 'coins': 30, 'turn': 3, 'over': False, 'rng': 77, 'seed': 77, 'undo': None}
+        s = {'ver': 2, 'wild': False, 'w': 6, 'h': 6, 'land': [], 'top': 3, 'grid': grid, 'cur': 1, 'next': 2, 'hold': 0, 'score': 0, 'coins': 30, 'turn': 3, 'over': False, 'rng': 77, 'seed': 77, 'undo': None}
         s.update(kw)
         page.evaluate('s => localStorage.setItem("tt-save", JSON.stringify(s))', s)
         page.goto(URL + '#')
@@ -347,6 +347,34 @@ with sync_playwright() as p:
     tap_cell(page, 0, True)
     after = check_consistent(page, 'fox walled in')
     assert after['grid'][14] == TOMB and FOX not in after['grid'], 'a walled-in fox becomes a tombstone'
+
+    # ---- Wild bears: the New game dialog picks the mode; boxed-in bears escalate (growl) and then maul a low-tier building
+    page.tap('#newBtn')
+    assert page.locator('#newGame').is_visible()
+    page.tap('#newCancel'); assert page.locator('#newGame').is_hidden()
+    page.tap('#newBtn'); page.tap('#newWild')
+    wild = check_consistent(page, 'new wild game')
+    assert wild['wild'] is True and wild['turn'] == 0 and 'wild bears' in page.inner_text('#seed')
+    assert page.evaluate("JSON.parse(localStorage.getItem('tt-wild'))") is True, 'the mode pick is remembered'
+    g = [0] * 36
+    g[0] = BEAR; g[6] = FOX; g[1] = 6       # a calm bear boxed in by a house and a fox (the fox keeps its box open)
+    load(g, wild=True, cur=2, next=2)
+    tap_cell(page, 35, True)
+    after = check_consistent(page, 'growl')
+    assert after['grid'][0] == 19 and after['grid'][1] == 6, 'turn 1 boxed in: the bear growls'
+    g = [0] * 36
+    g[0] = 20; g[6] = FOX; g[1] = 5         # an angry bear boxed in by a hut and a fox
+    load(g, wild=True, cur=2, next=2, score=150)
+    assert page.evaluate("getComputedStyle(document.querySelector('#board .cell[data-i=\"0\"] .e')).animationName") == 'grumble', 'angry bears look angry'
+    tap_cell(page, 35, True)
+    after = check_consistent(page, 'maul')
+    assert after['grid'][1] == 4 and after['grid'][0] == BEAR, 'turn 3 boxed in: the hut is mauled down to a camp and the bear starts over'
+    assert page.evaluate("JSON.parse(localStorage.getItem('tt-best-wild'))") == 150, 'wild games keep their own best score'
+    assert page.evaluate("JSON.parse(localStorage.getItem('tt-best'))") != 150, 'and leave the classic best alone'
+    assert page.evaluate("document.getElementById('seed').textContent").endswith('wild bears')
+    page.tap('#newBtn'); page.tap('#newClassic')
+    classic = check_consistent(page, 'new classic game')
+    assert classic['wild'] is False and 'wild' not in page.inner_text('#seed')
 
     # ---- shop: higher tiers unlock once built; stock runs out -> price doubles (shown on the button)
     load([0] * 36, coins=500)
