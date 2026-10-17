@@ -2,7 +2,7 @@
   --bg: #0f2418; --bg2: #14301f; --ink: #eaf6e6; --muted: #8fb39a; --accent: #ffd45a;
   --g1: #84c660; --g2: #7bbd57; --line: #3f7a2a;
   /* board side: as wide as the phone allows, as tall as the screen allows after the controls underneath */
-  --bs: max(280px, min(100vw - 12px, calc(100dvh - 420px), 640px));
+  --bs: max(280px, min(100vw - 12px, calc(100dvh - 350px), 640px));
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; height: 100%; background: radial-gradient(circle at 50% 0, var(--bg2), var(--bg)); color: var(--ink);
@@ -120,20 +120,39 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   animation: rise .9s ease-out forwards; font-size: 16px; white-space: nowrap; }
 @keyframes rise { to { transform: translate(-50%, -190%); opacity: 0; } }
 
-.side { width: var(--bs); display: flex; flex-direction: column; gap: 8px; }
+/* phone layout: reserve, score and the undo / preview / hints / new buttons sit at the top, then free space, then Place / Next right above the
+   map, which is pushed down into thumb reach, with the hint line, the Shop button and the footer under it. `.side` dissolves so its
+   children can be ordered. */
+.side { display: contents; }
+.side > * { width: var(--bs); }
+.side > .sheet { width: auto; }
+.actions { order: 1; } .panel { order: 2; margin-top: auto; } #boardWrap { order: 3; } .note { order: 4; } .shopbar { order: 5; } .foot { order: 6; }
+.shopbar { display: flex; gap: 8px; }
+.shopbtn { flex: 1; border-color: #8a6d1c; background: #2a2410; color: var(--accent); font-size: 16px; }
+.shopbar .btn[hidden] { display: none; }
+
+/* the shop pop-up (bottom sheet) */
+.sheet { position: fixed; inset: 0; z-index: 9; background: #000a; display: flex; align-items: flex-end; justify-content: center; }
+.sheet-card { width: min(100%, 520px); max-height: 82dvh; overflow: auto; background: #14301f; border-top: 2px solid var(--accent); border-radius: 18px 18px 0 0;
+  padding: 12px 12px calc(14px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; animation: sheetup .22s ease-out; }
+@keyframes sheetup { from { transform: translateY(35%); opacity: .4; } to { transform: none; opacity: 1; } }
+.sheet-head { display: flex; align-items: center; gap: 10px; }
+.sheet-head h2 { margin: 0; font-size: 20px; flex: 1; }
+.sheet-coins { color: var(--accent); font-weight: 800; }
+.sheet .x { width: 38px; height: 38px; border-radius: 50%; border: 2px solid #1d4a30; background: #153322; color: var(--ink); font: 700 16px inherit; cursor: pointer; }
 .note { margin: 0; min-height: 1.35em; text-align: center; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .note.hot { color: var(--accent); }
 
 .panel { display: grid; grid-template-columns: 1.5fr 1fr; gap: 8px; }
-.slot { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 84px;
+.slot { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 72px;
   background: #0b1a11; border: 2px solid #1d4a30; border-radius: 14px; color: inherit; font: inherit; padding: 4px; }
 .slot small { position: absolute; top: 4px; left: 8px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .8px; }
-.slot .emoji { font-size: 34px; line-height: 1; margin-top: 10px; min-height: 34px; }
+.slot .emoji { font-size: 30px; line-height: 1; margin-top: 8px; min-height: 30px; }
 .slot em { position: absolute; bottom: 3px; font-style: normal; font-size: 11px; color: var(--muted); }
 .slot.current { border-color: var(--accent); }
-.slot.current .emoji { font-size: 40px; margin-top: 6px; }
+.slot.current .emoji { font-size: 36px; margin-top: 4px; }
 .slot.next { opacity: .85; }
-.slot.next .emoji { font-size: 30px; }
+.slot.next .emoji { font-size: 27px; }
 
 /* shop: the item row scrolls sideways once many tiers are unlocked; tools and land sit in a fixed row of six */
 .tools { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
@@ -189,7 +208,14 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   #app { display: grid; grid-template-columns: var(--bs) 340px; justify-content: center; align-content: start; align-items: start; column-gap: 28px; row-gap: 10px; padding-top: 14px; }
   .hud { grid-column: 1; grid-row: 1; }
   #boardWrap { grid-column: 1; grid-row: 2; }
-  .side { grid-column: 2; grid-row: 1 / span 2; width: 340px; padding-top: 4px; }
+  .side { display: flex; flex-direction: column; gap: 8px; grid-column: 2; grid-row: 1 / span 2; width: 340px; padding-top: 4px; }
+  .side > * { width: auto; }
+  .panel, .actions, .note, .shopbar, .foot { order: 0; margin-top: 0; }
+  #boardWrap { order: 0; }
+  /* wide screens keep the shop inline in the side column: no pop-up, no Shop button */
+  #shopSheet, #shopSheet.hidden { position: static !important; display: block !important; background: none; }
+  .sheet-card { width: auto; max-height: none; overflow: visible; background: none; border: 0; border-radius: 0; padding: 0; animation: none; }
+  .sheet-head, .shopbar { display: none; }
   .tray { width: 72px; height: 72px; }
   .tray .emoji { font-size: 38px; }
 }

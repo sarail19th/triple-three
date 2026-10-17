@@ -167,6 +167,10 @@
     waterEl = svg;
   }
 
+  // The shop is a pop-up sheet on phones (wide screens show it inline, see the CSS). Every shop action closes it, so the map is back at once.
+  function openShop() { $('shopSheet').classList.remove('hidden'); }
+  function closeShop() { $('shopSheet').classList.add('hidden'); }
+
   // The shop row lists every unlocked building tier plus the crystal; it is rebuilt only when that list changes.
   function buildShop() {
     var items = [], k, fresh = shopKey !== '';
@@ -183,7 +187,7 @@
       b.innerHTML = '<span class="te">' + TT.EMOJI[t] + '</span><span class="tp"></span><span class="tb"></span>';
       b.addEventListener('click', function () {
         var s = TT.buy(state, t);
-        if (s) { state = s; save(); render([]); }
+        if (s) { state = s; save(); render([]); closeShop(); }
       });
       shopEl.appendChild(b);
     });
@@ -212,6 +216,7 @@
     if (sel >= 0 && (state.over || !targetOk(sel))) sel = -1;
     $('score').textContent = state.score;
     $('coins').textContent = state.coins;
+    $('sheetCoins').textContent = state.coins;
     var best = store.get(bestKey(), 0);
     if (state.score > best) { best = state.score; store.set(bestKey(), best); }
     $('best').textContent = best;
@@ -246,6 +251,9 @@
       }
       b.querySelector('.tb').textContent = '×' + Math.max(0, state.stock[t] || 0);
     });
+    var TOOL_NAMES = { hammer: '🔨 Hammer', trap: '🪤 Trap', move: '🚚 Mover', bridge: '🌉 Bridge' };
+    $('toolCancel').hidden = !mode; // a tool is armed: the Shop sheet is closed, so offer a way to put it away
+    if (mode) $('toolCancelName').textContent = TOOL_NAMES[mode];
     var util = document.querySelector('.tools.util');
     util.style.setProperty('--tools', $('bridgeBtn').hidden ? 7 : 8);
     var lp = TT.landPrice(state);
@@ -480,12 +488,12 @@
   document.querySelectorAll('.tool[data-tool]').forEach(function (b) { // trap, hammer and mover (the item shop is built in buildShop)
     var t = b.dataset.tool;
     if (t !== 'bridge') b.querySelector('.tp').textContent = '🪙' + TT.PRICE[t];
-    b.addEventListener('click', function () { mode = mode === t ? null : t; sel = -1; moveFrom = -1; render([]); });
+    b.addEventListener('click', function () { mode = mode === t ? null : t; sel = -1; moveFrom = -1; render([]); closeShop(); });
   });
   document.querySelectorAll('.land').forEach(function (b) {
     b.addEventListener('click', function () {
       var r = TT.buyLand(state, b.dataset.land);
-      if (r) { state = r.state; sel = -1; hover = -1; save(); render(r.events); vibrate(15); }
+      if (r) { state = r.state; sel = -1; hover = -1; save(); render(r.events); vibrate(15); closeShop(); }
     });
   });
   $('previewBtn').setAttribute('aria-pressed', previewOn);
@@ -528,7 +536,12 @@
     $('newGame').classList.add('hidden');
     startNew(0, dlg.wild, dlg.map);
   });
-  $('newBtn').addEventListener('click', openNewGame);
+  $('shopBtn').addEventListener('click', openShop);
+  $('shopClose').addEventListener('click', closeShop);
+  $('shopSheet').addEventListener('click', function (e) { if (e.target === this) closeShop(); }); // a tap on the dimmed background
+  $('toolCancel').addEventListener('click', function () { mode = null; moveFrom = -1; sel = -1; render([]); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeShop(); });
+  $('newBtn').addEventListener('click', function () { closeShop(); openNewGame(); });
   $('newCancel').addEventListener('click', function () { $('newGame').classList.add('hidden'); });
   $('againBtn').addEventListener('click', function () { startNew(0, state.wild, state.map); });
   // item guide: built from the logic tables so it can never drift from the real merge chains

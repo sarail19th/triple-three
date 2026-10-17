@@ -86,6 +86,19 @@ def tap_cell(page, idx, preview_on):
     page.tap(sel)
 
 
+def open_shop(page):
+    """The shop is a pop-up sheet on phones: open it (a no-op when it is already open)."""
+    if page.locator('#shopSheet').is_hidden():
+        page.tap('#shopBtn')
+    assert page.locator('#shopSheet').is_visible(), 'the shop sheet opens'
+
+
+def shop_tap(page, selector):
+    """Tap something inside the shop (tools, land, items). Every shop action closes the sheet again."""
+    open_shop(page)
+    page.tap(selector)
+
+
 with sync_playwright() as p:
     browser = p.chromium.launch(**({'executable_path': os.environ['TT_CHROMIUM']} if os.environ.get('TT_CHROMIUM') else {}))
     ctx = browser.new_context(viewport={'width': 412, 'height': 860}, device_scale_factor=2, has_touch=True, is_mobile=True)
@@ -122,6 +135,19 @@ with sync_playwright() as p:
         return { w: b.width, bt: b.top, tl: t.left, tt: t.top, tb: t.bottom } }""")
     assert box['w'] >= 380, f"board too small: {box['w']}"
     assert box['tl'] < 20 and box['tb'] <= box['bt'] + 1 and box['tt'] < box['bt'], f'reserve tray should be top-left: {box}'
+    # phone layout: buttons and Place / Next above the map, the map in the lower half (thumb reach), the Shop button under it, the shop closed
+    lay = page.evaluate("""() => { const r = id => document.getElementById(id).getBoundingClientRect(), b = r('board');
+        return { boardTop: b.top, boardBottom: b.bottom, undoBottom: r('undoBtn').bottom, placeBottom: document.querySelector('.panel').getBoundingClientRect().bottom,
+                 shopTop: r('shopBtn').top, vh: innerHeight, sheetHidden: document.getElementById('shopSheet').classList.contains('hidden') } }""")
+    assert lay['undoBottom'] <= lay['boardTop'] and lay['placeBottom'] <= lay['boardTop'] + 1, f'controls above the map: {lay}'
+    assert lay['shopTop'] >= lay['boardBottom'], f'Shop button under the map: {lay}'
+    assert (lay['boardTop'] + lay['boardBottom']) / 2 >= lay['vh'] * 0.55, f'the map sits in the lower half of the screen: {lay}'
+    assert lay['sheetHidden'] and page.locator('#shopSheet').is_hidden(), 'the shop starts closed'
+    # the shop pops up, shows coins, closes with its X, with a tap outside and with Escape
+    page.tap('#shopBtn'); assert page.locator('#shopSheet').is_visible() and page.inner_text('#sheetCoins') == '10'
+    page.tap('#shopClose'); assert page.locator('#shopSheet').is_hidden()
+    page.tap('#shopBtn'); page.mouse.click(200, 60); assert page.locator('#shopSheet').is_hidden(), 'a tap on the dimmed background closes it'
+    page.tap('#shopBtn'); page.keyboard.press('Escape'); assert page.locator('#shopSheet').is_hidden()
     assert page.locator('#undoBtn').is_disabled()
     page.screenshot(path=os.path.join(args.shots, '1_start.png'))
 
@@ -157,7 +183,7 @@ with sync_playwright() as p:
             btn = page.locator(f'.tool[data-tool="{tool}"]')
             price = page.evaluate('([s, t]) => TT.priceOf(s, +t)', [st, tool])
             if btn.is_enabled():
-                btn.tap(); buys += 1
+                open_shop(page); btn.tap(); buys += 1
                 after = check_consistent(page, f'buy@{turns}')
                 assert after['cur'] == int(tool) and after['next'] == st['cur'] and after['turn'] == st['turn'], 'buy replaces current, free'
                 assert after['coins'] == st['coins'] - price and after['stock'][tool] == st['stock'][tool] - 1, 'buying costs the shown price and one stock'
@@ -170,7 +196,7 @@ with sync_playwright() as p:
         if not empties and hammer_btn.is_disabled():  # full board, no hammer: buying land is the only way out
             side = page.evaluate("[...document.querySelectorAll('.land')].filter(b => !b.disabled).map(b => b.dataset.land)")
             assert side, 'full board but not over means the hammer or land must be usable'
-            page.tap(f'.land[data-land="{side[0]}"]')
+            shop_tap(page, f'.land[data-land="{side[0]}"]')
             after = check_consistent(page, f'land@{turns}')
             assert after['coins'] == st['coins'] - LAND_PRICE[len(st['land'])] and after['turn'] == st['turn'] and len(after['land']) == len(st['land']) + 1, 'land costs coins, free action'
             assert 0 in after['grid'], 'land adds empty tiles'
@@ -179,7 +205,7 @@ with sync_playwright() as p:
         if not empties or (roll < 0.26 and hammer_btn.is_enabled()):  # hammer (forced when the board is full but affordable)
             assert hammer_btn.is_enabled(), 'full board but not over means the hammer must be usable'
             occ = [i for i, v in enumerate(st['grid']) if v != 0]
-            hammer_btn.tap()
+            open_shop(page); hammer_btn.tap()
             assert hammer_btn.get_attribute('aria-pressed') == 'true'
             idx = rng.choice(occ)
             tap_cell(page, idx, preview_on)
@@ -193,7 +219,7 @@ with sync_playwright() as p:
             movable = [i for i, v in enumerate(st['grid']) if v not in (0, BEAR, FOX)]
             if movable:
                 src, dst = rng.choice(movable), rng.choice(empties)
-                move_btn.tap()
+                open_shop(page); move_btn.tap()
                 assert move_btn.get_attribute('aria-pressed') == 'true'
                 page.tap(f'#board .cell[data-i="{src}"]')
                 assert page.locator('#board .cell.pick').count() == 1, 'picked-up tile is highlighted'
@@ -270,7 +296,7 @@ with sync_playwright() as p:
     g[14] = BEAR; g[8] = TOMB; g[9] = TOMB
     load(g)
     assert page.locator('#trapBtn').is_enabled()
-    page.tap('#trapBtn')
+    shop_tap(page, '#trapBtn')
     assert page.get_attribute('#trapBtn', 'aria-pressed') == 'true'
     page.tap('#board .cell[data-i="0"]')  # not a bear: ignored
     assert state(page)['grid'] == g
@@ -279,7 +305,7 @@ with sync_playwright() as p:
     assert after['grid'][14] == CHURCH and after['grid'][8] == 0 and after['coins'] == 30 - 12 + 20 and after['turn'] == 3, 'trapped bear becomes a tombstone (here completing a church), free action'
     assert page.get_attribute('#trapBtn', 'aria-pressed') == 'false' and page.locator('#trapBtn').is_disabled(), 'no bear left'
     load(g)
-    page.tap('#trapBtn')
+    shop_tap(page, '#trapBtn')
     page.hover('#board .cell[data-i="14"]')
     page.click('#board .cell[data-i="14"]')
     after = check_consistent(page, 'trap by mouse')
@@ -304,17 +330,28 @@ with sync_playwright() as p:
     g[20] = FOX
     load(g)
     assert page.locator('#trapBtn').is_enabled(), 'trap works on a fox'
-    page.tap('#trapBtn')
+    shop_tap(page, '#trapBtn')
     tap_cell(page, 20, True)
     after = check_consistent(page, 'trap fox')
     assert after['grid'][20] == TOMB and after['turn'] == 3 and after['coins'] == 30 - 12, 'trapped fox becomes a tombstone'
+
+    # ---- an armed tool is shown next to the Shop button and can be put away without reopening the shop
+    g = [0] * 36
+    g[14] = 5
+    load(g, coins=100)
+    assert page.locator('#toolCancel').is_hidden()
+    shop_tap(page, '#hammerBtn')
+    assert page.locator('#shopSheet').is_hidden(), 'arming a tool closes the shop'
+    assert page.locator('#toolCancel').is_visible() and 'Hammer' in page.inner_text('#toolCancel')
+    page.tap('#toolCancel')
+    assert page.locator('#toolCancel').is_hidden() and page.get_attribute('#hammerBtn', 'aria-pressed') == 'false'
 
     # ---- mover: pick up, preview the drop, confirm; animals cannot be picked up; picking twice cancels
     g = [0] * 36
     g[0] = 1; g[2] = 1; g[21] = 1; g[30] = BEAR
     load(g, coins=100)
     assert page.locator('#moveBtn').is_enabled() and page.inner_text('#moveBtn .tp') == '🪙60'
-    page.tap('#moveBtn')
+    shop_tap(page, '#moveBtn')
     assert page.get_attribute('#moveBtn', 'aria-pressed') == 'true'
     page.tap('#board .cell[data-i="30"]')  # a bear: ignored
     assert page.locator('#board .cell.pick').count() == 0, 'animals cannot be picked up'
@@ -417,7 +454,7 @@ with sync_playwright() as p:
     for i in (2, 8, 14, 15, 21, 27, 33): g[i] = 21
     g[0] = 5
     load(g, map='medium', coins=100)
-    page.tap('#hammerBtn')
+    shop_tap(page, '#hammerBtn')
     page.tap('#board .cell[data-i="8"]')   # the hammer cannot smash water: nothing is selected, nothing changes
     assert page.locator('#board .cell.target').count() == 0, f"water got a target highlight; note={page.inner_text('#note')}"
     assert state(page)['grid'] == g, f"grid changed: {[(i, v, g[i]) for i, v in enumerate(state(page)['grid']) if v != g[i]]} turn={state(page)['turn']}"
@@ -427,9 +464,10 @@ with sync_playwright() as p:
     g = [0] * 36
     for i in (2, 8, 14, 15, 21, 27, 33): g[i] = 21
     load(g, map='medium', coins=1000)
+    open_shop(page)
     assert page.locator('#bridgeBtn').is_visible() and page.locator('#bridgeBtn').is_enabled()
     assert page.inner_text('#bridgeBtn .tp') == '🪙300' and page.inner_text('#bridgeBtn .tb') == '×5'
-    page.tap('#bridgeBtn')
+    shop_tap(page, '#bridgeBtn')
     assert page.get_attribute('#bridgeBtn', 'aria-pressed') == 'true' and page.locator('#board .cell.spot').count() == 5, 'five glowing spots on the river'
     page.tap('#board .cell[data-i="14"]')   # the middle of the double-wide river: not a spot
     assert state(page)['bridges'] == [] and state(page)['coins'] == 1000
@@ -457,7 +495,7 @@ with sync_playwright() as p:
     assert page.locator('.tool[data-tool="7"]').count() == 0
     load([0] * 36, coins=500, cur=2, next=2, stock={'1': 0, '2': 1, '3': 1, '4': 1, '5': 1, '6': 1, '7': 1, '8': 1, '9': 1, '10': 1, '16': 0, 'hammer': 2, 'trap': 2})
     assert page.inner_text('.tool[data-tool="1"] .tp') == '🪙12', 'sold-out grass costs double (6 -> 12)'
-    page.tap('.tool[data-tool="1"]')
+    shop_tap(page, '.tool[data-tool="1"]')
     after = check_consistent(page, 'surcharge buy')
     assert after['coins'] == 500 - 12 and after['stock']['1'] == -1 and after['cur'] == 1
     assert page.inner_text('.tool[data-tool="1"] .tp') == '🪙24' or page.locator('.tool[data-tool="1"]').is_disabled(), 'price keeps doubling'
@@ -466,17 +504,17 @@ with sync_playwright() as p:
     g = [0] * 36
     g[0] = 1
     load(g, coins=5000)
-    page.tap('.land[data-land="top"]')
+    shop_tap(page, '.land[data-land="top"]')
     after = check_consistent(page, 'land top')
     assert after['h'] == 7 and after['w'] == 6 and after['grid'][6] == 1 and after['coins'] == 5000 - 150 and after['turn'] == 3
     assert page.locator('.land[data-land="top"]').is_disabled(), 'each side only once'
     assert page.inner_text('#landNote').startswith('Land 1/4')
-    page.tap('.land[data-land="left"]')
+    shop_tap(page, '.land[data-land="left"]')
     after = check_consistent(page, 'land left')
     assert after['w'] == 7 and after['h'] == 7 and after['grid'][7 + 1] == 1
     box = page.evaluate("() => { const b = document.getElementById('board').getBoundingClientRect(), w = document.getElementById('boardWrap').getBoundingClientRect(); return { bw: b.width, ww: w.width, bh: b.height } }")
     assert abs(box['bw'] - box['ww'] * 7 / 7) < 2 and box['bw'] <= box['ww'] + 1, f'7x7 board fits its square wrap: {box}'
-    page.tap('.land[data-land="right"]'); page.tap('.land[data-land="bottom"]')
+    shop_tap(page, '.land[data-land="right"]'); shop_tap(page, '.land[data-land="bottom"]')
     after = check_consistent(page, 'land all')
     assert after['w'] == 8 and after['h'] == 8 and len(after['land']) == 4 and page.locator('#board .cell').count() == 64
     assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), 'no horizontal scroll with the biggest board'
@@ -521,7 +559,7 @@ with sync_playwright() as p:
     assert page.evaluate('window.ttDebug.critterHomes()') == homes0, 'critters keep their tile while it exists'
     # smash a home tile: critters that lived there move house (snap), the rest stay put
     gone = homes0[0]['cell']
-    page.tap('#hammerBtn'); tap_cell(page, gone, True)
+    shop_tap(page, '#hammerBtn'); tap_cell(page, gone, True)
     homes1 = page.evaluate('window.ttDebug.critterHomes()')
     assert all(h['code'] in area[h['kind']] and h['cell'] != gone for h in homes1), f'critters re-homed after their tile vanished: {homes1}'
     page.wait_for_timeout(300)
