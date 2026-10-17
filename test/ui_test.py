@@ -398,7 +398,17 @@ with sync_playwright() as p:
     med = check_consistent(page, 'medium map')
     assert med['map'] == 'medium' and [i for i, v in enumerate(med['grid']) if v == 21] == [2, 8, 14, 15, 21, 27, 33]
     assert page.evaluate("JSON.parse(localStorage.getItem('tt-map'))") == 'medium', 'the map pick is remembered'
-    assert 'gradient' in page.evaluate("getComputedStyle(document.querySelector('#board .cell[data-i=\"2\"]')).backgroundImage"), 'water is drawn blue'
+    assert page.locator('#board svg.water').count() == 1 and page.locator('#board svg.water #wcells rect').count() >= 7, 'water is one soft SVG layer under the tiles'
+    assert page.evaluate("getComputedStyle(document.querySelector('#board .cell[data-i=\"2\"]')).backgroundImage") == 'none', 'the water tiles themselves are transparent'
+    page.wait_for_timeout(400)
+    swim = page.evaluate('window.ttDebug.critterHomes()')
+    assert {h['kind'] for h in swim} == {'🦢', '🐟'} and all(h['code'] == 21 for h in swim), f'swans and fish live on the water: {swim}'
+    water_inside = """() => { const homes = window.ttDebug.critterHomes(), els = [...document.querySelectorAll('#critters .crit')];
+        return els.map((el, i) => { const r = el.getBoundingClientRect(), c = document.querySelector('#board .cell[data-i=\"' + homes[i].cell + '\"]').getBoundingClientRect(),
+            x = r.left + r.width / 2, y = r.top + r.height / 2; return x >= c.left - 1 && x <= c.right + 1 && y >= c.top - 1 && y <= c.bottom + 1; }); }"""
+    for _ in range(6):
+        assert all(page.evaluate(water_inside)), 'a swan or fish left its own water tile'
+        page.wait_for_timeout(700)
     tap_cell_before = state(page)
     page.tap('#board .cell[data-i="2"]')   # tapping water does nothing
     assert state(page)['grid'] == tap_cell_before['grid'] and state(page)['turn'] == 0
@@ -415,6 +425,7 @@ with sync_playwright() as p:
     page.tap('#newBtn'); page.tap('.opt[data-map="easy"]'); page.tap('.opt[data-bears="classic"]'); page.tap('#newStart')
     easy = check_consistent(page, 'easy map')
     assert easy['map'] == 'easy' and easy['grid'] == [0] * 36 and 'map' not in page.inner_text('#seed')
+    assert page.locator('#board svg.water').count() == 0 and page.evaluate('window.ttDebug.critters()') == [], 'no water, no water layer and no swans'
 
     # ---- shop: higher tiers unlock once built; stock runs out -> price doubles (shown on the button)
     load([0] * 36, coins=500)
