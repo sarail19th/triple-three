@@ -82,6 +82,19 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 @keyframes ripples { from { transform: translate(-0.2px, 0); } to { transform: translate(0.2px, 0.08px); } }
 .cell[data-c="21"] { cursor: not-allowed; outline: none; }
 
+/* bridges: wooden planks across a water tile, laid along the way across (bh = left-right, bv = up-down); bears walk over them */
+.cell.bridge::before { content: ""; position: absolute; pointer-events: none; z-index: 0; border-radius: 3px; box-shadow: 0 2px 5px #0005; }
+.cell.bridge .e { position: relative; z-index: 1; }
+.cell.bridge.bh::before { left: -1px; right: -1px; top: 20%; bottom: 20%; border-top: 3px solid #6b4723; border-bottom: 3px solid #6b4723;
+  background: repeating-linear-gradient(90deg, #c4955a 0 11%, #8a6236 11% 13%); }
+.cell.bridge.bv::before { top: -1px; bottom: -1px; left: 20%; right: 20%; border-left: 3px solid #6b4723; border-right: 3px solid #6b4723;
+  background: repeating-linear-gradient(0deg, #c4955a 0 11%, #8a6236 11% 13%); }
+.cell.bridge.built::before { animation: planks .45s ease-out; }
+@keyframes planks { from { transform: scale(0.2); opacity: 0; } to { transform: none; opacity: 1; } }
+.cell.spot { box-shadow: inset 0 0 0 3px var(--accent); animation: spotpulse 1s ease-in-out infinite alternate; }
+.cell.spot.target { box-shadow: inset 0 0 0 3px #ff5a5a; animation: none; background-color: #ff5a5a44; }
+@keyframes spotpulse { from { background-color: #ffd45a22; } to { background-color: #ffd45a66; } }
+
 /* animations (cells are not scaled as layout; only the inner emoji is) */
 .cell.drop .e { animation: drop .22s ease-out; }
 .cell.pop .e { animation: pop .38s cubic-bezier(.2, 1.6, .4, 1); }
@@ -124,7 +137,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 
 /* shop: the item row scrolls sideways once many tiers are unlocked; tools and land sit in a fixed row of six */
 .tools { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
-.tools.util { grid-template-columns: repeat(7, 1fr); }
+.tools.util { grid-template-columns: repeat(var(--tools, 7), 1fr); }
+.tool[hidden] { display: none; }
 .tools.shop { display: flex; overflow-x: auto; scrollbar-width: thin; padding-bottom: 2px; }
 /* 6.5 buttons wide: the half button peeking in on the right shows that the row scrolls */
 .tools.shop .tool { flex: 0 0 calc((100% - 30px) / 6.5); }

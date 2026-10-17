@@ -83,11 +83,13 @@
   // Is idx a legal target for the armed tool (or for placement when none is armed)?
   function targetOk(idx) {
     var v = state.grid[idx];
-    if (mode === 'move') return TT.isMovable(v) || (v === 0 && moveFrom >= 0); // pick something up, then an empty tile to drop it on
-    return mode === 'hammer' ? v !== 0 && v !== TT.WATER : mode === 'trap' ? isAnimal(v) : (v === 0 || isCollectible(v));
+    if (mode === 'move') return TT.isMovable(v) || (v === 0 && moveFrom >= 0 && !isBridgeTile(idx)); // pick something up, then an empty tile to drop it on
+    if (mode === 'bridge') return TT.bridgeSpots(state).indexOf(idx) >= 0;
+    return mode === 'hammer' ? v !== 0 && v !== TT.WATER : mode === 'trap' ? isAnimal(v) : ((v === 0 && !isBridgeTile(idx)) || isCollectible(v));
   }
+  function isBridgeTile(i) { return state.bridges.indexOf(i) >= 0; }
   function doAction(idx) {
-    return mode === 'hammer' ? TT.hammer(state, idx) : mode === 'trap' ? TT.trap(state, idx) : TT.place(state, idx);
+    return mode === 'hammer' ? TT.hammer(state, idx) : mode === 'trap' ? TT.trap(state, idx) : mode === 'bridge' ? TT.buyBridge(state, idx) : TT.place(state, idx);
   }
 
   // Mouse: hover already showed the preview, so one click commits. Touch: the first tap selects and previews
@@ -130,7 +132,7 @@
     return { x: r.left - b.left + r.width / 2, y: r.top - b.top + r.height / 2, w: r.width, h: r.height };
   }
   function clearAnim() {
-    cells.forEach(function (c) { c.classList.remove('drop', 'pop', 'shake', 'slide', 'warp'); });
+    cells.forEach(function (c) { c.classList.remove('drop', 'pop', 'shake', 'slide', 'warp', 'built'); });
   }
 
   // Water is drawn as ONE soft layer under the tiles instead of blue squares: the water tiles become blurred blobs that fuse
@@ -138,12 +140,13 @@
   // Water that touches the board edge is extended past it, so a river runs off the edge instead of ending in a rounded cap.
   function drawWater() {
     var g = state.grid, w = state.w, h = state.h, r, c;
-    var key = w + 'x' + h + ':' + g.map(function (v) { return v === TT.WATER ? 1 : 0; }).join('');
+    function wet(i) { return g[i] === TT.WATER || state.bridges.indexOf(i) >= 0; } // a bridge crosses water: the river runs on underneath
+    var key = w + 'x' + h + ':' + g.map(function (v, i) { return wet(i) ? 1 : 0; }).join('');
     if (key === waterKey) return;
     waterKey = key;
     if (waterEl) { waterEl.remove(); waterEl = null; }
     if (key.indexOf('1') < 0) return;
-    function isWater(rr, cc) { return g[Math.min(h - 1, Math.max(0, rr)) * w + Math.min(w - 1, Math.max(0, cc))] === TT.WATER; }
+    function isWater(rr, cc) { return wet(Math.min(h - 1, Math.max(0, rr)) * w + Math.min(w - 1, Math.max(0, cc))); }
     var rects = '';
     for (r = -1; r <= h; r++) for (c = -1; c <= w; c++) if (isWater(r, c)) rects += '<rect x="' + (c - 0.01) + '" y="' + (r - 0.01) + '" width="1.02" height="1.02"/>';
     var x0 = -2, y0 = -2, W = w + 4, H = h + 4, box = 'x="' + x0 + '" y="' + y0 + '" width="' + W + '" height="' + H + '"';
@@ -196,10 +199,15 @@
       c.dataset.c = code;
       c.firstChild.textContent = TT.EMOJI[code];
       c.classList.toggle('empty', code === 0);
+      var isB = state.bridges.indexOf(i) >= 0, col = i % w; // a bridge tile is walkable water: planks along the way across
+      c.classList.toggle('bridge', isB);
+      c.classList.toggle('bh', isB && col > 0 && col < w - 1 && g[i - 1] !== TT.WATER && g[i + 1] !== TT.WATER);
+      c.classList.toggle('bv', isB && !c.classList.contains('bh'));
       c.classList.toggle('hint', hints && !state.over && TT.wouldMerge(state, i));
-      c.setAttribute('aria-label', 'row ' + (((i / w) | 0) + 1) + ' column ' + ((i % w) + 1) + ' ' + TT.NAME[code]);
+      c.setAttribute('aria-label', 'row ' + (((i / w) | 0) + 1) + ' column ' + ((i % w) + 1) + ' ' + (state.bridges.indexOf(i) >= 0 ? 'bridge ' : '') + TT.NAME[code]);
     });
-    if (mode && (state.over || state.coins < TT.PRICE[mode] || !(state.stock[mode] > 0))) mode = null;
+    if (mode === 'bridge') { if (!TT.canBridge(state)) mode = null; }
+    else if (mode && (state.over || state.coins < TT.PRICE[mode] || !(state.stock[mode] > 0))) mode = null;
     if (mode !== 'move' || (moveFrom >= 0 && !TT.isMovable(g[moveFrom]))) moveFrom = -1;
     if (sel >= 0 && (state.over || !targetOk(sel))) sel = -1;
     $('score').textContent = state.score;
@@ -219,8 +227,15 @@
         b.disabled = !TT.canHammer(state) || state.over || !g.some(function (v) { return v !== 0 && v !== TT.WATER; });
         b.setAttribute('aria-pressed', mode === 'hammer');
       } else if (t === 'move') {
-        b.disabled = state.over || !TT.canMove(state) || !g.some(TT.isMovable) || TT.emptyCount(g) === 0;
+        b.disabled = state.over || !TT.canMove(state) || !g.some(TT.isMovable) || TT.freeCount(state) === 0;
         b.setAttribute('aria-pressed', mode === 'move');
+      } else if (t === 'bridge') {
+        b.hidden = !g.some(function (v) { return v === TT.WATER; }) && !state.bridges.length; // only on maps with water
+        b.disabled = state.over || !TT.canBridge(state);
+        b.setAttribute('aria-pressed', mode === 'bridge');
+        b.querySelector('.tp').textContent = TT.bridgePrice(state) === null ? 'max' : '🪙' + fmt(TT.bridgePrice(state));
+        b.querySelector('.tb').textContent = '×' + (TT.MAX_BRIDGES - state.bridges.length);
+        return;
       } else if (t === 'trap') {
         b.disabled = state.over || state.coins < TT.PRICE.trap || !(state.stock.trap > 0) || !g.some(isAnimal);
         b.setAttribute('aria-pressed', mode === 'trap');
@@ -231,6 +246,8 @@
       }
       b.querySelector('.tb').textContent = '×' + Math.max(0, state.stock[t] || 0);
     });
+    var util = document.querySelector('.tools.util');
+    util.style.setProperty('--tools', $('bridgeBtn').hidden ? 7 : 8);
     var lp = TT.landPrice(state);
     document.querySelectorAll('.land').forEach(function (b) {
       var owned = state.land.indexOf(b.dataset.land) >= 0;
@@ -254,7 +271,7 @@
   // ---- move preview: ghost of the resulting item, merged tiles outlined, plus a one-line explanation
   function updatePreview() {
     cells.forEach(function (c) {
-      c.classList.remove('pv', 'eat', 'target', 'pick');
+      c.classList.remove('pv', 'eat', 'target', 'pick', 'spot');
       if (c.hasAttribute('data-pv')) c.removeAttribute('data-pv');
     });
     var note = '', hot = false, pi = sel >= 0 ? sel : (previewOn ? hover : -1), p;
@@ -267,6 +284,13 @@
         note = (sel === pi ? 'Tap again to trap' : 'Trap') + ' the ' + TT.NAME[state.grid[pi]] + ' -> ' + TT.NAME[res] + ' (-' + TT.PRICE.trap + ' coins)';
         hot = sel === pi;
       } else note = '🪤 Tap a bear or fox to kill it';
+    } else if (mode === 'bridge') {
+      var spots = TT.bridgeSpots(state), bp = TT.bridgePrice(state);
+      spots.forEach(function (i) { cells[i].classList.add('spot'); });
+      if (pi >= 0 && spots.indexOf(pi) >= 0) {
+        cells[pi].classList.add('target');
+        note = (sel === pi ? 'Tap again to build' : 'Build') + ' a bridge here (-' + bp + ' coins)'; hot = sel === pi;
+      } else note = '🌉 Tap a glowing water tile to bridge it (-' + bp + ' coins)';
     } else if (mode === 'move') {
       if (moveFrom < 0) {
         if (pi >= 0 && TT.isMovable(state.grid[pi])) { cells[pi].classList.add('target'); note = '🚚 Pick up the ' + TT.NAME[state.grid[pi]]; }
@@ -292,7 +316,7 @@
     } else if (pi >= 0 && isCollectible(state.grid[pi])) {
       var cash = state.grid[pi] === TT.CASH;
       note = (cash ? '💵 Click to collect the cash: +' + TT.CASH_COINS : '💰 Click to open the treasure: +' + TT.TREASURE_COINS) + ' coins'; hot = true;
-    } else if (TT.emptyCount(state.grid) === 0) {
+    } else if (TT.freeCount(state) === 0) {
       note = 'Board full - use the 🔨 hammer (' + TT.PRICE.hammer + ' coins) or buy land'; hot = true;
     } else if (previewOn && pi >= 0 && (p = TT.preview(state, pi))) {
       cells[pi].classList.add('pv'); cells[pi].setAttribute('data-pv', TT.EMOJI[p.final]);
@@ -351,6 +375,9 @@
         cells[ev.to].classList.add('warp');
       } else if (ev.type === 'trapped') {
         cells[ev.at].classList.add('shake');
+      } else if (ev.type === 'bridge') { // planks slide in; the price just paid is the one before the current next price
+        cells[ev.at].classList.add('built');
+        floatAt(ev.at, '🌉 -' + TT.BRIDGE_PRICE[state.bridges.length - 1] + '🪙');
       } else if (ev.type === 'cub') { // a bear cub is born in the pen
         cells[ev.at].classList.add('drop');
         floatAt(ev.at, '🍼');
@@ -452,7 +479,7 @@
   });
   document.querySelectorAll('.tool[data-tool]').forEach(function (b) { // trap, hammer and mover (the item shop is built in buildShop)
     var t = b.dataset.tool;
-    b.querySelector('.tp').textContent = '🪙' + TT.PRICE[t];
+    if (t !== 'bridge') b.querySelector('.tp').textContent = '🪙' + TT.PRICE[t];
     b.addEventListener('click', function () { mode = mode === t ? null : t; sel = -1; moveFrom = -1; render([]); });
   });
   document.querySelectorAll('.land').forEach(function (b) {
@@ -523,7 +550,7 @@
     '<p class="gnote">💵 Cash is collectible: tap it for +' + TT.CASH_COINS + ' coins. 🐇🐤 hop around the homes (camp to village).</p>' +
     '<h3>Bears</h3><div class="chain">' + chip(TT.BEAR, 'trap it') + '<span class="arrow">&rarr;</span>' +
     chain(TT.TOMB, null, 'treasure: tap to open, +' + TT.TREASURE_COINS + ' coins') + '</div>' +
-    '<p class="gnote">👻🐈‍⬛ haunt the tombstones and churches. <b>Wild bears</b> mode: a bear that cannot step but is not sealed in gets angry (💢, then 💢💢) and on the third turn mauls a 🌱🌿🌳🏕️🛖 next to it, one tier down (a 🌱 is destroyed), then starts over. In a small pen (4 to 6 tiles) with 2 bears and 2 free tiles, a cub is sometimes born (🍼). Blue tiles are <b>water</b>: nothing can be placed, merged, moved or smashed there, and animals cannot cross it.</p>' +
+    '<p class="gnote">👻🐈‍⬛ haunt the tombstones and churches. <b>Wild bears</b> mode: a bear that cannot step but is not sealed in gets angry (💢, then 💢💢) and on the third turn mauls a 🌱🌿🌳🏕️🛖 next to it, one tier down (a 🌱 is destroyed), then starts over. In a small pen (4 to 6 tiles) with 2 bears and 2 free tiles, a cub is sometimes born (🍼). Blue tiles are <b>water</b>: nothing can be placed, merged, moved or smashed there, and animals cannot cross it. A 🌉 <b>bridge</b> (up to 5, dearer each time) turns a water tile that has land on both sides into a road bears can walk over; nothing can be built on it.</p>' +
     '<h3>Special</h3><div class="chain">' + chip(TT.CRYSTAL, 'wildcard') + chip(TT.FOX, 'warps, walls trap it') + '</div>' +
     '<p class="gnote">💎 stands in for any tier, including 🏬 (making 💵 cash) and 🕌 (making a 💰 treasure). Three or more 💎 touching each other merge into a 💰 treasure. 🚚 moves one item to an empty tile for coins.</p>' +
     '<p class="gnote">Three or more connected items of the same kind merge into the next one. Bigger groups pay more points and coins.</p>' +

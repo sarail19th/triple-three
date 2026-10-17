@@ -994,6 +994,107 @@ t('breeding: not in classic games, not with 1 bear, not with only 1 empty tile, 
   none(crowded, 'bear cap');
 });
 
+// ---- bridges
+const medium = (over = {}) => Object.assign(TT.newGame(3, { map: 'medium' }), { coins: 100000 }, over);
+// medium river water indices: 2 8 14 15 21 27 33 (the winding river); 14 and 15 are the double-wide part
+
+t('bridge spots: water tiles with dry land on both opposite sides, so edges yes, corners and the middle of water no', () => {
+  assert.deepStrictEqual(TT.bridgeSpots(medium()), [2, 8, 21, 27, 33], 'the single-width parts of the river (the top and bottom edge tiles included)');
+  [TT.newGame(3), TT.newGame(3, { map: 'standard' })].forEach((s) => assert.deepStrictEqual(TT.bridgeSpots(s), [], 'no water, no spots'));
+  // a corner water tile is never a spot, even with land next to it; a lone lake tile in the middle is
+  const g = TT.newGame(3); g.grid[I(0, 0)] = TT.WATER; g.grid[I(3, 3)] = TT.WATER; g.grid[I(3, 4)] = TT.WATER; g.grid[I(5, 5)] = TT.WATER;
+  assert.deepStrictEqual(TT.bridgeSpots(g), [I(3, 3), I(3, 4)], 'only the two-tile pond tiles that have banks on both sides (up/down)');
+  const wide = TT.newGame(3); [I(2, 1), I(2, 2), I(2, 3)].forEach((i) => { wide.grid[i] = TT.WATER; });
+  assert.deepStrictEqual(TT.bridgeSpots(wide), [I(2, 1), I(2, 2), I(2, 3)], 'a horizontal strip of water can be crossed up/down at every tile');
+  const lake = TT.newGame(3); for (let r = 1; r <= 3; r++) for (let c = 1; c <= 3; c++) lake.grid[I(r, c)] = TT.WATER;
+  assert(!TT.bridgeSpots(lake).includes(I(2, 2)), 'the middle of a lake is not a spot');
+});
+
+t('buying a bridge: the water tile becomes a walkable tile, free action, price rises, at most five, and it extends over wide water', () => {
+  let s = medium();
+  const first = TT.buyBridge(s, 8);
+  assert(first && first.events[0].type === 'bridge' && first.events[0].at === 8);
+  assert.strictEqual(first.state.grid[8], 0); assert.deepStrictEqual(first.state.bridges, [8]);
+  assert.strictEqual(first.state.coins, s.coins - TT.BRIDGE_PRICE[0]); assert.strictEqual(first.state.turn, s.turn, 'free action');
+  assert.deepStrictEqual(TT.validate(first.state), []);
+  assert.strictEqual(TT.buyBridge(s, 14), null, 'the middle of the double-wide river is not a spot yet');
+  assert.strictEqual(TT.buyBridge(s, I(0, 0)), null, 'dry land is not a spot'); assert.strictEqual(TT.buyBridge(s, -1), null);
+  s = first.state;
+  assert(TT.bridgeSpots(s).includes(14), 'next to the first bridge the wide part opens up: the bridge counts as a bank');
+  const prices = [TT.BRIDGE_PRICE[0]];
+  for (const idx of [14, 21, 27, 33]) { const before = s.coins, r = TT.buyBridge(s, idx); assert(r, 'bridge at ' + idx); prices.push(before - r.state.coins); s = r.state; }
+  assert.deepStrictEqual(prices, TT.BRIDGE_PRICE, 'every bridge costs more than the last');
+  assert(TT.BRIDGE_PRICE.every((p, k) => k === 0 || p > TT.BRIDGE_PRICE[k - 1]));
+  assert.strictEqual(s.bridges.length, 5); assert.strictEqual(TT.bridgePrice(s), null); assert.strictEqual(TT.buyBridge(s, 2), null, 'limit of 5');
+  assert.deepStrictEqual(TT.bridgeSpots(s), []); assert(!TT.canBridge(s));
+  assert.deepStrictEqual(TT.validate(s), []);
+  assert.strictEqual(TT.buyBridge(medium({ coins: TT.BRIDGE_PRICE[0] - 1 }), 8), null, 'too poor');
+  assert(TT.canBridge(medium()) && !TT.canBridge(medium({ coins: 5 })));
+});
+
+t('bridge tiles: nothing can be placed, dropped or previewed there, and they do not count as free tiles', () => {
+  const s = Object.assign(TT.buyBridge(medium(), 8).state, { cur: 2 });
+  assert.strictEqual(TT.place(s, 8), null); assert.strictEqual(TT.preview(s, 8), null);
+  const withItem = JSON.parse(JSON.stringify(s)); withItem.grid[I(5, 5)] = 3; withItem.coins = 1000;
+  assert.strictEqual(TT.move(withItem, I(5, 5), 8), null, 'the mover cannot drop on a bridge either');
+  assert.strictEqual(TT.hammer(withItem, 8), null, 'nothing to smash');
+  assert.strictEqual(TT.freeCount(s), s.grid.filter((v) => v === 0).length - 1);
+  // a board full except the bridge tile is over: nothing can be placed
+  const full = JSON.parse(JSON.stringify(s)); full.stock.hammer = 0; full.coins = 0;
+  full.grid = full.grid.map((v, i) => (v === TT.WATER || i === 8 ? v : ((((i / 6) | 0) + (i % 6)) % 2 ? 5 : 6)));
+  full.grid[I(5, 5)] = 0; full.cur = 4;
+  const r = TT.place(full, I(5, 5));
+  assert(r.state.over, 'only a bridge tile left: game over'); assert.deepStrictEqual(TT.validate(r.state), []);
+});
+
+t('bears cross a bridge: they step onto it and off the other side', () => {
+  const s0 = medium(); const b = TT.buyBridge(s0, 8).state; // bridge on (1,2): banks (1,1) and (1,3)
+  // turn 1: the bear on the left bank is walled in except for the bridge tile
+  const left = JSON.parse(JSON.stringify(b)); left.cur = 2;
+  left.grid[I(1, 1)] = TT.BEAR; left.grid[I(0, 1)] = 5; left.grid[I(2, 1)] = 6; left.grid[I(1, 0)] = 7;
+  const r1 = TT.place(left, I(5, 5));
+  assert.strictEqual(r1.state.grid[I(1, 2)], TT.BEAR, 'the bear is on the bridge'); assert.strictEqual(r1.state.grid[I(1, 1)], 0);
+  assert(!r1.events.some((e) => e.type === 'trapped'), 'a bridge tile is room, not a wall');
+  assert.deepStrictEqual(TT.validate(r1.state), []);
+  // turn 2: on the bridge with the left bank blocked, the only way is across
+  const onBridge = JSON.parse(JSON.stringify(r1.state)); onBridge.cur = 2; onBridge.grid[I(1, 1)] = 8;
+  const r2 = TT.place(onBridge, I(5, 4));
+  assert.strictEqual(r2.state.grid[I(1, 3)], TT.BEAR, 'the bear walked across to the other bank'); assert.strictEqual(r2.state.grid[I(1, 2)], 0);
+  // a bear walled in by buildings and a bridge tile is trapped only when the bridge is blocked too
+  const sealed = JSON.parse(JSON.stringify(b)); sealed.cur = 2; sealed.grid[I(1, 2)] = TT.BEAR;
+  sealed.grid[I(1, 1)] = 5; sealed.grid[I(1, 3)] = 6;
+  assert.strictEqual(TT.place(sealed, I(5, 5)).state.grid[I(1, 2)], TT.TOMB, 'walled in on the bridge: it turns into a tombstone like anywhere else');
+});
+
+t('bridges keep their tiles when land is bought, and undo takes a bridge back with its price', () => {
+  const b = TT.buyBridge(medium(), 8).state;                // (1,2)
+  const top = TT.buyLand(b, 'top').state;
+  assert.deepStrictEqual(top.bridges, [8 + 6]); assert.strictEqual(top.grid[14], 0); assert.deepStrictEqual(TT.validate(top), []);
+  const left = TT.buyLand(b, 'left').state;                  // (1,2) -> (1,3) on a 7-wide board
+  assert.deepStrictEqual(left.bridges, [1 * 7 + 3]); assert.deepStrictEqual(TT.validate(left), []);
+  const right = TT.buyLand(b, 'right').state, bottom = TT.buyLand(b, 'bottom').state;
+  assert.deepStrictEqual(right.bridges, [1 * 7 + 2]); assert.deepStrictEqual(bottom.bridges, [8]);
+  [top, left, right, bottom].forEach((x) => assert.strictEqual(TT.bridgeSpots(x).length, 5, 'the same five spots on the grown board (one bridged, the double-wide part opened up)'));
+  // undo: place something, build a bridge, undo -> the bridge and its cost are gone (undo charges only its own fee)
+  const base = medium({ coins: 5000 });
+  const placed = TT.place(base, I(5, 0)).state;
+  const built = TT.buyBridge(placed, 2).state;
+  assert.strictEqual(built.bridges.length, 1);
+  const undone = TT.undo(built);
+  assert.deepStrictEqual(undone.bridges, []); assert.strictEqual(undone.coins, base.coins - TT.UNDO_COST);
+  assert.deepStrictEqual(TT.validate(undone), []);
+});
+
+t('bridges: migrate gives old saves none; validate rejects a bridge on water, a duplicate, an out-of-range tile, or too many', () => {
+  const old = JSON.parse(JSON.stringify(medium())); delete old.bridges;
+  TT.migrate(old); assert.deepStrictEqual(old.bridges, []); assert.deepStrictEqual(TT.validate(old), []);
+  const ok = TT.buyBridge(medium(), 8).state;
+  assert(TT.validate(Object.assign({}, ok, { bridges: [14] })).length, 'bridge on a water tile');
+  assert(TT.validate(Object.assign({}, ok, { bridges: [8, 8] })).length, 'duplicate');
+  assert(TT.validate(Object.assign({}, ok, { bridges: [99] })).length, 'out of range');
+  assert(TT.validate(Object.assign({}, ok, { bridges: [0, 1, 3, 4, 5, 6] })).length, 'more than the limit');
+});
+
 t('swap stores the item, then exchanges', () => {
   let s = TT.newGame(3);
   const c0 = s.cur, n0 = s.next;
@@ -1045,9 +1146,10 @@ t('wouldMerge agrees with place', () => {
 });
 
 t('fuzz: 400 random games keep state valid and always terminate', () => {
-  let maxTurns = 0, merges = 0, trapped = 0, churches = 0, hammers = 0, lands = 0, foxMoves = 0, maxTier = 0, moves = 0, growls = 0, mauls = 0, cubs = 0;
+  let maxTurns = 0, merges = 0, trapped = 0, churches = 0, hammers = 0, lands = 0, foxMoves = 0, maxTier = 0, moves = 0, growls = 0, mauls = 0, cubs = 0, bridges = 0;
   for (let seed = 1; seed <= 400; seed++) {
     let s = TT.newGame(seed, { wild: seed % 2 === 0, map: TT.MAPS[((seed / 2) | 0) % 4] });
+    if (s.map === 'medium' || s.map === 'hard') s.coins = 30000; // well off, so bridges and land get bought in these games too
     const pick = TT.newGame(seed * 7919 + 1); // independent chooser rng
     let guard = 0;
     while (!s.over) {
@@ -1058,10 +1160,14 @@ t('fuzz: 400 random games keep state valid and always terminate', () => {
         if (b) { s = b; assert.deepStrictEqual(TT.validate(s), []); continue; }
       }
       const empties = [], occupied = [];
-      s.grid.forEach((v, i) => { if (v === 0) empties.push(i); else if (v !== TT.WATER) occupied.push(i); });
+      s.grid.forEach((v, i) => { if (v === 0) { if (!s.bridges.includes(i)) empties.push(i); } else if (v !== TT.WATER) occupied.push(i); });
       if (TT.rand(pick) < 0.02 && empties.length && occupied.length) { // the mover, now and then
         const mv = TT.move(s, occupied[Math.floor(TT.rand(pick) * occupied.length)], empties[Math.floor(TT.rand(pick) * empties.length)]);
         if (mv) { moves++; s = mv.state; assert.deepStrictEqual(TT.validate(s), []); continue; }
+      }
+      if (TT.rand(pick) < 0.02) { // build a bridge now and then (maps with water only have spots)
+        const spots = TT.bridgeSpots(s), b = spots.length ? TT.buyBridge(s, spots[Math.floor(TT.rand(pick) * spots.length)]) : null;
+        if (b) { bridges++; s = b.state; assert.deepStrictEqual(TT.validate(s), []); continue; }
       }
       if (TT.rand(pick) < 0.01 || !empties.length) { // buy land now and then, and whenever stuck
         const side = TT.SIDES[Math.floor(TT.rand(pick) * TT.SIDES.length)];
@@ -1094,7 +1200,7 @@ t('fuzz: 400 random games keep state valid and always terminate', () => {
     maxTurns = Math.max(maxTurns, s.turn);
   }
   assert(merges > 0 && trapped > 0 && foxMoves > 0, 'fuzz exercised merges, trapped bears and fox warps');
-  console.log(`  fuzz: max ${maxTurns} turns, ${merges} merges, ${trapped} trapped bears, ${churches} churches, ${hammers} hammers, ${lands} land purchases, ${moves} moves, ${foxMoves} fox warps, ${growls} growls, ${mauls} mauls, ${cubs} cubs, best tier ${maxTier}`);
+  console.log(`  fuzz: max ${maxTurns} turns, ${merges} merges, ${trapped} trapped bears, ${churches} churches, ${hammers} hammers, ${lands} land purchases, ${moves} moves, ${foxMoves} fox warps, ${growls} growls, ${mauls} mauls, ${cubs} cubs, ${bridges} bridges, best tier ${maxTier}`);
 });
 
 console.log(`OK: ${n} logic tests passed`);
