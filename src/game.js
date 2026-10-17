@@ -238,7 +238,7 @@
           p.eaten.forEach(function (i) { cells[i].classList.add('eat'); });
           var mv = sel === pi ? 'Tap again to ' : '';
           note = p.merged
-            ? (mv ? mv + 'move and merge' : 'Moves and merges') + ' into ' + TT.NAME[p.final] + ' · +' + p.points + ' pts · +' + p.coins + ' coins'
+            ? (mv ? mv + 'move and merge' : 'Moves and merges') + ' into ' + TT.NAME[p.final] + gain(p)
             : (mv ? mv + 'drop' : 'Drop') + ' the ' + TT.NAME[state.grid[moveFrom]] + ' here (-' + TT.PRICE.move + ' coins)';
           hot = sel === pi;
         } else note = '🚚 Tap an empty tile to drop the ' + TT.NAME[state.grid[moveFrom]] + ' (tap it again to put it down)';
@@ -259,7 +259,7 @@
       p.eaten.forEach(function (i) { cells[i].classList.add('eat'); });
       var verb = sel === pi ? 'Tap again to ' : '';
       note = p.merged
-        ? (verb ? verb + 'merge' : 'Merges') + ' into ' + TT.NAME[p.final] + ' · +' + p.points + ' pts · +' + p.coins + ' coins'
+        ? (verb ? verb + 'merge' : 'Merges') + ' into ' + TT.NAME[p.final] + gain(p)
         : (verb ? verb + 'place ' : 'Place ') + TT.NAME[state.cur] + ' here';
       hot = sel === pi;
     } else if (previewOn) note = 'Tap a tile to preview, tap again to place';
@@ -267,6 +267,8 @@
     $('note').classList.toggle('hot', hot);
   }
 
+  // ' · +30 pts · +2 coins' for a merge; empty when it pays nothing (three gems -> treasure: the treasure is the prize)
+  function gain(p) { return p.points || p.coins ? ' · +' + p.points + ' pts · +' + p.coins + ' coins' : ''; }
   function toast(text, yFrac) {
     var b = fxEl.getBoundingClientRect(), el = document.createElement('div');
     el.className = 'pts'; el.textContent = text; el.style.left = b.width / 2 + 'px'; el.style.top = b.height * (yFrac || 0.5) + 'px';
@@ -294,7 +296,7 @@
             'px;--dx:' + (to.x - f.x) + 'px;--dy:' + (to.y - f.y) + 'px';
           fxEl.appendChild(gh);
         });
-        floatAt(ev.at, '+' + ev.points + (ev.coins ? ' · +' + ev.coins + '🪙' : ''));
+        floatAt(ev.at, ev.points || ev.coins ? '+' + ev.points + (ev.coins ? ' · +' + ev.coins + '🪙' : '') : '💰');
       } else if (ev.type === 'bear') {
         var a = cellCenter(ev.from), b = cellCenter(ev.to), c = cells[ev.to];
         c.style.setProperty('--dx', (a.x - b.x) + 'px'); c.style.setProperty('--dy', (a.y - b.y) + 'px');
@@ -447,7 +449,7 @@
     chain(TT.TOMB, null, 'treasure: tap to open, +' + TT.TREASURE_COINS + ' coins') + '</div>' +
     '<p class="gnote">👻🐈‍⬛ haunt the tombstones and churches.</p>' +
     '<h3>Special</h3><div class="chain">' + chip(TT.CRYSTAL, 'wildcard') + chip(TT.FOX, 'warps, walls trap it') + '</div>' +
-    '<p class="gnote">💎 stands in for any tier, including 🏬 (making 💵 cash) and 🕌 (making a 💰 treasure). 🚚 moves one item to an empty tile for coins.</p>' +
+    '<p class="gnote">💎 stands in for any tier, including 🏬 (making 💵 cash) and 🕌 (making a 💰 treasure). Three or more 💎 touching each other merge into a 💰 treasure. 🚚 moves one item to an empty tile for coins.</p>' +
     '<p class="gnote">Three or more connected items of the same kind merge into the next one. Bigger groups pay more points and coins.</p>';
   $('guideLink').addEventListener('click', function (e) { e.preventDefault(); $('guide').classList.remove('hidden'); });
   $('guideClose').addEventListener('click', function () { $('guide').classList.add('hidden'); });

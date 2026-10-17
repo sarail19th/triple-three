@@ -98,15 +98,15 @@
   // Resolve merges triggered at cell `at`, chaining while the result keeps matching. Mutates s.
   function resolveAt(s, at, events) {
     for (;;) {
-      var code = s.grid[at];
-      if (!NEXT[code]) return;
+      var code = s.grid[at], next = code === CRYSTAL ? TREASURE : NEXT[code]; // 3+ connected gems merge into a treasure
+      if (!next) return;
       var g = group(s.grid, at, code);
       if (g.length < 3) return;
-      var pts = g.length * BASE[code], coins = (g.length - 2) * COIN[code];
+      var pts = g.length * (BASE[code] || 0), coins = (g.length - 2) * (COIN[code] || 0); // gems themselves pay nothing: the treasure is the prize
       for (var k = 0; k < g.length; k++) s.grid[g[k]] = EMPTY;
-      s.grid[at] = NEXT[code];
+      s.grid[at] = next;
       s.score += pts; s.coins += coins;
-      events.push({ type: 'merge', at: at, cells: g, from: code, to: NEXT[code], points: pts, coins: coins });
+      events.push({ type: 'merge', at: at, cells: g, from: code, to: next, points: pts, coins: coins });
     }
   }
 
@@ -121,7 +121,7 @@
   }
 
   // Every crystal on the board turns into the best item kind that merges at its cell; one that cannot merge yet
-  // stays as an inert wildcard and is re-checked after every placement. `first` (the crystal just placed) goes first.
+  // stays as a wildcard (three of them together merge into a treasure, see applyItem) and is re-checked after every placement. `first` (the crystal just placed) goes first.
   function settleCrystals(s, events, first) {
     for (var again = true; again;) {
       again = false;
@@ -138,8 +138,10 @@
   // Put `item` on empty cell idx and resolve every merge it causes (no animal movement). Mutates s.
   function applyItem(s, idx, item, events) {
     s.grid[idx] = item;
-    if (item === CRYSTAL) settleCrystals(s, events, idx);
-    else { resolveAt(s, idx, events); settleCrystals(s, events); }
+    if (item === CRYSTAL) {
+      settleCrystals(s, events, idx);
+      if (s.grid[idx] === CRYSTAL) { resolveAt(s, idx, events); settleCrystals(s, events); } // no tier to stand in for: 3+ connected gems -> treasure
+    } else { resolveAt(s, idx, events); settleCrystals(s, events); }
   }
 
   function emptyCount(grid) { var n = 0; for (var i = 0; i < grid.length; i++) if (grid[i] === EMPTY) n++; return n; }
@@ -347,7 +349,7 @@
     applyItem(s, idx, s.cur, events);
     for (var i = 0; i < N; i++) if (i !== idx && state.grid[i] !== EMPTY && s.grid[i] === EMPTY) eaten.push(i);
     events.forEach(function (e) { if (e.type === 'merge') { pts += e.points; coins += e.coins; } });
-    return { item: state.cur, final: s.grid[idx], eaten: eaten, points: pts, coins: coins, merged: pts > 0 };
+    return { item: state.cur, final: s.grid[idx], eaten: eaten, points: pts, coins: coins, merged: events.some(function (e) { return e.type === 'merge'; }) };
   }
 
   // What would moving the item on `from` to the empty cell `to` do? Pure. Same shape as preview(); `eaten` never lists `from`.
@@ -359,7 +361,7 @@
     applyItem(s, to, item, events);
     for (var i = 0; i < N; i++) if (i !== to && i !== from && state.grid[i] !== EMPTY && s.grid[i] === EMPTY) eaten.push(i);
     events.forEach(function (e) { if (e.type === 'merge') { pts += e.points; coins += e.coins; } });
-    return { item: item, final: s.grid[to], eaten: eaten, points: pts, coins: coins, merged: pts > 0 };
+    return { item: item, final: s.grid[to], eaten: eaten, points: pts, coins: coins, merged: events.some(function (e) { return e.type === 'merge'; }) };
   }
 
   // Undo is possible when there is a snapshot and the player can pay UNDO_COST (taken from the restored coins).
@@ -391,7 +393,8 @@
   }
 
   // Fill in fields that older saves lack (coins, stock, milestone, land, new codes) on s and its undo snapshot. Mutates s.
-  // Tiers that no longer end the chain (the old grand castles) may now form a group: settle those so the save is valid.
+  // Every save is settled once: tiers that no longer end the chain (the old grand castles) and gems that sat inert in a group of
+  // three may now merge, and a save with such a group would be invalid.
   function migrate(s) {
     [s, s && s.undo].forEach(function (x) {
       if (!x || typeof x !== 'object') return;
@@ -401,7 +404,7 @@
       if (!x.stock || typeof x.stock !== 'object') x.stock = Object.assign({}, START_STOCK);
       for (var sk in START_STOCK) if (typeof x.stock[sk] !== 'number') x.stock[sk] = START_STOCK[sk]; // items added since the save was made
       if (typeof x.milestone !== 'number') { x.milestone = 0; while (x.score >= milestoneScore(x.milestone)) x.milestone++; }
-      if (old && Array.isArray(x.grid) && x.grid.length === DEFAULT_W * DEFAULT_H) {
+      if (Array.isArray(x.grid) && x.grid.length === (x.w || DEFAULT_W) * (x.h || DEFAULT_H)) {
         dim(x);
         var ev = [];
         for (var i = 0; i < N; i++) resolveAt(x, i, ev);
@@ -451,7 +454,7 @@
     var seen = {};
     for (i = 0; i < N; i++) {
       var c = s.grid[i];
-      if (NEXT[c] && !seen[i]) {
+      if ((NEXT[c] || c === CRYSTAL) && !seen[i]) {
         var g = group(s.grid, i, c);
         g.forEach(function (k) { seen[k] = true; });
         if (g.length >= 3) p.push('unmerged group of ' + NAME[c] + ' at ' + i);

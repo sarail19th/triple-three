@@ -14,7 +14,13 @@ Owner's rules
 - A 2nd bank doubles the previous bank's rate (15% -> 30% -> 60%).
 - A game clock with a speed control.
 
-Recommendations given (to confirm with the owner)
+Owner's answers (confirmed)
+- Time follows turns (about 10 turns = 1 month, 120 = 1 year), with a pause / 1x / 2x / 3x speed control.
+- After a default, paying the debt returns the tile (empty; the building is gone).
+- Loan size left to us: half of the collateral's shop value.
+- The mover (free action, 60 coins = 3x the hammer, limited stock) is already built.
+
+Recommendations given
 - Time follows turns (about 10 turns = 1 month, 120 = 1 year); the "speed timer" is a pause / 1x / 2x / 3x button that calls a pure
   `advance(state, ticks)` on an interval, pausing when the tab is hidden. Keeps replay, undo and tests deterministic.
 - Loan = half the collateral's shop value; interest simple, charged monthly; repay per loan.
@@ -28,3 +34,13 @@ Recommendations given (to confirm with the owner)
 ## Smaller ideas
 - Pond-style maps: start a game with some dead tiles (needs the locked-tile primitive above).
 - A new app icon (the PWA icon is still the original house and tree).
+
+## Bear breeding (owner's idea, undecided)
+"If 2 bears are trapped together for several turns, should they produce 1 more bear?" Advice given:
+- Good fit with the pocket rule (bears sharing a pocket with room are safe): safety gets a time limit. A pen of 2 bears + 1 free tile
+  fills itself with a cub, seals, and the 3 bears become tombstones (a church).
+- Do it chance-based with the seeded rng (about 10% per turn for each pocket holding 2+ bears and a free tile): no per-bear ids or
+  turn counters in the state, deterministic, easy to test. "Several turns" then emerges statistically.
+- Limits are needed or it becomes a tombstone farm / fills the open board: only in pockets of at most about 6 cells (never on the
+  open board), cubs only into free tiles of that pocket, a cap on total bears on the board (about 8), foxes never breed.
+- Open question: which tile resolves the tombstone merge when a cub seals the pen (the cub's tile is the natural choice).
