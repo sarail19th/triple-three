@@ -77,11 +77,22 @@
 <div id="newGame" class="overlay hidden" role="dialog" aria-modal="true" aria-label="New game">
   <div class="card">
     <h2>New game</h2>
-    <button id="newClassic" class="btn primary">Classic</button>
-    <p class="gnote">The standard game.</p>
-    <button id="newWild" class="btn">🐻 Wild bears</button>
-    <p class="gnote">Harder: a bear boxed in (but not sealed) gets angry for 2 turns, then mauls a 🌱🌿🌳🏕️🛖 next to it one tier down, and again every 3 turns. Has its own best score.</p>
+    <h3>Map</h3>
+    <div class="opts">
+      <button class="opt" data-map="easy" aria-pressed="true">Easy</button>
+      <button class="opt" data-map="standard" aria-pressed="false">Standard</button>
+      <button class="opt" data-map="medium" aria-pressed="false">Medium</button>
+      <button class="opt" data-map="hard" aria-pressed="false">Hard</button>
+    </div>
+    <p id="mapNote" class="gnote"></p>
+    <h3>Bears</h3>
+    <div class="opts two">
+      <button class="opt" data-bears="classic" aria-pressed="true">Classic</button>
+      <button class="opt" data-bears="wild" aria-pressed="false">🐻 Wild bears</button>
+    </div>
+    <p id="bearNote" class="gnote"></p>
     <p id="newNote" class="gnote"></p>
+    <button id="newStart" class="btn primary">Start</button>
     <button id="newCancel" class="btn">Cancel</button>
   </div>
 </div>
@@ -101,7 +112,8 @@
       <li>On a computer, hover a tile to preview the move (the result shows faintly, merged items are outlined) and click to place the item shown in <b>Place</b>. On a touch screen, tap to preview and tap again to place. Turn <b>Preview</b> off to place with one tap.</li>
       <li>Connect <b>3 or more</b> identical items (up, down, left, right) and <i>all</i> of them merge into one of the next tier on the tile you tapped (4 or 5 pay more points and coins, nothing is left over):<br>🌱 → 🌿 → 🌳 → 🏕️ → 🛖 → 🏠 → 🏘️ → 🏫 → 🏥 → 🏬 → 💵 <b>cash</b>: tap it to collect coins.</li>
       <li>🐻 <b>Bears</b> wander one step each turn. Box one in so it cannot move and it becomes a 🪦 (bears sharing a pocket that still has room are safe). Three connected 🪦 merge into ⛪, three ⛪ into 🕌, three 🕌 into a 💰 <b>treasure</b>: tap it to open it for coins.</li>
-      <li>🐻💢 <b>Wild bears</b> (pick it in <b>New</b>): a bear that cannot step but is not sealed in gets angry (💢, then 💢💢) and on the third turn <b>mauls</b> a 🌱🌿🌳🏕️🛖 next to it one tier down (a 🌱 is destroyed, which opens an escape hole), then starts over. Houses and everything above are safe.</li>
+      <li>🐻💢 <b>Wild bears</b> (pick it in <b>New</b>): a bear that cannot step but is not sealed in gets angry (💢, then 💢💢) and on the third turn <b>mauls</b> a 🌱🌿🌳🏕️🛖 next to it one tier down (a 🌱 is destroyed, which opens an escape hole), then starts over. Houses and everything above are safe. In a small pen (4 to 6 tiles) holding 2 bears and 2 free tiles, a cub is sometimes born 🍼.</li>
+      <li>🗺️ <b>Maps</b> (also in <b>New</b>): Easy is a plain field, Standard starts with a few plants, Medium has a river across the field, Hard has random ponds. Blue tiles are <b>water</b>: nothing can be placed, merged, moved or smashed there, and animals cannot enter it.</li>
       <li>🦊 The <b>fox</b> never walks: every turn it <b>warps</b> to a random empty tile (never into a hole it could not get out of). Corner it, though: when walls and items close it in on every side (or you fill the last free tile of its box) it becomes a 🪦, and so does a fox on a full board. The 🪤 trap kills it anywhere.</li>
       <li>💎 The <b>crystal</b> is a wildcard: it turns into whatever makes the best merge (any building tier up to 🏬 which makes 💵 cash, 🪦, ⛪ or 🕌 which makes a 💰 treasure). If no tier fits it waits as a wildcard, and <b>three 💎 touching each other merge into a 💰 treasure</b> on the tile you tapped.</li>
       <li>🪙 <b>Coins</b> come from merges. Spend them in the shop: buy an item as your current one (the old one moves to Next). You can buy 🌱 🌿 🌳, and any higher tier once you have built one. Stock is limited (the ×N badge): after it runs out the price <b>doubles</b> with every purchase, and score milestones restock it.</li>

@@ -12,14 +12,23 @@
   // Wild bears (a per-game option): a bear that cannot step for 3 turns in a row (boxed in, but its pocket still has room) mauls
   // one neighbouring building of tier 1..MAUL_MAX (grass .. hut) one tier down (grass is destroyed), then starts over.
   var MAUL_MAX = 5;
+  // Wild bears also breed: a pocket of 4..BREED_MAX_POCKET tiles with 2+ bears and 2+ empty tiles has a BREED_CHANCE each turn of
+  // a cub appearing on one of its empty tiles (so a cub never takes the last free tile), up to BREED_MAX_BEARS bears on the board.
+  var BREED_MIN_BEARS = 2, BREED_MIN_EMPTY = 2, BREED_MAX_POCKET = 6, BREED_MAX_BEARS = 8, BREED_CHANCE = 0.1;
+  // Maps (chosen when a game starts, kept in state.map): easy = plain field, standard = a few random grass/bush/tree, medium = a
+  // river across the field, hard = random ponds. Water tiles are fixed for the whole game.
+  var MAPS = ['easy', 'standard', 'medium', 'hard'];
+  var STANDARD_ITEMS = 5;
+  var MEDIUM_WATER = [2, 8, 14, 15, 21, 27, 33]; // a winding river from the top edge to the bottom edge (6x6 indices)
   function isBear(v) { return v === BEAR || v === BEAR_GROWL || v === BEAR_ANGRY; }
 
   // Cell / item codes. 0 empty. 1..10 building chain (10 = mall), 11 cash (collectible, final), 12 bear, 13 tombstone,
   // 14 church, 15 cathedral, 16 crystal, 17 treasure (final tier of the bear chain: collectible), 18 fox,
-  // 19/20 a bear that was boxed in for 1 / 2 turns in a row (Wild bears games only: the warning stages before it mauls).
-  var EMPTY = 0, LAST_BUILDING = 10, CASH = 11, BEAR = 12, TOMB = 13, CHURCH = 14, CATHEDRAL = 15, CRYSTAL = 16, TREASURE = 17, FOX = 18, BEAR_GROWL = 19, BEAR_ANGRY = 20;
-  var EMOJI = ['', '🌱', '🌿', '🌳', '🏕️', '🛖', '🏠', '🏘️', '🏫', '🏥', '🏬', '💵', '🐻', '🪦', '⛪', '🕌', '💎', '💰', '🦊', '🐻', '🐻'];
-  var NAME = ['empty', 'grass', 'bush', 'tree', 'camp', 'hut', 'house', 'village', 'school', 'hospital', 'mall', 'cash', 'bear', 'tombstone', 'church', 'cathedral', 'crystal', 'treasure', 'fox', 'growling bear', 'angry bear'];
+  // 19/20 a bear that was boxed in for 1 / 2 turns in a row (Wild bears games only: the warning stages before it mauls),
+  // 21 water (map tiles that never change: nothing can be placed, merged, moved or smashed there, and animals cannot enter it).
+  var EMPTY = 0, LAST_BUILDING = 10, CASH = 11, BEAR = 12, TOMB = 13, CHURCH = 14, CATHEDRAL = 15, CRYSTAL = 16, TREASURE = 17, FOX = 18, BEAR_GROWL = 19, BEAR_ANGRY = 20, WATER = 21;
+  var EMOJI = ['', '🌱', '🌿', '🌳', '🏕️', '🛖', '🏠', '🏘️', '🏫', '🏥', '🏬', '💵', '🐻', '🪦', '⛪', '🕌', '💎', '💰', '🦊', '🐻', '🐻', ''];
+  var NAME = ['empty', 'grass', 'bush', 'tree', 'camp', 'hut', 'house', 'village', 'school', 'hospital', 'mall', 'cash', 'bear', 'tombstone', 'church', 'cathedral', 'crystal', 'treasure', 'fox', 'growling bear', 'angry bear', 'water'];
   // code -> code it becomes when 3+ connect. Final tiers (11 cash, 15->17 treasure), bear, fox and crystal are absent / collectible.
   var NEXT = { 1: 2, 2: 3, 3: 4, 4: 5, 5: 6, 6: 7, 7: 8, 8: 9, 9: 10, 10: 11, 13: 14, 14: 15, 15: 17 };
   // points per item consumed by a merge, keyed by the consumed code (buildings x3 per tier)
@@ -64,16 +73,66 @@
   }
 
   function clone(s) {
-    return { ver: s.ver, wild: s.wild, w: s.w, h: s.h, land: s.land.slice(), top: s.top, grid: s.grid.slice(), cur: s.cur, next: s.next, hold: s.hold, score: s.score, coins: s.coins,
+    return { ver: s.ver, wild: s.wild, map: s.map, w: s.w, h: s.h, land: s.land.slice(), top: s.top, grid: s.grid.slice(), cur: s.cur, next: s.next, hold: s.hold, score: s.score, coins: s.coins,
       stock: Object.assign({}, s.stock), milestone: s.milestone, turn: s.turn, over: s.over, rng: s.rng, seed: s.seed, undo: s.undo };
   }
 
   function newGame(seed, opts) {
     seed = (seed >>> 0) || 1;
-    var s = { ver: VERSION, wild: !!(opts && opts.wild), w: DEFAULT_W, h: DEFAULT_H, land: [], top: 1, grid: new Array(DEFAULT_W * DEFAULT_H).fill(EMPTY), cur: 1, next: 1, hold: 0, score: 0, coins: START_COINS,
+    var s = { ver: VERSION, wild: !!(opts && opts.wild), map: opts && MAPS.indexOf(opts.map) >= 0 ? opts.map : 'easy', w: DEFAULT_W, h: DEFAULT_H, land: [], top: 1, grid: new Array(DEFAULT_W * DEFAULT_H).fill(EMPTY), cur: 1, next: 1, hold: 0, score: 0, coins: START_COINS,
       stock: Object.assign({}, START_STOCK), milestone: 0, turn: 0, over: false, rng: seed, seed: seed, undo: null };
+    dim(s);
+    genMap(s);
     s.next = drawItem(s); // always open with grass
     return s;
+  }
+
+  // ---- maps. Easy uses no random numbers at all, so classic seeds replay exactly as they always did.
+  function genMap(s) {
+    var i;
+    if (s.map === 'standard') scatter(s, STANDARD_ITEMS);
+    else if (s.map === 'medium') for (i = 0; i < MEDIUM_WATER.length; i++) s.grid[MEDIUM_WATER[i]] = WATER;
+    else if (s.map === 'hard') ponds(s);
+  }
+  // a few random grass / bush / tree on the empty field (never three of a kind touching)
+  function scatter(s, count) {
+    for (var placed = 0, tries = 0; placed < count && tries < 500; tries++) {
+      var at = randInt(s, N), r = randInt(s, 6), kind = r < 3 ? 1 : r < 5 ? 2 : 3;
+      if (s.grid[at] !== EMPTY) continue;
+      s.grid[at] = kind;
+      if (group(s.grid, at, kind).length >= 3) s.grid[at] = EMPTY; else placed++;
+    }
+  }
+  // do the non-water tiles of grid form one connected area?
+  function oneField(grid) {
+    var first = -1, total = 0, i;
+    for (i = 0; i < N; i++) if (grid[i] !== WATER) { total++; if (first < 0) first = i; }
+    var seen = {}, stack = [first], n = 0;
+    seen[first] = true;
+    while (stack.length) {
+      var c = stack.pop(); n++;
+      neighbors(c).forEach(function (j) { if (!seen[j] && grid[j] !== WATER) { seen[j] = true; stack.push(j); } });
+    }
+    return n === total;
+  }
+  // three random ponds of 2..4 tiles each; kept only if there are 6..9 water tiles and the land stays in one piece
+  function ponds(s) {
+    for (var attempt = 0; attempt < 80; attempt++) {
+      var g = new Array(N).fill(EMPTY), water = 0, p, i;
+      for (p = 0; p < 3; p++) {
+        var cells = [randInt(s, N)], size = 2 + randInt(s, 3);
+        g[cells[0]] = WATER;
+        while (cells.length < size) {
+          var from = cells[randInt(s, cells.length)], free = neighbors(from).filter(function (j) { return g[j] === EMPTY; });
+          if (!free.length) break;
+          var j = free[randInt(s, free.length)];
+          g[j] = WATER; cells.push(j);
+        }
+      }
+      for (i = 0; i < N; i++) if (g[i] === WATER) water++;
+      if (water >= 6 && water <= 9 && oneField(g)) { s.grid = g; return; }
+    }
+    [14, 15, 20, 21].forEach(function (i) { s.grid[i] = WATER; }); // (practically never reached) a pond in the middle
   }
 
   function neighbors(i) {
@@ -166,6 +225,9 @@
     return ok;
   }
 
+  // cells animals can be on or walk through (water, buildings, tombstones... are walls)
+  function roaming(v) { return isBear(v) || v === FOX || v === EMPTY; }
+
   // Animals are trapped per pocket: a pocket is a connected area of empty cells, bears and foxes. A pocket with no empty
   // cell left turns all its bears and foxes into tombstones (a fox walled in on all sides, or in a corner, or sharing a
   // pocket whose last free cell just got filled). In a pocket that still has room every bear that can step does, and a
@@ -175,7 +237,6 @@
   // last animal went in), then the rest in board order.
   function moveBears(s, events, last) {
     var seen = {}, trapped = [], bears = [], i;
-    function roaming(v) { return isBear(v) || v === FOX || v === EMPTY; }
     for (i = 0; i < N; i++) {
       if (seen[i] || !roaming(s.grid[i])) continue;
       var stack = [i], pocket = [], room = false;
@@ -209,8 +270,31 @@
       s.grid[from] = EMPTY; s.grid[to] = FOX;
       events.push({ type: 'fox', from: from, to: to });
     });
+    if (s.wild) breed(s, events);
     trapped.forEach(function (at) { if (s.grid[at] === TOMB) resolveAt(s, at, events); });
     mauled.forEach(function (at) { if (s.grid[at] !== EMPTY) resolveAt(s, at, events); }); // a lowered tile may complete a group
+  }
+
+  // Wild bears breed: see BREED_*. A cub appears (calm, code 12) on an empty tile of a small pocket that has 2+ bears and 2+ empty tiles.
+  function breed(s, events) {
+    var seen = {}, bears = 0, i;
+    for (i = 0; i < N; i++) if (isBear(s.grid[i])) bears++;
+    for (i = 0; i < N; i++) {
+      if (seen[i] || !roaming(s.grid[i])) continue;
+      var stack = [i], size = 0, inPocket = 0, empties = [];
+      seen[i] = true;
+      while (stack.length) {
+        var c = stack.pop();
+        size++;
+        if (isBear(s.grid[c])) inPocket++; else if (s.grid[c] === EMPTY) empties.push(c);
+        neighbors(c).forEach(function (j) { if (!seen[j] && roaming(s.grid[j])) { seen[j] = true; stack.push(j); } });
+      }
+      if (size <= BREED_MAX_POCKET && inPocket >= BREED_MIN_BEARS && empties.length >= BREED_MIN_EMPTY && bears < BREED_MAX_BEARS && rand(s) < BREED_CHANCE) {
+        var at = empties[randInt(s, empties.length)];
+        s.grid[at] = BEAR; bears++;
+        events.push({ type: 'cub', at: at });
+      }
+    }
   }
 
   // Wild bears: a bear that could not step this turn gets one stage angrier (2 warning turns); on the third boxed-in turn it
@@ -306,7 +390,7 @@
   // Shop: the hammer removes whatever stands on cell idx (free action, costs coins). Returns {state, events} or null.
   function hammer(state, idx) {
     dim(state);
-    if (state.over || !(idx >= 0 && idx < N) || state.grid[idx] === EMPTY || !canHammer(state)) return null;
+    if (state.over || !(idx >= 0 && idx < N) || state.grid[idx] === EMPTY || state.grid[idx] === WATER || !canHammer(state)) return null;
     var s = clone(state), item = s.grid[idx];
     s.grid[idx] = EMPTY; s.coins -= PRICE.hammer; s.stock.hammer--; s.over = isOver(s);
     return { state: s, events: [{ type: 'hammer', at: idx, item: item }] };
@@ -340,7 +424,7 @@
   // Shop: the mover picks up the item on `from` and drops it on the empty cell `to` (free action, costs coins, limited stock).
   // It merges there exactly as a placed item would. Bears and foxes cannot be moved (only the trap deals with them).
   // Returns {state, events} or null.
-  function isMovable(code) { return code !== EMPTY && !isBear(code) && code !== FOX; }
+  function isMovable(code) { return code !== EMPTY && code !== WATER && !isBear(code) && code !== FOX; }
   function canMove(s) { return s.coins >= PRICE.move && s.stock.move > 0; }
   function moveLegal(state, from, to) {
     return !state.over && from >= 0 && from < N && to >= 0 && to < N && from !== to && isMovable(state.grid[from]) && state.grid[to] === EMPTY;
@@ -441,6 +525,7 @@
       if (old) upgradeV1(x);
       if (!x.stock || typeof x.stock !== 'object') x.stock = Object.assign({}, START_STOCK);
       for (var sk in START_STOCK) if (typeof x.stock[sk] !== 'number') x.stock[sk] = START_STOCK[sk]; // items added since the save was made
+      if (MAPS.indexOf(x.map) < 0) x.map = 'easy'; // every older game was played on the plain field
       if (typeof x.wild !== 'boolean') x.wild = false; // Wild bears is chosen per game; every older game is a classic one
       if (typeof x.milestone !== 'number') { x.milestone = 0; while (x.score >= milestoneScore(x.milestone)) x.milestone++; }
       if (Array.isArray(x.grid) && x.grid.length === (x.w || DEFAULT_W) * (x.h || DEFAULT_H)) {
@@ -462,6 +547,7 @@
     var ok = function (v) { return v === (v | 0) && v >= DEFAULT_W && v <= DEFAULT_W + 2; };
     if (!ok(s.w) || !ok(s.h) || !Array.isArray(s.land)) return ['bad board size'];
     if (typeof s.wild !== 'boolean') return ['bad wild flag'];
+    if (MAPS.indexOf(s.map) < 0) return ['bad map'];
     dim(s);
     if (!Array.isArray(s.grid) || s.grid.length !== N) return ['bad grid'];
     var lr = 0, tb = 0;
@@ -472,7 +558,7 @@
     if (s.w !== DEFAULT_W + lr || s.h !== DEFAULT_H + tb) p.push('board size does not match the land bought');
     for (i = 0; i < N; i++) {
       var v = s.grid[i];
-      if (v !== (v | 0) || v < 0 || v > BEAR_ANGRY) p.push('bad code at ' + i + ': ' + v);
+      if (v !== (v | 0) || v < 0 || v > WATER) p.push('bad code at ' + i + ': ' + v);
       else if (!s.wild && (v === BEAR_GROWL || v === BEAR_ANGRY)) p.push('angry bear in a classic game at ' + i);
     }
     if (p.length) return p;
@@ -511,7 +597,8 @@
 
   return {
     W: DEFAULT_W, H: DEFAULT_H, N: DEFAULT_W * DEFAULT_H, MAX_LAND: SIDES.length, SIDES: SIDES, LAND_PRICE: LAND_PRICE, LAST_BUILDING: LAST_BUILDING, VERSION: VERSION,
-    EMPTY: EMPTY, CASH: CASH, BEAR: BEAR, BEAR_GROWL: BEAR_GROWL, BEAR_ANGRY: BEAR_ANGRY, MAUL_MAX: MAUL_MAX, isBear: isBear, TOMB: TOMB, CHURCH: CHURCH, CATHEDRAL: CATHEDRAL, CRYSTAL: CRYSTAL, TREASURE: TREASURE, FOX: FOX,
+    EMPTY: EMPTY, CASH: CASH, BEAR: BEAR, BEAR_GROWL: BEAR_GROWL, BEAR_ANGRY: BEAR_ANGRY, WATER: WATER, MAUL_MAX: MAUL_MAX, isBear: isBear, MAPS: MAPS, MEDIUM_WATER: MEDIUM_WATER, STANDARD_ITEMS: STANDARD_ITEMS,
+    BREED_MAX_POCKET: BREED_MAX_POCKET, BREED_MAX_BEARS: BREED_MAX_BEARS, BREED_CHANCE: BREED_CHANCE, TOMB: TOMB, CHURCH: CHURCH, CATHEDRAL: CATHEDRAL, CRYSTAL: CRYSTAL, TREASURE: TREASURE, FOX: FOX,
     TREASURE_COINS: TREASURE_COINS, CASH_COINS: CASH_COINS,
     EMOJI: EMOJI, NAME: NAME, NEXT: NEXT, BASE: BASE, WEIGHTS: WEIGHTS,
     START_COINS: START_COINS, COIN: COIN, PRICE: PRICE, BUYABLE: BUYABLE, UNDO_COST: UNDO_COST, START_STOCK: START_STOCK,
