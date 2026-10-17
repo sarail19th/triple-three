@@ -242,7 +242,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       <li>On a computer, hover a tile to preview the move (the result shows faintly, merged items are outlined) and click to place the item shown in <b>Place</b>. On a touch screen, tap to preview and tap again to place. Turn <b>Preview</b> off to place with one tap.</li>
       <li>Connect <b>3 or more</b> identical items (up, down, left, right) and <i>all</i> of them merge into one of the next tier on the tile you tapped (4 or 5 pay more points and coins, nothing is left over):<br>🌱 → 🌿 → 🌳 → 🏕️ → 🛖 → 🏠 → 🏘️ → 🏫 → 🏥 → 🏬 → 💵 <b>cash</b>: tap it to collect coins.</li>
       <li>🐻 <b>Bears</b> wander one step each turn. Box one in so it cannot move and it becomes a 🪦 (bears sharing a pocket that still has room are safe). Three connected 🪦 merge into ⛪, three ⛪ into 🕌, three 🕌 into a 💰 <b>treasure</b>: tap it to open it for coins.</li>
-      <li>🦊 The <b>fox</b> never walks: every turn it <b>warps</b> to a random empty tile. Corner it, though: when walls and items close it in on every side (or you fill the last free tile of its box) it becomes a 🪦, and so does a fox on a full board. The 🪤 trap kills it anywhere.</li>
+      <li>🦊 The <b>fox</b> never walks: every turn it <b>warps</b> to a random empty tile (never into a hole it could not get out of). Corner it, though: when walls and items close it in on every side (or you fill the last free tile of its box) it becomes a 🪦, and so does a fox on a full board. The 🪤 trap kills it anywhere.</li>
       <li>💎 The <b>crystal</b> is a wildcard: it turns into whatever makes the best merge (any building tier up to 🏬 which makes 💵 cash, 🪦, ⛪ or 🕌 which makes a 💰 treasure). If no tier fits it waits as a wildcard, and <b>three 💎 touching each other merge into a 💰 treasure</b> on the tile you tapped.</li>
       <li>🪙 <b>Coins</b> come from merges. Spend them in the shop: buy an item as your current one (the old one moves to Next). You can buy 🌱 🌿 🌳, and any higher tier once you have built one. Stock is limited (the ×N badge): after it runs out the price <b>doubles</b> with every purchase, and score milestones restock it.</li>
       <li>🪤 kills a bear or fox on the spot, 🔨 removes any placed item, 🚚 <b>moves</b> one item (not animals) to an empty tile, merging it there like a placed item, and ⬆️⬇️⬅️➡️ buy <b>land</b>: one more row or column on that side (each side once, dearer every time).</li>
@@ -401,6 +401,21 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 
   function emptyCount(grid) { var n = 0; for (var i = 0; i < grid.length; i++) if (grid[i] === EMPTY) n++; return n; }
 
+  // Would a fox jumping from `from` to the empty cell `to` still have a free cell in its pocket (counting the cell it leaves)?
+  // A warp never picks a landing that would trap the fox at once, e.g. a single tile walled in on all four sides.
+  function landsWithRoom(s, from, to) {
+    var seen = {}, stack = [to], ok = false;
+    seen[to] = true;
+    while (stack.length && !ok) {
+      var c = stack.pop();
+      if (c !== to && (c === from || s.grid[c] === EMPTY)) { ok = true; break; } // `to` is about to hold the fox; `from` is vacated by the jump
+      neighbors(c).forEach(function (j) {
+        if (!seen[j] && (j === from || s.grid[j] === BEAR || s.grid[j] === FOX || s.grid[j] === EMPTY)) { seen[j] = true; stack.push(j); }
+      });
+    }
+    return ok;
+  }
+
   // Animals are trapped per pocket: a pocket is a connected area of empty cells, bears and foxes. A pocket with no empty
   // cell left turns all its bears and foxes into tombstones (a fox walled in on all sides, or in a corner, or sharing a
   // pocket whose last free cell just got filled). In a pocket that still has room every bear that can step does, and a
@@ -436,9 +451,10 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     var foxes = [];
     for (i = 0; i < N; i++) if (s.grid[i] === FOX) foxes.push(i);
     foxes.forEach(function (from) {
-      var empties = [];
-      for (var j = 0; j < N; j++) if (s.grid[j] === EMPTY) empties.push(j);
-      var to = empties[randInt(s, empties.length)]; // never empty: a fox that survived has room in its pocket
+      var safe = [];
+      for (var j = 0; j < N; j++) if (s.grid[j] === EMPTY && landsWithRoom(s, from, j)) safe.push(j);
+      if (!safe.length) return; // nowhere safe to jump (a fox that survived always has its own box to hop around in, so this is rare): it stays
+      var to = safe[randInt(s, safe.length)];
       s.grid[from] = EMPTY; s.grid[to] = FOX;
       events.push({ type: 'fox', from: from, to: to });
     });
