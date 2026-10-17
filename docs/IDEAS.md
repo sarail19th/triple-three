@@ -59,3 +59,9 @@ Maps built: easy / standard / medium (river) / hard (ponds). Water is the first 
 Next on the map side (owner's plan): a **bridge** item for the river, and a bridge earns money when people cross it. Water tiles
 are currently walls, so a bridge would be a buildable replacement on a water tile (new code, new shop item, income per turn or per
 crossing animal; the calendar from the bank plan would fit). The bank's "locked / dead tiles" can reuse the water idea.
+
+## Bridges (built) and what is next for them
+Built as the owner described: a bridge must join two banks (land on both opposite sides, never a map corner or the middle of wide water),
+limit 5 per game, dearer every time, and bears can cross. Implementation notes are in CLAUDE.md.
+Still open from the owner's earlier plan: a bridge **earns money when animals cross it** (per crossing, or per turn while something walks over it).
+Natural hook: `moveBears` already moves bears and foxes onto a bridge tile; count crossings there and pay coins in `place`.

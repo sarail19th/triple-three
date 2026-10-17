@@ -66,10 +66,11 @@ def check_consistent(page, where):
     assert dom['hold'] == (EMOJI[st['hold']] if st['hold'] else '·'), f'{where}: hold display'
     assert dom['undoDisabled'] == (st['undo'] is None or st['undo']['coins'] < 5), f'{where}: undo button state'
     tools = page.evaluate("[...document.querySelectorAll('.tool[data-tool]')].map(b => b.dataset.tool)")
-    assert tools[:3] == ['1', '2', '3'] and tools[-4:] == ['16', 'trap', 'hammer', 'move'], f'{where}: shop items {tools}'
-    assert len(tools) == max(3, st['top']) + 4, f'{where}: one button per unlocked tier + crystal + trap + hammer + mover, got {tools}'
+    assert tools[:3] == ['1', '2', '3'] and tools[-5:] == ['16', 'trap', 'hammer', 'move', 'bridge'], f'{where}: shop items {tools}'
+    assert len(tools) == max(3, st['top']) + 5, f'{where}: one button per unlocked tier + crystal + trap + hammer + mover + bridge, got {tools}'
     for tool in tools:
-        assert page.inner_text(f'.tool[data-tool="{tool}"] .tb') == f"×{max(0, st['stock'][tool])}", f'{where}: stock badge {tool}'
+        want = f"×{5 - len(st['bridges'])}" if tool == 'bridge' else f"×{max(0, st['stock'][tool])}"
+        assert page.inner_text(f'.tool[data-tool="{tool}"] .tb') == want, f'{where}: badge {tool}'
     return st
 
 
@@ -152,7 +153,7 @@ with sync_playwright() as p:
             assert after['undo'] is None and page.locator('#undoBtn').is_disabled(), 'single-level undo'
             continue
         if roll < 0.20:  # shop: buy grass / bush / tree if enabled
-            tool = rng.choice([t for t in page.evaluate("[...document.querySelectorAll('.tool[data-tool]')].map(b => b.dataset.tool)") if t not in ('trap', 'hammer', 'move')])
+            tool = rng.choice([t for t in page.evaluate("[...document.querySelectorAll('.tool[data-tool]')].map(b => b.dataset.tool)") if t not in ('trap', 'hammer', 'move', 'bridge')])
             btn = page.locator(f'.tool[data-tool="{tool}"]')
             price = page.evaluate('([s, t]) => TT.priceOf(s, +t)', [st, tool])
             if btn.is_enabled():
@@ -246,7 +247,7 @@ with sync_playwright() as p:
     assert resumed['grid'] == mid['grid'] and resumed['turn'] == mid['turn'] and resumed['rng'] == mid['rng'], 'saved game resumes'
     # ---- mouse: hover previews, ONE click places (touch needs preview + confirm, covered above)
     def load(grid, **kw):
-        s = {'ver': 2, 'wild': False, 'w': 6, 'h': 6, 'land': [], 'top': 3, 'grid': grid, 'cur': 1, 'next': 2, 'hold': 0, 'score': 0, 'coins': 30, 'turn': 3, 'over': False, 'rng': 77, 'seed': 77, 'undo': None}
+        s = {'ver': 2, 'wild': False, 'bridges': [], 'w': 6, 'h': 6, 'land': [], 'top': 3, 'grid': grid, 'cur': 1, 'next': 2, 'hold': 0, 'score': 0, 'coins': 30, 'turn': 3, 'over': False, 'rng': 77, 'seed': 77, 'undo': None}
         s.update(kw)
         page.evaluate('s => localStorage.setItem("tt-save", JSON.stringify(s))', s)
         page.goto(URL + '#')
@@ -422,9 +423,29 @@ with sync_playwright() as p:
     assert state(page)['grid'] == g, f"grid changed: {[(i, v, g[i]) for i, v in enumerate(state(page)['grid']) if v != g[i]]} turn={state(page)['turn']}"
     tap_cell(page, 0, True)                # but it still smashes a hut
     assert check_consistent(page, 'hammer next to water')['grid'][0] == 0
+    # ---- bridges: a tool for maps with water; glowing spots only where land is on both sides; limited, dearer every time
+    g = [0] * 36
+    for i in (2, 8, 14, 15, 21, 27, 33): g[i] = 21
+    load(g, map='medium', coins=1000)
+    assert page.locator('#bridgeBtn').is_visible() and page.locator('#bridgeBtn').is_enabled()
+    assert page.inner_text('#bridgeBtn .tp') == '🪙300' and page.inner_text('#bridgeBtn .tb') == '×5'
+    page.tap('#bridgeBtn')
+    assert page.get_attribute('#bridgeBtn', 'aria-pressed') == 'true' and page.locator('#board .cell.spot').count() == 5, 'five glowing spots on the river'
+    page.tap('#board .cell[data-i="14"]')   # the middle of the double-wide river: not a spot
+    assert state(page)['bridges'] == [] and state(page)['coins'] == 1000
+    tap_cell(page, 8, True)
+    after = check_consistent(page, 'bridge')
+    assert after['bridges'] == [8] and after['grid'][8] == 0 and after['coins'] == 700 and after['turn'] == 3, 'a free action that costs the first price'
+    assert page.locator('#board .cell.bridge').count() == 1 and page.locator('#board .cell.bridge.bh').count() == 1, 'planks laid left-right across the river'
+    assert page.get_attribute('#bridgeBtn', 'aria-pressed') == 'false' and page.locator('#board svg.water').count() == 1, 'the river still runs under the bridge'
+    page.tap('#board .cell[data-i="8"]'); page.tap('#board .cell[data-i="8"]')   # nothing can be built on a bridge
+    assert state(page)['grid'][8] == 0 and state(page)['turn'] == 3
+    assert page.inner_text('#bridgeBtn .tp') == '🪙700' and page.inner_text('#bridgeBtn .tb') == '×4', 'the next bridge costs more'
+
     page.tap('#newBtn'); page.tap('.opt[data-map="easy"]'); page.tap('.opt[data-bears="classic"]'); page.tap('#newStart')
     easy = check_consistent(page, 'easy map')
     assert easy['map'] == 'easy' and easy['grid'] == [0] * 36 and 'map' not in page.inner_text('#seed')
+    assert page.locator('#bridgeBtn').is_hidden(), 'no water, no bridge tool'
     assert page.locator('#board svg.water').count() == 0 and page.evaluate('window.ttDebug.critters()') == [], 'no water, no water layer and no swans'
 
     # ---- shop: higher tiers unlock once built; stock runs out -> price doubles (shown on the button)

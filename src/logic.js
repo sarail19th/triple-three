@@ -19,6 +19,10 @@
   // river across the field, hard = random ponds. Water tiles are fixed for the whole game.
   var MAPS = ['easy', 'standard', 'medium', 'hard'];
   var STANDARD_ITEMS = 5;
+  // Bridges: a shop tool for maps with water. A bridge turns one water tile into a walkable tile (bears and foxes cross it, nothing can
+  // be built on it) and is remembered in state.bridges. At most MAX_BRIDGES per game, dearer every time.
+  var MAX_BRIDGES = 5;
+  var BRIDGE_PRICE = [300, 700, 1500, 3200, 6500];
   var MEDIUM_WATER = [2, 8, 14, 15, 21, 27, 33]; // a winding river from the top edge to the bottom edge (6x6 indices)
   function isBear(v) { return v === BEAR || v === BEAR_GROWL || v === BEAR_ANGRY; }
 
@@ -90,13 +94,13 @@
   }
 
   function clone(s) {
-    return { ver: s.ver, wild: s.wild, map: s.map, w: s.w, h: s.h, land: s.land.slice(), top: s.top, grid: s.grid.slice(), cur: s.cur, next: s.next, hold: s.hold, score: s.score, coins: s.coins,
+    return { ver: s.ver, wild: s.wild, map: s.map, bridges: s.bridges.slice(), w: s.w, h: s.h, land: s.land.slice(), top: s.top, grid: s.grid.slice(), cur: s.cur, next: s.next, hold: s.hold, score: s.score, coins: s.coins,
       stock: Object.assign({}, s.stock), milestone: s.milestone, turn: s.turn, over: s.over, rng: s.rng, seed: s.seed, undo: s.undo };
   }
 
   function newGame(seed, opts) {
     seed = (seed >>> 0) || 1;
-    var s = { ver: VERSION, wild: !!(opts && opts.wild), map: opts && MAPS.indexOf(opts.map) >= 0 ? opts.map : 'easy', w: DEFAULT_W, h: DEFAULT_H, land: [], top: 1, grid: new Array(DEFAULT_W * DEFAULT_H).fill(EMPTY), cur: 1, next: 1, hold: 0, score: 0, coins: START_COINS,
+    var s = { ver: VERSION, wild: !!(opts && opts.wild), map: opts && MAPS.indexOf(opts.map) >= 0 ? opts.map : 'easy', bridges: [], w: DEFAULT_W, h: DEFAULT_H, land: [], top: 1, grid: new Array(DEFAULT_W * DEFAULT_H).fill(EMPTY), cur: 1, next: 1, hold: 0, score: 0, coins: START_COINS,
       stock: Object.assign({}, START_STOCK), milestone: 0, turn: 0, over: false, rng: seed, seed: seed, undo: null };
     dim(s);
     genMap(s);
@@ -355,7 +359,9 @@
   function canHammer(s) { return s.coins >= PRICE.hammer && s.stock.hammer > 0; }
   function landPrice(s) { return s.land.length < SIDES.length ? LAND_PRICE[s.land.length] : null; }
   function canLand(s) { return s.land.length < SIDES.length && s.coins >= LAND_PRICE[s.land.length]; }
-  function isOver(s) { return emptyCount(s.grid) === 0 && !canHammer(s) && !canLand(s); }
+  // empty tiles an item can actually be placed on (a bridge tile is empty but nothing is built on it)
+  function freeCount(s) { var n = 0; for (var i = 0; i < s.grid.length; i++) if (s.grid[i] === EMPTY && s.bridges.indexOf(i) < 0) n++; return n; }
+  function isOver(s) { return freeCount(s) === 0 && !canHammer(s) && !canLand(s); }
   // Score milestones restock the shop (only tiers that are unlocked). Mutates s.
   function grantMilestones(s, events) {
     while (s.score >= milestoneScore(s.milestone)) {
@@ -371,7 +377,7 @@
   // Play one turn: put s.cur on empty cell idx. Returns {state, events}, or null if the move is illegal.
   function place(state, idx) {
     dim(state);
-    if (state.over || !(idx >= 0 && idx < N) || state.grid[idx] !== EMPTY) return null;
+    if (state.over || !(idx >= 0 && idx < N) || state.grid[idx] !== EMPTY || state.bridges.indexOf(idx) >= 0) return null;
     var s = clone(state), events = [], item = s.cur;
     s.undo = clone(state); s.undo.undo = null; // one level of undo, no nesting
     events.push({ type: 'place', at: idx, item: item });
@@ -444,7 +450,7 @@
   function isMovable(code) { return code !== EMPTY && code !== WATER && !isBear(code) && code !== FOX; }
   function canMove(s) { return s.coins >= PRICE.move && s.stock.move > 0; }
   function moveLegal(state, from, to) {
-    return !state.over && from >= 0 && from < N && to >= 0 && to < N && from !== to && isMovable(state.grid[from]) && state.grid[to] === EMPTY;
+    return !state.over && from >= 0 && from < N && to >= 0 && to < N && from !== to && isMovable(state.grid[from]) && state.grid[to] === EMPTY && state.bridges.indexOf(to) < 0;
   }
   function move(state, from, to) {
     dim(state);
@@ -457,6 +463,34 @@
     grantMilestones(s, events);
     s.over = isOver(s); // the board is as full as before, so this only ever stays false
     return { state: s, events: events };
+  }
+
+  // Water tiles where a bridge may go: the tile must have dry (or already bridged) tiles on BOTH opposite sides, up/down or left/right,
+  // so it joins two banks. That rules out the middle of wide water and every corner of the map (a corner has no opposite pair).
+  function bridgeSpots(state) {
+    dim(state);
+    var out = [];
+    if (state.over || state.bridges.length >= MAX_BRIDGES) return out;
+    for (var i = 0; i < N; i++) {
+      if (state.grid[i] !== WATER) continue;
+      var r = (i / W) | 0, c = i % W;
+      var vertical = r > 0 && r < H - 1 && state.grid[i - W] !== WATER && state.grid[i + W] !== WATER;
+      var horizontal = c > 0 && c < W - 1 && state.grid[i - 1] !== WATER && state.grid[i + 1] !== WATER;
+      if (vertical || horizontal) out.push(i);
+    }
+    return out;
+  }
+  function bridgePrice(s) { return s.bridges.length < MAX_BRIDGES ? BRIDGE_PRICE[s.bridges.length] : null; }
+  function canBridge(s) { return s.bridges.length < MAX_BRIDGES && s.coins >= BRIDGE_PRICE[s.bridges.length] && bridgeSpots(s).length > 0; }
+  // Shop: build a bridge on water tile idx (free action, limited, dearer every time). Returns {state, events} or null.
+  function buyBridge(state, idx) {
+    dim(state);
+    if (state.over || state.bridges.length >= MAX_BRIDGES || state.coins < BRIDGE_PRICE[state.bridges.length] || bridgeSpots(state).indexOf(idx) < 0) return null;
+    var s = clone(state);
+    s.coins -= BRIDGE_PRICE[state.bridges.length];
+    s.grid[idx] = EMPTY; s.bridges.push(idx); s.bridges.sort(function (a, b) { return a - b; });
+    s.over = isOver(s);
+    return s.over ? null : { state: s, events: [{ type: 'bridge', at: idx }] };
   }
 
   // Shop: buy one more row (top/bottom) or column (left/right) of land; each side once, dearer every time. Free action.
@@ -475,6 +509,10 @@
       g = out; s.w++;
     }
     s.grid = g;
+    s.bridges = state.bridges.map(function (i) { // the new row / column moves every index
+      var r = (i / w) | 0, c = i % w;
+      return side === 'top' ? i + w : side === 'bottom' ? i : side === 'left' ? r * (w + 1) + c + 1 : r * (w + 1) + c;
+    });
     s.over = false;
     return { state: s, events: [{ type: 'land', side: side, w: s.w, h: s.h }] };
   }
@@ -483,7 +521,7 @@
   // else {item, final (code left on idx), eaten (other cells emptied by merges), points, coins, merged}.
   function preview(state, idx) {
     dim(state);
-    if (state.over || !(idx >= 0 && idx < N) || state.grid[idx] !== EMPTY) return null;
+    if (state.over || !(idx >= 0 && idx < N) || state.grid[idx] !== EMPTY || state.bridges.indexOf(idx) >= 0) return null;
     var s = clone(state), events = [], eaten = [], pts = 0, coins = 0;
     applyItem(s, idx, s.cur, events);
     for (var i = 0; i < N; i++) if (i !== idx && state.grid[i] !== EMPTY && s.grid[i] === EMPTY) eaten.push(i);
@@ -542,6 +580,7 @@
       if (old) upgradeV1(x);
       if (!x.stock || typeof x.stock !== 'object') x.stock = Object.assign({}, START_STOCK);
       for (var sk in START_STOCK) if (typeof x.stock[sk] !== 'number') x.stock[sk] = START_STOCK[sk]; // items added since the save was made
+      if (!Array.isArray(x.bridges)) x.bridges = [];
       if (MAPS.indexOf(x.map) < 0) x.map = 'easy'; // every older game was played on the plain field
       if (typeof x.wild !== 'boolean') x.wild = false; // Wild bears is chosen per game; every older game is a classic one
       if (typeof x.milestone !== 'number') { x.milestone = 0; while (x.score >= milestoneScore(x.milestone)) x.milestone++; }
@@ -567,6 +606,13 @@
     if (MAPS.indexOf(s.map) < 0) return ['bad map'];
     dim(s);
     if (!Array.isArray(s.grid) || s.grid.length !== N) return ['bad grid'];
+    if (!Array.isArray(s.bridges) || s.bridges.length > MAX_BRIDGES) return ['bad bridges'];
+    var seenB = {};
+    for (i = 0; i < s.bridges.length; i++) {
+      var bi = s.bridges[i];
+      if (bi !== (bi | 0) || bi < 0 || bi >= N || seenB[bi] || s.grid[bi] === WATER) return ['bad bridge at ' + bi];
+      seenB[bi] = true;
+    }
     var lr = 0, tb = 0;
     s.land.forEach(function (side, k) {
       if (SIDES.indexOf(side) < 0 || s.land.indexOf(side) !== k) p.push('bad land ' + side);
@@ -622,7 +668,7 @@
     RESTOCK: RESTOCK, MILESTONES: MILESTONES, milestoneScore: milestoneScore, canUndo: canUndo, canHammer: canHammer, migrate: migrate,
     rand: rand, drawItem: drawItem, newGame: newGame, neighbors: neighbors, group: group,
     place: place, swap: swap, undo: undo, validate: validate, wouldMerge: wouldMerge, emptyCount: emptyCount,
-    buy: buy, hammer: hammer, trap: trap, move: move, open: open, buyLand: buyLand, preview: preview, previewMove: previewMove, isOver: isOver,
+    buy: buy, hammer: hammer, trap: trap, move: move, open: open, buyLand: buyLand, buyBridge: buyBridge, bridgeSpots: bridgeSpots, bridgePrice: bridgePrice, canBridge: canBridge, freeCount: freeCount, MAX_BRIDGES: MAX_BRIDGES, BRIDGE_PRICE: BRIDGE_PRICE, preview: preview, previewMove: previewMove, isOver: isOver,
     priceOf: priceOf, isMovable: isMovable, canMove: canMove, isAvailable: isAvailable, unlockedTop: unlockedTop, landPrice: landPrice, canLand: canLand
   };
 });
