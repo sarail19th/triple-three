@@ -50,3 +50,12 @@ Owner's answers for mauling: only 🌱🌿🌳🏕️🛖 can be mauled; one tie
 2 warning turns, maul on turn 3; a mauled 🌱 leaves an escape hole; offered as an extra-difficulty option ("Wild bears"), not in
 every game. Built as the per-game `wild` flag. Breeding (see above) is not built; if it is, it should probably also live under
 Wild bears, since both act on bears waiting in a pocket.
+
+## Bear breeding (built, Wild bears only) and maps (built)
+Owner's rule: breeding needs at least 2 empty tiles in the pen (so a pen is at least 4 tiles with 2 bears): 2 bears + 2 free tiles ->
+2 bears + 1 cub with 1 free tile left. Built with a 10% chance per turn, pens of at most 6 tiles, at most 8 bears.
+Maps built: easy / standard / medium (river) / hard (ponds). Water is the first "dead tile".
+
+Next on the map side (owner's plan): a **bridge** item for the river, and a bridge earns money when people cross it. Water tiles
+are currently walls, so a bridge would be a buildable replacement on a water tile (new code, new shop item, income per turn or per
+crossing animal; the calendar from the bank plan would fit). The bank's "locked / dead tiles" can reuse the water idea.

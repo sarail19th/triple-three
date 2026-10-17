@@ -13,7 +13,7 @@ from playwright.sync_api import sync_playwright
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 DIST = os.path.join(ROOT, 'dist')
-EMOJI = ['', '🌱', '🌿', '🌳', '🏕️', '🛖', '🏠', '🏘️', '🏫', '🏥', '🏬', '💵', '🐻', '🪦', '⛪', '🕌', '💎', '💰', '🦊', '🐻', '🐻']
+EMOJI = ['', '🌱', '🌿', '🌳', '🏕️', '🛖', '🏠', '🏘️', '🏫', '🏥', '🏬', '💵', '🐻', '🪦', '⛪', '🕌', '💎', '💰', '🦊', '🐻', '🐻', '']
 BEAR, TOMB, CHURCH, CRYSTAL, TREASURE, FOX = 12, 13, 14, 16, 17, 18
 LAND_PRICE = [150, 400, 1000, 2500]
 MIN_TURNS = 50   # random turns that must be played
@@ -352,7 +352,7 @@ with sync_playwright() as p:
     page.tap('#newBtn')
     assert page.locator('#newGame').is_visible()
     page.tap('#newCancel'); assert page.locator('#newGame').is_hidden()
-    page.tap('#newBtn'); page.tap('#newWild')
+    page.tap('#newBtn'); page.tap('.opt[data-bears="wild"]'); page.tap('#newStart')
     wild = check_consistent(page, 'new wild game')
     assert wild['wild'] is True and wild['turn'] == 0 and 'wild bears' in page.inner_text('#seed')
     assert page.evaluate("JSON.parse(localStorage.getItem('tt-wild'))") is True, 'the mode pick is remembered'
@@ -372,9 +372,42 @@ with sync_playwright() as p:
     assert page.evaluate("JSON.parse(localStorage.getItem('tt-best-wild'))") == 150, 'wild games keep their own best score'
     assert page.evaluate("JSON.parse(localStorage.getItem('tt-best'))") != 150, 'and leave the classic best alone'
     assert page.evaluate("document.getElementById('seed').textContent").endswith('wild bears')
-    page.tap('#newBtn'); page.tap('#newClassic')
+    page.tap('#newBtn'); page.tap('.opt[data-bears="classic"]'); page.tap('#newStart')
     classic = check_consistent(page, 'new classic game')
     assert classic['wild'] is False and 'wild' not in page.inner_text('#seed')
+
+    # ---- Maps: picked in the New game dialog; water tiles are blue, fixed and unusable
+    page.tap('#newBtn')
+    for m in ['easy', 'standard', 'medium', 'hard']:
+        page.tap(f'.opt[data-map="{m}"]')
+        assert page.get_attribute(f'.opt[data-map="{m}"]', 'aria-pressed') == 'true' and page.inner_text('#mapNote') != ''
+    page.tap('.opt[data-map="standard"]'); page.tap('#newStart')
+    std = check_consistent(page, 'standard map')
+    assert std['map'] == 'standard' and sum(1 for v in std['grid'] if v) == 5 and 21 not in std['grid'] and 'standard map' in page.inner_text('#seed')
+    page.tap('#newBtn'); page.tap('.opt[data-map="hard"]'); page.tap('#newStart')
+    hard = check_consistent(page, 'hard map')
+    assert hard['map'] == 'hard' and 6 <= hard['grid'].count(21) <= 9 and page.locator('#board .cell[data-c="21"]').count() == hard['grid'].count(21)
+    page.tap('#newBtn'); page.tap('.opt[data-map="medium"]'); page.tap('.opt[data-bears="classic"]'); page.tap('#newStart')
+    med = check_consistent(page, 'medium map')
+    assert med['map'] == 'medium' and [i for i, v in enumerate(med['grid']) if v == 21] == [2, 8, 14, 15, 21, 27, 33]
+    assert page.evaluate("JSON.parse(localStorage.getItem('tt-map'))") == 'medium', 'the map pick is remembered'
+    assert 'gradient' in page.evaluate("getComputedStyle(document.querySelector('#board .cell[data-i=\"2\"]')).backgroundImage"), 'water is drawn blue'
+    tap_cell_before = state(page)
+    page.tap('#board .cell[data-i="2"]')   # tapping water does nothing
+    assert state(page)['grid'] == tap_cell_before['grid'] and state(page)['turn'] == 0
+    g = [0] * 36
+    for i in (2, 8, 14, 15, 21, 27, 33): g[i] = 21
+    g[0] = 5
+    load(g, map='medium', coins=100)
+    page.tap('#hammerBtn')
+    page.tap('#board .cell[data-i="8"]')   # the hammer cannot smash water: nothing is selected, nothing changes
+    assert page.locator('#board .cell.target').count() == 0, f"water got a target highlight; note={page.inner_text('#note')}"
+    assert state(page)['grid'] == g, f"grid changed: {[(i, v, g[i]) for i, v in enumerate(state(page)['grid']) if v != g[i]]} turn={state(page)['turn']}"
+    tap_cell(page, 0, True)                # but it still smashes a hut
+    assert check_consistent(page, 'hammer next to water')['grid'][0] == 0
+    page.tap('#newBtn'); page.tap('.opt[data-map="easy"]'); page.tap('.opt[data-bears="classic"]'); page.tap('#newStart')
+    easy = check_consistent(page, 'easy map')
+    assert easy['map'] == 'easy' and easy['grid'] == [0] * 36 and 'map' not in page.inner_text('#seed')
 
     # ---- shop: higher tiers unlock once built; stock runs out -> price doubles (shown on the button)
     load([0] * 36, coins=500)

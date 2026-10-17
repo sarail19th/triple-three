@@ -802,6 +802,153 @@ t('wild bears: classic games never escalate; the trap kills any stage; stages ca
   assert.strictEqual(old.wild, false); assert.deepStrictEqual(TT.validate(old), []);
 });
 
+// ---- maps
+const waterCells = (s) => s.grid.map((v, i) => (v === TT.WATER ? i : -1)).filter((i) => i >= 0);
+const fieldIsOne = (s) => {
+  const free = s.grid.map((v, i) => (v === TT.WATER ? -1 : i)).filter((i) => i >= 0), seen = new Set([free[0]]), stack = [free[0]];
+  while (stack.length) TT.neighbors(stack.pop()).forEach((j) => { if (s.grid[j] !== TT.WATER && !seen.has(j)) { seen.add(j); stack.push(j); } });
+  return seen.size === free.length;
+};
+
+t('maps: easy is the plain empty field (and uses no random numbers, so classic seeds replay as before)', () => {
+  const s = TT.newGame(5);
+  assert.strictEqual(s.map, 'easy'); assert(s.grid.every((v) => v === 0));
+  assert.strictEqual(TT.newGame(5, { map: 'nonsense' }).map, 'easy');
+  const same = TT.newGame(5, { map: 'easy', wild: true });
+  assert.strictEqual(same.rng, s.rng); assert.strictEqual(same.next, s.next);
+});
+
+t('maps: standard scatters a few grass / bush / tree, never a mergeable group, reproducibly per seed', () => {
+  const kinds = new Set(); let differ = false;
+  for (let seed = 1; seed <= 100; seed++) {
+    const s = TT.newGame(seed, { map: 'standard' });
+    const items = s.grid.filter((v) => v !== 0);
+    assert.strictEqual(items.length, TT.STANDARD_ITEMS, 'seed ' + seed);
+    items.forEach((v) => { assert(v >= 1 && v <= 3); kinds.add(v); });
+    assert.deepStrictEqual(TT.validate(s), []);
+    assert.strictEqual(JSON.stringify(s), JSON.stringify(TT.newGame(seed, { map: 'standard' })), 'same seed, same map');
+    if (JSON.stringify(s.grid) !== JSON.stringify(TT.newGame(seed + 1, { map: 'standard' }).grid)) differ = true;
+  }
+  assert.strictEqual(kinds.size, 3, 'all three kinds show up'); assert(differ, 'different seeds give different fields');
+});
+
+t('maps: medium has the same river for every seed, across the field from edge to edge, and nothing else', () => {
+  const a = TT.newGame(1, { map: 'medium' }), b = TT.newGame(999, { map: 'medium' });
+  assert.deepStrictEqual(waterCells(a), TT.MEDIUM_WATER); assert.deepStrictEqual(waterCells(b), TT.MEDIUM_WATER);
+  assert(a.grid.every((v) => v === 0 || v === TT.WATER));
+  assert.deepStrictEqual(TT.validate(a), []);
+  const rows = new Set(TT.MEDIUM_WATER.map((i) => (i / 6) | 0));
+  assert.strictEqual(rows.size, 6, 'water in every row: the river runs from the top edge to the bottom edge');
+  // orthogonally connected river
+  const w = new Set(TT.MEDIUM_WATER), seen = new Set([TT.MEDIUM_WATER[0]]), stack = [TT.MEDIUM_WATER[0]];
+  while (stack.length) TT.neighbors(stack.pop()).forEach((j) => { if (w.has(j) && !seen.has(j)) { seen.add(j); stack.push(j); } });
+  assert.strictEqual(seen.size, w.size);
+});
+
+t('maps: hard has random ponds (6..9 water tiles) that leave the land in one piece, reproducibly per seed', () => {
+  const layouts = new Set();
+  for (let seed = 1; seed <= 150; seed++) {
+    const s = TT.newGame(seed, { map: 'hard' });
+    const n = waterCells(s).length;
+    assert(n >= 4 && n <= 9, 'water tiles ' + n + ' (seed ' + seed + ')');
+    assert(fieldIsOne(s), 'one connected field (seed ' + seed + ')');
+    assert.deepStrictEqual(TT.validate(s), []);
+    assert.deepStrictEqual(waterCells(s), waterCells(TT.newGame(seed, { map: 'hard' })));
+    layouts.add(waterCells(s).join(','));
+  }
+  assert(layouts.size > 100, 'ponds differ from seed to seed');
+});
+
+t('water: nothing can be placed, hammered, moved or trapped there; animals treat it as a wall and never enter it', () => {
+  const s = TT.newGame(3, { map: 'medium' });
+  s.coins = 500;
+  const wi = TT.MEDIUM_WATER[0];
+  assert.strictEqual(TT.place(s, wi), null, 'cannot place on water'); assert.strictEqual(TT.preview(s, wi), null);
+  assert.strictEqual(TT.hammer(s, wi), null, 'the hammer cannot remove water');
+  assert.strictEqual(TT.move(withGridKeep(s, { [I(0, 0)]: 3 }), I(0, 0), wi), null, 'cannot drop onto water');
+  assert.strictEqual(TT.move(withGridKeep(s, { [I(0, 0)]: 3 }), wi, I(0, 1)), null, 'cannot pick water up');
+  assert(!TT.isMovable(TT.WATER));
+  // a bear next to water never steps into it
+  for (let seed = 1; seed <= 60; seed++) {
+    const g = withGridKeep(Object.assign(TT.newGame(seed, { map: 'medium' }), { cur: 2 }), { [I(0, 1)]: TT.BEAR });
+    const r = TT.place(g, I(5, 5));
+    assert.deepStrictEqual(waterCells(r.state), TT.MEDIUM_WATER, 'water never changes');
+  }
+  // a fox never warps onto water either; a bear walled in by water and buildings dies like any trapped bear
+  for (let seed = 1; seed <= 60; seed++) {
+    const base = Object.assign(TT.newGame(seed, { map: 'hard' }), { cur: 2 }), free = base.grid.map((v, i) => (v === 0 ? i : -1)).filter((i) => i >= 0);
+    const g = withGridKeep(base, { [free[3]]: TT.FOX });
+    const r = TT.place(g, free[0]);
+    assert.deepStrictEqual(waterCells(r.state), waterCells(base), 'water never changes (seed ' + seed + ')');
+    const fx = r.state.grid.indexOf(TT.FOX);
+    assert(fx >= 0 && !waterCells(base).includes(fx), 'the fox warped to dry land');
+  }
+  const corner = Object.assign(TT.newGame(2), { map: 'medium' });
+  corner.grid = new Array(36).fill(0); corner.grid[I(0, 0)] = TT.BEAR; corner.grid[I(0, 1)] = TT.WATER; corner.grid[I(1, 0)] = 5; corner.cur = 2;
+  assert.strictEqual(TT.place(corner, I(5, 5)).state.grid[I(0, 0)], TT.TOMB, 'water + building seal the bear in');
+  const fox = Object.assign(TT.newGame(2), { map: 'medium' }); fox.grid = new Array(36).fill(0);
+  fox.grid[I(0, 0)] = TT.FOX; fox.grid[I(0, 1)] = TT.WATER; fox.grid[I(1, 0)] = TT.WATER; fox.cur = 2;
+  assert.strictEqual(TT.place(fox, I(5, 5)).state.grid[I(0, 0)], TT.TOMB, 'a fox cornered by water is trapped too');
+});
+function withGridKeep(base, cells) { const s = JSON.parse(JSON.stringify(base)); for (const k in cells) s.grid[k] = cells[k]; return s; }
+
+t('water: the board is full when every non-water tile is used; land adds plain tiles and keeps the water', () => {
+  const s = TT.newGame(4, { map: 'medium' });
+  s.grid = s.grid.map((v, i) => (v === TT.WATER ? v : ((((i / 6) | 0) + (i % 6)) % 2 ? 5 : 6)));
+  s.grid[I(0, 0)] = 0; s.stock.hammer = 0; s.coins = 0; s.cur = 4;
+  const r = TT.place(s, I(0, 0));
+  assert(r.state.over, 'water does not count as a free tile');
+  assert.deepStrictEqual(TT.validate(r.state), []);
+  const rich = Object.assign(TT.newGame(4, { map: 'medium' }), { coins: 1000 });
+  const l = TT.buyLand(rich, 'top').state;
+  assert.strictEqual(waterCells(l).length, TT.MEDIUM_WATER.length);
+  assert.deepStrictEqual(waterCells(l), TT.MEDIUM_WATER.map((i) => i + 6), 'the river moved down one row with the new top row');
+  assert.deepStrictEqual(TT.validate(l), []);
+});
+
+t('maps: migrate gives old saves the plain field; validate rejects an unknown map', () => {
+  const old = JSON.parse(JSON.stringify(TT.newGame(3))); delete old.map;
+  TT.migrate(old);
+  assert.strictEqual(old.map, 'easy'); assert.deepStrictEqual(TT.validate(old), []);
+  assert(TT.validate(Object.assign({}, old, { map: 'swamp' })).length);
+  assert(TT.validate(Object.assign({}, old, { grid: old.grid.map((v, i) => (i === 3 ? 99 : v)) })).length);
+});
+
+// ---- breeding (Wild bears only): a small pocket with 2+ bears and 2+ empty tiles sometimes grows a cub on one of its empty tiles
+const pen4 = (extra = {}) => Object.assign({ [I(0, 0)]: TT.BEAR, [I(0, 1)]: TT.BEAR, [I(1, 0)]: 5, [I(1, 1)]: 6, [I(0, 4)]: 7, [I(1, 3)]: 8, [I(1, 2)]: 9, [I(0, 3)]: 0 }, extra);
+// pen: (0,0) (0,1) (0,2) (0,3) in a row along the top edge, walled below by buildings and at (0,4)
+
+t('breeding: 2 bears + 2 empty tiles in a pen sometimes make a cub, and always leave a free tile', () => {
+  let cubs = 0; const runs = 300;
+  for (let seed = 1; seed <= runs; seed++) {
+    const r = TT.place(withGrid(pen4(), { wild: true, cur: 2, rng: seed }), I(5, 5));
+    const bears = r.state.grid.filter((v) => TT.isBear(v)).length;
+    assert(bears === 2 || bears === 3, 'bears ' + bears);
+    if (bears === 3) {
+      cubs++;
+      const e = r.events.find((x) => x.type === 'cub');
+      assert(e && e.at <= I(0, 3), 'the cub appears on a tile of the pen (the first four tiles)');
+      assert.strictEqual(r.state.grid[e.at], TT.BEAR);
+    }
+    assert(r.state.grid.slice(0, 4).some((v) => v === 0), 'the pen always keeps a free tile (seed ' + seed + ')');
+    assert(!r.events.some((x) => x.type === 'trapped'), 'a cub never seals the pen');
+    assert.deepStrictEqual(TT.validate(r.state), []);
+  }
+  assert(cubs > runs * 0.04 && cubs < runs * 0.2, 'about ' + TT.BREED_CHANCE * 100 + '% of turns: ' + cubs + '/' + runs);
+});
+
+t('breeding: not in classic games, not with 1 bear, not with only 1 empty tile, not in big pockets, not past the bear cap', () => {
+  const none = (s, why) => { for (let seed = 1; seed <= 150; seed++) { s.rng = seed; const r = TT.place(JSON.parse(JSON.stringify(s)), I(5, 5)); assert(!r.events.some((e) => e.type === 'cub'), why + ' (seed ' + seed + ')'); } };
+  none(withGrid(pen4(), { wild: false, cur: 2 }), 'classic');
+  none(withGrid(pen4({ [I(0, 1)]: 0 }), { wild: true, cur: 2 }), 'one bear');
+  none(withGrid(pen4({ [I(0, 3)]: 7 }), { wild: true, cur: 2 }), 'one free tile only');
+  const big = withGrid({ [I(2, 2)]: TT.BEAR, [I(2, 3)]: TT.BEAR }, { wild: true, cur: 2 });
+  none(big, 'open board (a pocket far bigger than ' + TT.BREED_MAX_POCKET + ' tiles)');
+  const crowded = withGrid(pen4(), { wild: true, cur: 2 });
+  let k = 0; for (let i = 0; i < 36 && k < TT.BREED_MAX_BEARS - 2; i++) if (crowded.grid[i] === 0 && i > 11 && i !== I(5, 5)) { crowded.grid[i] = TT.BEAR; k++; }
+  none(crowded, 'bear cap');
+});
+
 t('swap stores the item, then exchanges', () => {
   let s = TT.newGame(3);
   const c0 = s.cur, n0 = s.next;
@@ -853,9 +1000,9 @@ t('wouldMerge agrees with place', () => {
 });
 
 t('fuzz: 400 random games keep state valid and always terminate', () => {
-  let maxTurns = 0, merges = 0, trapped = 0, churches = 0, hammers = 0, lands = 0, foxMoves = 0, maxTier = 0, moves = 0, growls = 0, mauls = 0;
+  let maxTurns = 0, merges = 0, trapped = 0, churches = 0, hammers = 0, lands = 0, foxMoves = 0, maxTier = 0, moves = 0, growls = 0, mauls = 0, cubs = 0;
   for (let seed = 1; seed <= 400; seed++) {
-    let s = TT.newGame(seed, { wild: seed % 2 === 0 });
+    let s = TT.newGame(seed, { wild: seed % 2 === 0, map: TT.MAPS[((seed / 2) | 0) % 4] });
     const pick = TT.newGame(seed * 7919 + 1); // independent chooser rng
     let guard = 0;
     while (!s.over) {
@@ -866,7 +1013,7 @@ t('fuzz: 400 random games keep state valid and always terminate', () => {
         if (b) { s = b; assert.deepStrictEqual(TT.validate(s), []); continue; }
       }
       const empties = [], occupied = [];
-      s.grid.forEach((v, i) => { (v === 0 ? empties : occupied).push(i); });
+      s.grid.forEach((v, i) => { if (v === 0) empties.push(i); else if (v !== TT.WATER) occupied.push(i); });
       if (TT.rand(pick) < 0.02 && empties.length && occupied.length) { // the mover, now and then
         const mv = TT.move(s, occupied[Math.floor(TT.rand(pick) * occupied.length)], empties[Math.floor(TT.rand(pick) * empties.length)]);
         if (mv) { moves++; s = mv.state; assert.deepStrictEqual(TT.validate(s), []); continue; }
@@ -891,7 +1038,7 @@ t('fuzz: 400 random games keep state valid and always terminate', () => {
       const prob = TT.validate(r.state);
       assert.deepStrictEqual(prob, [], `seed ${seed} turn ${s.turn}: ${prob.join(', ')}`);
       assert(r.state.score >= s.score);
-      r.events.forEach((e) => { if (e.type === 'merge') { merges++; if (e.to === TT.CHURCH) churches++; } if (e.type === 'trapped') trapped++; if (e.type === 'fox') foxMoves++; if (e.type === 'growl') growls++; if (e.type === 'maul') mauls++; if (e.type === 'merge') maxTier = Math.max(maxTier, e.to); });
+      r.events.forEach((e) => { if (e.type === 'merge') { merges++; if (e.to === TT.CHURCH) churches++; } if (e.type === 'trapped') trapped++; if (e.type === 'fox') foxMoves++; if (e.type === 'growl') growls++; if (e.type === 'maul') mauls++; if (e.type === 'cub') cubs++; if (e.type === 'merge') maxTier = Math.max(maxTier, e.to); });
       if (TT.rand(pick) < 0.05) {
         const u = TT.undo(r.state);
         assert.strictEqual(!!u, TT.canUndo(r.state));
@@ -902,7 +1049,7 @@ t('fuzz: 400 random games keep state valid and always terminate', () => {
     maxTurns = Math.max(maxTurns, s.turn);
   }
   assert(merges > 0 && trapped > 0 && foxMoves > 0, 'fuzz exercised merges, trapped bears and fox warps');
-  console.log(`  fuzz: max ${maxTurns} turns, ${merges} merges, ${trapped} trapped bears, ${churches} churches, ${hammers} hammers, ${lands} land purchases, ${moves} moves, ${foxMoves} fox warps, ${growls} growls, ${mauls} mauls, best tier ${maxTier}`);
+  console.log(`  fuzz: max ${maxTurns} turns, ${merges} merges, ${trapped} trapped bears, ${churches} churches, ${hammers} hammers, ${lands} land purchases, ${moves} moves, ${foxMoves} fox warps, ${growls} growls, ${mauls} mauls, ${cubs} cubs, best tier ${maxTier}`);
 });
 
 console.log(`OK: ${n} logic tests passed`);

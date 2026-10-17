@@ -21,12 +21,14 @@
   function randomSeed() { return ((Math.random() * 4294967295) >>> 0) || 1; }
   function fmt(n) { return n >= 10000 ? Math.round(n / 1000) + 'k' : n >= 1000 ? (Math.round(n / 100) / 10) + 'k' : String(n); }
 
-  // best scores are kept per mode: Wild bears is harder, so it gets its own board
-  function bestKey() { return state && state.wild ? 'tt-best-wild' : 'tt-best'; }
+  // best scores are kept per map and bear mode: harder games get their own board (easy + classic keeps the original key)
+  function bestKey() { return (state && state.map && state.map !== 'easy' ? 'tt-best-' + state.map : 'tt-best') + (state && state.wild ? '-wild' : ''); }
   function wildPref() { return store.get('tt-wild', false) === true; } // the mode picked last in the New game dialog
-  function startNew(seed, wild) {
+  function mapPref() { var m = store.get('tt-map', 'easy'); return TT.MAPS.indexOf(m) >= 0 ? m : 'easy'; }
+  function startNew(seed, wild, map) {
     if (wild === undefined) wild = wildPref();
-    state = TT.newGame(seed || randomSeed(), { wild: !!wild });
+    if (map === undefined) map = mapPref();
+    state = TT.newGame(seed || randomSeed(), { wild: !!wild, map: map });
     sel = -1; hover = -1; mode = null; moveFrom = -1;
     $('overlay').classList.add('hidden');
     save();
@@ -81,7 +83,7 @@
   function targetOk(idx) {
     var v = state.grid[idx];
     if (mode === 'move') return TT.isMovable(v) || (v === 0 && moveFrom >= 0); // pick something up, then an empty tile to drop it on
-    return mode === 'hammer' ? v !== 0 : mode === 'trap' ? isAnimal(v) : (v === 0 || isCollectible(v));
+    return mode === 'hammer' ? v !== 0 && v !== TT.WATER : mode === 'trap' ? isAnimal(v) : (v === 0 || isCollectible(v));
   }
   function doAction(idx) {
     return mode === 'hammer' ? TT.hammer(state, idx) : mode === 'trap' ? TT.trap(state, idx) : TT.place(state, idx);
@@ -181,7 +183,7 @@
     document.querySelectorAll('.tool[data-tool]').forEach(function (b) {
       var t = b.dataset.tool;
       if (t === 'hammer') {
-        b.disabled = !TT.canHammer(state) || state.over || TT.emptyCount(g) === g.length;
+        b.disabled = !TT.canHammer(state) || state.over || !g.some(function (v) { return v !== 0 && v !== TT.WATER; });
         b.setAttribute('aria-pressed', mode === 'hammer');
       } else if (t === 'move') {
         b.disabled = state.over || !TT.canMove(state) || !g.some(TT.isMovable) || TT.emptyCount(g) === 0;
@@ -209,7 +211,7 @@
       (TT.unlockedTop(state) > 3 ? ' +1 each higher tier' : '') + ' +1🪤 +1🔨';
     $('undoBtn').textContent = '↶ Undo 🪙' + TT.UNDO_COST;
     $('turn').textContent = 'Turn ' + state.turn;
-    $('seed').textContent = 'seed ' + state.seed + (state.wild ? ' · wild bears' : '');
+    $('seed').textContent = 'seed ' + state.seed + (state.map !== 'easy' ? ' · ' + state.map + ' map' : '') + (state.wild ? ' · wild bears' : '');
     animate(events);
     updatePreview();
     syncCritters();
@@ -249,7 +251,7 @@
         } else note = '🚚 Tap an empty tile to drop the ' + TT.NAME[state.grid[moveFrom]] + ' (tap it again to put it down)';
       }
     } else if (mode === 'hammer') {
-      if (pi >= 0 && state.grid[pi] !== 0) {
+      if (pi >= 0 && state.grid[pi] !== 0 && state.grid[pi] !== TT.WATER) {
         cells[pi].classList.add('target');
         note = (lastPointer !== 'mouse' && sel === pi ? 'Tap again to smash ' : 'Smash ') + TT.NAME[state.grid[pi]] + ' (-' + TT.PRICE.hammer + ' coins)';
         hot = sel === pi;
@@ -316,6 +318,9 @@
         cells[ev.to].classList.add('warp');
       } else if (ev.type === 'trapped') {
         cells[ev.at].classList.add('shake');
+      } else if (ev.type === 'cub') { // a bear cub is born in the pen
+        cells[ev.at].classList.add('drop');
+        floatAt(ev.at, '🍼');
       } else if (ev.type === 'growl') { // the boxed-in bear gets angrier
         cells[ev.at].classList.add('shake');
         floatAt(ev.at, ev.level === 1 ? '💢' : '💢💢');
@@ -435,18 +440,31 @@
   $('hintBtn').addEventListener('click', function () {
     hints = !hints; this.setAttribute('aria-pressed', hints); render([]);
   });
-  // New game: pick the mode in a small dialog (the last pick is remembered); Play again repeats the mode just played
+  // New game: pick the map and the bear mode in a small dialog (the last picks are remembered); Play again repeats both
+  var dlg = { map: 'easy', wild: false };
+  function showDialog() {
+    document.querySelectorAll('#newGame .opt[data-map]').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.map === dlg.map); });
+    document.querySelectorAll('#newGame .opt[data-bears]').forEach(function (b) { b.setAttribute('aria-pressed', (b.dataset.bears === 'wild') === dlg.wild); });
+    $('mapNote').textContent = MAP_NOTES[dlg.map];
+    $('bearNote').textContent = dlg.wild ? 'Boxed-in bears growl, get angry, then maul a 🌱🌿🌳🏕️🛖 next to them (one tier down). Bears breed in small pens. Own best scores.' : 'Bears wander and get trapped into tombstones.';
+  }
+  var MAP_NOTES = { easy: 'A plain grass field.', standard: 'A plain field with a few grass, bushes and trees already growing.', medium: 'A river runs across the field and splits it in two.', hard: 'Random ponds eat into the field (different every game).' };
   function openNewGame() {
-    $('newClassic').classList.toggle('primary', !wildPref()); $('newWild').classList.toggle('primary', wildPref());
+    dlg.map = mapPref(); dlg.wild = wildPref();
     $('newNote').textContent = state.over || state.turn === 0 ? '' : 'Your current game will be replaced.';
+    showDialog();
     $('newGame').classList.remove('hidden');
   }
-  function pickMode(wild) { store.set('tt-wild', wild); $('newGame').classList.add('hidden'); startNew(0, wild); }
+  document.querySelectorAll('#newGame .opt[data-map]').forEach(function (b) { b.addEventListener('click', function () { dlg.map = b.dataset.map; showDialog(); }); });
+  document.querySelectorAll('#newGame .opt[data-bears]').forEach(function (b) { b.addEventListener('click', function () { dlg.wild = b.dataset.bears === 'wild'; showDialog(); }); });
+  $('newStart').addEventListener('click', function () {
+    store.set('tt-map', dlg.map); store.set('tt-wild', dlg.wild);
+    $('newGame').classList.add('hidden');
+    startNew(0, dlg.wild, dlg.map);
+  });
   $('newBtn').addEventListener('click', openNewGame);
-  $('newClassic').addEventListener('click', function () { pickMode(false); });
-  $('newWild').addEventListener('click', function () { pickMode(true); });
   $('newCancel').addEventListener('click', function () { $('newGame').classList.add('hidden'); });
-  $('againBtn').addEventListener('click', function () { startNew(0, state.wild); });
+  $('againBtn').addEventListener('click', function () { startNew(0, state.wild, state.map); });
   // item guide: built from the logic tables so it can never drift from the real merge chains
   function chip(code, label) {
     return '<div class="chip"><span class="ce">' + TT.EMOJI[code] + '</span><small>' + (label || TT.NAME[code]) + '</small></div>';
@@ -466,7 +484,7 @@
     '<p class="gnote">💵 Cash is collectible: tap it for +' + TT.CASH_COINS + ' coins. 🐇🐤 hop around the homes (camp to village).</p>' +
     '<h3>Bears</h3><div class="chain">' + chip(TT.BEAR, 'trap it') + '<span class="arrow">&rarr;</span>' +
     chain(TT.TOMB, null, 'treasure: tap to open, +' + TT.TREASURE_COINS + ' coins') + '</div>' +
-    '<p class="gnote">👻🐈‍⬛ haunt the tombstones and churches. <b>Wild bears</b> mode: a bear that cannot step but is not sealed in gets angry (💢, then 💢💢) and on the third turn mauls a 🌱🌿🌳🏕️🛖 next to it, one tier down (a 🌱 is destroyed), then starts over.</p>' +
+    '<p class="gnote">👻🐈‍⬛ haunt the tombstones and churches. <b>Wild bears</b> mode: a bear that cannot step but is not sealed in gets angry (💢, then 💢💢) and on the third turn mauls a 🌱🌿🌳🏕️🛖 next to it, one tier down (a 🌱 is destroyed), then starts over. In a small pen (4 to 6 tiles) with 2 bears and 2 free tiles, a cub is sometimes born (🍼). Blue tiles are <b>water</b>: nothing can be placed, merged, moved or smashed there, and animals cannot cross it.</p>' +
     '<h3>Special</h3><div class="chain">' + chip(TT.CRYSTAL, 'wildcard') + chip(TT.FOX, 'warps, walls trap it') + '</div>' +
     '<p class="gnote">💎 stands in for any tier, including 🏬 (making 💵 cash) and 🕌 (making a 💰 treasure). Three or more 💎 touching each other merge into a 💰 treasure. 🚚 moves one item to an empty tile for coins.</p>' +
     '<p class="gnote">Three or more connected items of the same kind merge into the next one. Bigger groups pay more points and coins.</p>';
