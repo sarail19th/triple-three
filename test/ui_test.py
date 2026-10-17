@@ -13,7 +13,9 @@ from playwright.sync_api import sync_playwright
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 DIST = os.path.join(ROOT, 'dist')
-EMOJI = ['', '🌱', '🌿', '🌳', '🛖', '🏠', '🏛️', '🏰', '🏯', '🐻', '🪦', '⛪', '🕌', '💎', '💰']
+EMOJI = ['', '🌱', '🌿', '🌳', '🏕️', '🛖', '🏠', '🏘️', '🏫', '🏥', '🏬', '💵', '🐻', '🪦', '⛪', '🕌', '💎', '💰', '🦊']
+BEAR, TOMB, CHURCH, CRYSTAL, TREASURE, FOX = 12, 13, 14, 16, 17, 18
+LAND_PRICE = [150, 400, 1000, 2500]
 MIN_TURNS = 50   # random turns that must be played
 MAX_TURNS = 600  # safety cap: a full board must be reached long before this
 
@@ -56,15 +58,18 @@ def check_consistent(page, where):
         hold: document.getElementById('holdItem').textContent,
         coins: document.getElementById('coins').textContent,
         undoDisabled: document.getElementById('undoBtn').disabled })""")
-    assert len(dom['cells']) == 36, f'{where}: board must have 36 cells'
+    assert len(dom['cells']) == st['w'] * st['h'] == len(st['grid']), f'{where}: board must have w*h cells'
     assert dom['cells'] == [EMOJI[v] for v in st['grid']], f'{where}: DOM board differs from state'
     assert dom['score'] == str(st['score']), f'{where}: score text'
     assert dom['coins'] == str(st['coins']), f'{where}: coins text'
     assert dom['cur'] == EMOJI[st['cur']] and dom['next'] == EMOJI[st['next']], f'{where}: queue display'
     assert dom['hold'] == (EMOJI[st['hold']] if st['hold'] else '·'), f'{where}: hold display'
     assert dom['undoDisabled'] == (st['undo'] is None or st['undo']['coins'] < 5), f'{where}: undo button state'
-    for tool in ['1', '2', '3', '13', 'trap', 'hammer']:
-        assert page.inner_text(f'.tool[data-tool="{tool}"] .tb') == f"×{st['stock'][tool]}", f'{where}: stock badge {tool}'
+    tools = page.evaluate("[...document.querySelectorAll('.tool[data-tool]')].map(b => b.dataset.tool)")
+    assert tools[:3] == ['1', '2', '3'] and tools[-3:] == ['16', 'trap', 'hammer'], f'{where}: shop items {tools}'
+    assert len(tools) == max(3, st['top']) + 3, f'{where}: one button per unlocked tier + crystal + trap + hammer, got {tools}'
+    for tool in tools:
+        assert page.inner_text(f'.tool[data-tool="{tool}"] .tb') == f"×{max(0, st['stock'][tool])}", f'{where}: stock badge {tool}'
     return st
 
 
@@ -81,7 +86,7 @@ def tap_cell(page, idx, preview_on):
 
 
 with sync_playwright() as p:
-    browser = p.chromium.launch()
+    browser = p.chromium.launch(**({'executable_path': os.environ['TT_CHROMIUM']} if os.environ.get('TT_CHROMIUM') else {}))
     ctx = browser.new_context(viewport={'width': 412, 'height': 860}, device_scale_factor=2, has_touch=True, is_mobile=True)
     page = ctx.new_page()
     errors = []
@@ -120,7 +125,7 @@ with sync_playwright() as p:
     page.screenshot(path=os.path.join(args.shots, '1_start.png'))
 
     # ---- play random turns until game over
-    turns = swaps = undos = merges = pops = buys = hammers = 0
+    turns = swaps = undos = merges = pops = buys = hammers = lands = 0
     preview_on = True
     assert page.get_attribute('#previewBtn', 'aria-pressed') == 'true'
     prev = st
@@ -147,18 +152,29 @@ with sync_playwright() as p:
             assert after['undo'] is None and page.locator('#undoBtn').is_disabled(), 'single-level undo'
             continue
         if roll < 0.20:  # shop: buy grass / bush / tree if enabled
-            tool = rng.choice(['1', '2', '3', '13'])
+            tool = rng.choice([t for t in page.evaluate("[...document.querySelectorAll('.tool[data-tool]')].map(b => b.dataset.tool)") if t not in ('trap', 'hammer')])
             btn = page.locator(f'.tool[data-tool="{tool}"]')
+            price = page.evaluate('([s, t]) => TT.priceOf(s, +t)', [st, tool])
             if btn.is_enabled():
                 btn.tap(); buys += 1
                 after = check_consistent(page, f'buy@{turns}')
                 assert after['cur'] == int(tool) and after['next'] == st['cur'] and after['turn'] == st['turn'], 'buy replaces current, free'
-                assert after['coins'] < st['coins'] and after['stock'][tool] == st['stock'][tool] - 1, 'buying costs coins and stock'
+                assert after['coins'] == st['coins'] - price and after['stock'][tool] == st['stock'][tool] - 1, 'buying costs the shown price and one stock'
             else:
-                assert st['coins'] < {'1': 6, '2': 15, '3': 35, '13': 50}[tool] or st['stock'][tool] == 0 or st['cur'] == int(tool) or 0 not in st['grid'], 'tool disabled only when unaffordable/sold out/useless'
+                locked = tool == '16' and st['milestone'] == 0
+                assert st['coins'] < price or locked or st['cur'] == int(tool) or 0 not in st['grid'], 'tool disabled only when unaffordable/locked/useless'
             continue
         empties = [i for i, v in enumerate(st['grid']) if v == 0]
         hammer_btn = page.locator('#hammerBtn')
+        if not empties and hammer_btn.is_disabled():  # full board, no hammer: buying land is the only way out
+            side = page.evaluate("[...document.querySelectorAll('.land')].filter(b => !b.disabled).map(b => b.dataset.land)")
+            assert side, 'full board but not over means the hammer or land must be usable'
+            page.tap(f'.land[data-land="{side[0]}"]')
+            after = check_consistent(page, f'land@{turns}')
+            assert after['coins'] == st['coins'] - LAND_PRICE[len(st['land'])] and after['turn'] == st['turn'] and len(after['land']) == len(st['land']) + 1, 'land costs coins, free action'
+            assert 0 in after['grid'], 'land adds empty tiles'
+            lands += 1
+            continue
         if not empties or (roll < 0.26 and hammer_btn.is_enabled()):  # hammer (forced when the board is full but affordable)
             assert hammer_btn.is_enabled(), 'full board but not over means the hammer must be usable'
             occ = [i for i, v in enumerate(st['grid']) if v != 0]
@@ -190,6 +206,7 @@ with sync_playwright() as p:
 
     final = check_consistent(page, 'final')
     assert final['over'] and 0 not in final['grid'] and (final['coins'] < 20 or final['stock']['hammer'] == 0), 'game over means a full board and no usable hammer'
+    assert len(final['land']) == 4 or final['coins'] < LAND_PRICE[len(final['land'])], 'game over also means no land left to buy'
     assert turns >= MIN_TURNS, f'only {turns} random turns before game over (want >= {MIN_TURNS})'
     assert page.locator('#overlay').is_visible(), 'game-over overlay'
     assert str(final['score']) in page.inner_text('#overText')
@@ -214,7 +231,7 @@ with sync_playwright() as p:
     assert resumed['grid'] == mid['grid'] and resumed['turn'] == mid['turn'] and resumed['rng'] == mid['rng'], 'saved game resumes'
     # ---- mouse: hover previews, ONE click places (touch needs preview + confirm, covered above)
     def load(grid, **kw):
-        s = {'grid': grid, 'cur': 1, 'next': 2, 'hold': 0, 'score': 0, 'coins': 30, 'turn': 3, 'over': False, 'rng': 77, 'seed': 77, 'undo': None}
+        s = {'ver': 2, 'w': 6, 'h': 6, 'land': [], 'top': 3, 'grid': grid, 'cur': 1, 'next': 2, 'hold': 0, 'score': 0, 'coins': 30, 'turn': 3, 'over': False, 'rng': 77, 'seed': 77, 'undo': None}
         s.update(kw)
         page.evaluate('s => localStorage.setItem("tt-save", JSON.stringify(s))', s)
         page.goto(URL + '#')
@@ -234,7 +251,7 @@ with sync_playwright() as p:
 
     # ---- bear trap: kills a bear on the spot into a tombstone; mouse = one click, touch = preview + confirm
     g = [0] * 36
-    g[14] = 9; g[8] = 10; g[9] = 10
+    g[14] = BEAR; g[8] = TOMB; g[9] = TOMB
     load(g)
     assert page.locator('#trapBtn').is_enabled()
     page.tap('#trapBtn')
@@ -243,28 +260,110 @@ with sync_playwright() as p:
     assert state(page)['grid'] == g
     tap_cell(page, 14, True)
     after = check_consistent(page, 'trap')
-    assert after['grid'][14] == 11 and after['grid'][8] == 0 and after['coins'] == 30 - 12 + 20 and after['turn'] == 3, 'trapped bear becomes a tombstone (here completing a church), free action'
+    assert after['grid'][14] == CHURCH and after['grid'][8] == 0 and after['coins'] == 30 - 12 + 20 and after['turn'] == 3, 'trapped bear becomes a tombstone (here completing a church), free action'
     assert page.get_attribute('#trapBtn', 'aria-pressed') == 'false' and page.locator('#trapBtn').is_disabled(), 'no bear left'
     load(g)
     page.tap('#trapBtn')
     page.hover('#board .cell[data-i="14"]')
     page.click('#board .cell[data-i="14"]')
     after = check_consistent(page, 'trap by mouse')
-    assert after['grid'][14] == 11 and after['turn'] == 3
+    assert after['grid'][14] == CHURCH and after['turn'] == 3
 
     # ---- treasure: one tap opens it for coins (no confirmation), free action
     g = [0] * 36
-    g[14] = 14
+    g[14] = TREASURE
     load(g, coins=5)
     page.tap('#board .cell[data-i="14"]')
     after = check_consistent(page, 'treasure')
     assert after['grid'][14] == 0 and after['coins'] == 5 + 250 and after['turn'] == 3, 'treasure opens for coins'
+    g = [0] * 36
+    g[14] = 11  # cash, the last building tier
+    load(g, coins=5)
+    page.tap('#board .cell[data-i="14"]')
+    after = check_consistent(page, 'cash')
+    assert after['grid'][14] == 0 and after['coins'] == 5 + 5000 and after['turn'] == 3, 'cash is collected for coins'
+
+    # ---- fox: shows up in the trap flow like a bear (trap button enabled, tap kills it into a tombstone)
+    g = [0] * 36
+    g[20] = FOX
+    load(g)
+    assert page.locator('#trapBtn').is_enabled(), 'trap works on a fox'
+    page.tap('#trapBtn')
+    tap_cell(page, 20, True)
+    after = check_consistent(page, 'trap fox')
+    assert after['grid'][20] == TOMB and after['turn'] == 3 and after['coins'] == 30 - 12, 'trapped fox becomes a tombstone'
+
+    # ---- shop: higher tiers unlock once built; stock runs out -> price doubles (shown on the button)
+    load([0] * 36, coins=500)
+    assert page.locator('.tool[data-tool="4"]').count() == 0, 'camp is locked at the start'
+    load([0] * 36, coins=500, top=6)
+    for t in ['4', '5', '6']:
+        assert page.locator(f'.tool[data-tool="{t}"]').count() == 1, f'tier {t} unlocked'
+    assert page.locator('.tool[data-tool="7"]').count() == 0
+    load([0] * 36, coins=500, cur=2, next=2, stock={'1': 0, '2': 1, '3': 1, '4': 1, '5': 1, '6': 1, '7': 1, '8': 1, '9': 1, '10': 1, '16': 0, 'hammer': 2, 'trap': 2})
+    assert page.inner_text('.tool[data-tool="1"] .tp') == '🪙12', 'sold-out grass costs double (6 -> 12)'
+    page.tap('.tool[data-tool="1"]')
+    after = check_consistent(page, 'surcharge buy')
+    assert after['coins'] == 500 - 12 and after['stock']['1'] == -1 and after['cur'] == 1
+    assert page.inner_text('.tool[data-tool="1"] .tp') == '🪙24' or page.locator('.tool[data-tool="1"]').is_disabled(), 'price keeps doubling'
+
+    # ---- land: a new row/column on the chosen side, each side once, board and DOM grow
+    g = [0] * 36
+    g[0] = 1
+    load(g, coins=5000)
+    page.tap('.land[data-land="top"]')
+    after = check_consistent(page, 'land top')
+    assert after['h'] == 7 and after['w'] == 6 and after['grid'][6] == 1 and after['coins'] == 5000 - 150 and after['turn'] == 3
+    assert page.locator('.land[data-land="top"]').is_disabled(), 'each side only once'
+    assert page.inner_text('#landNote').startswith('Land 1/4')
+    page.tap('.land[data-land="left"]')
+    after = check_consistent(page, 'land left')
+    assert after['w'] == 7 and after['h'] == 7 and after['grid'][7 + 1] == 1
+    box = page.evaluate("() => { const b = document.getElementById('board').getBoundingClientRect(), w = document.getElementById('boardWrap').getBoundingClientRect(); return { bw: b.width, ww: w.width, bh: b.height } }")
+    assert abs(box['bw'] - box['ww'] * 7 / 7) < 2 and box['bw'] <= box['ww'] + 1, f'7x7 board fits its square wrap: {box}'
+    page.tap('.land[data-land="right"]'); page.tap('.land[data-land="bottom"]')
+    after = check_consistent(page, 'land all')
+    assert after['w'] == 8 and after['h'] == 8 and len(after['land']) == 4 and page.locator('#board .cell').count() == 64
+    assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), 'no horizontal scroll with the biggest board'
+    # play on the biggest board: a merge across the new columns, via the DOM
+    page.evaluate('s => localStorage.setItem("tt-save", JSON.stringify(s))', dict(after, grid=[1 if i in (8 * 3 + 5, 8 * 3 + 7) else 0 for i in range(64)], cur=1, coins=0))
+    page.reload(); page.wait_for_selector('#board .cell')
+    tap_cell(page, 8 * 3 + 6, True)
+    after = check_consistent(page, 'merge on 8x8')
+    assert after['grid'][8 * 3 + 6] == 2 and after['turn'] == 4, 'merge works on the grown board'
+    page.screenshot(path=os.path.join(args.shots, '5_land.png'))
+
+    # ---- an old (version 1) save is upgraded, not thrown away: codes remap and the four old grand castles merge
+    old_grid = [0] * 36
+    for i in (14, 15, 16, 21): old_grid[i] = 8        # grand castles (final tier before the update)
+    old_grid[0] = 9; old_grid[1] = 10; old_grid[2] = 14  # bear, tombstone, treasure in the old numbering
+    page.evaluate('s => localStorage.setItem("tt-save", JSON.stringify(s))', {'grid': old_grid, 'cur': 9, 'next': 4, 'hold': 0, 'score': 5000, 'coins': 77, 'stock': {'1': 1, '2': 1, '3': 1, '13': 1, 'hammer': 1, 'trap': 1}, 'milestone': 3, 'turn': 40, 'over': False, 'rng': 9, 'seed': 9, 'undo': None})
+    page.reload(); page.wait_for_selector('#board .cell')
+    up = check_consistent(page, 'v1 save')
+    assert up['ver'] == 2 and up['turn'] == 40 and up['cur'] == BEAR and up['next'] == 5, 'old items renumbered'
+    assert up['grid'][0] == BEAR and up['grid'][1] == TOMB and up['grid'][2] == TREASURE
+    assert up['grid'].count(9) == 0 and up['grid'].count(10) == 1, 'grand castles merged into one mall'
+
+    # ---- ambient critters wander around homes and graves, and never intercept a tap
+    g = [0] * 36
+    g[7] = 5; g[8] = 6; g[13] = 6; g[14] = 5  # huts and houses (alternating, so nothing merges): residential
+    g[21] = TOMB; g[22] = CHURCH; g[27] = 15; g[28] = TOMB  # graveyard: tombstones, a church and a cathedral (no 3 equal neighbours)
+    load(g)
+    page.wait_for_timeout(300)
+    crit = page.evaluate('window.ttDebug.critters()')
+    assert set(crit) == {'🐇', '🐤', '👻', '🐈\u200d⬛'}, f'critters: {crit}'
+    assert page.locator('#critters .crit').count() == len(crit) and page.locator('#board .cell').count() == 36
+    tap_cell(page, 0, True)
+    assert state(page)['turn'] == 4, 'critters never block a tap'
+    load([0] * 36)
+    assert page.evaluate('window.ttDebug.critters()') == [], 'no homes or graves, no critters'
+
 
     # ---- item guide lists both merge chains
     page.tap('#guideLink')
     assert page.locator('#guide').is_visible()
     guide = page.inner_text('#guideBody')
-    for e in ['🌱', '🏯', '🐻', '🪦', '⛪', '🕌', '💰', '💎']:
+    for e in ['🌱', '🏕️', '🏘️', '🏫', '🏥', '🏬', '💵', '🐻', '🪦', '⛪', '🕌', '💰', '💎', '🦊']:
         assert e in guide, f'guide misses {e}'
     page.screenshot(path=os.path.join(args.shots, '4_guide.png'))
     page.tap('#guideClose')
@@ -280,5 +379,5 @@ with sync_playwright() as p:
     browser.close()
 
 print(f'OK: random game reached game over after {turns} turns (+{swaps} swaps, {undos} undos, {merges} scoring turns, '
-      f'{pops} with pop animation, {buys} purchases, {hammers} hammers), final score {final["score"]}')
+      f'{pops} with pop animation, {buys} purchases, {hammers} hammers, {lands} land), final score {final["score"]}')
 server.shutdown()

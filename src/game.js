@@ -7,17 +7,19 @@
     set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
   };
 
-  var boardEl = $('board'), fxEl = $('fx');
+  var boardEl = $('board'), fxEl = $('fx'), wrapEl = $('boardWrap'), shopEl = $('shop'), critEl = $('critters');
   var state, best = store.get('tt-best', 0), hints = false;
   var previewOn = store.get('tt-preview', true) !== false;
   var sel = -1, hover = -1, mode = null, lastPointer = 'touch'; // UI-only: tile awaiting confirmation, mouse hover, armed tool ('hammer'|'trap'), last input type
-  var cells = [];
+  var cells = [], bw = 0, bh = 0, shopKey = '';
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   function seedFromHash() {
     var m = /seed=(\d+)/.exec(location.hash);
     return m ? (parseInt(m[1], 10) >>> 0) || 1 : 0;
   }
   function randomSeed() { return ((Math.random() * 4294967295) >>> 0) || 1; }
+  function fmt(n) { return n >= 10000 ? Math.round(n / 1000) + 'k' : n >= 1000 ? (Math.round(n / 100) / 10) + 'k' : String(n); }
 
   function startNew(seed) {
     state = TT.newGame(seed || randomSeed());
@@ -30,18 +32,26 @@
 
   function loadSaved() {
     var s = store.get('tt-save', null);
-    try { if (s) TT.migrate(s); } catch (e) { return null; } // saves from before coins / stock existed
+    try { if (s) TT.migrate(s); } catch (e) { return null; } // saves from before coins / stock / land / the new building chain
     try { if (s && TT.validate(s).length === 0 && typeof s.rng === 'number') return s; } catch (e) {}
     return null;
   }
 
-  // ---- board construction
-  for (var i = 0; i < TT.N; i++) {
-    var el = document.createElement('div');
-    el.className = 'cell empty' + (((i % TT.W) + ((i / TT.W) | 0)) % 2 ? ' alt' : '');
-    el.dataset.i = i; el.dataset.c = 0; el.setAttribute('role', 'gridcell');
-    var e = document.createElement('span'); e.className = 'e'; el.appendChild(e);
-    boardEl.appendChild(el); cells.push(el);
+  // ---- board construction (rebuilt whenever the land size changes)
+  function buildBoard() {
+    var w = state.w, h = state.h;
+    boardEl.textContent = ''; cells = [];
+    boardEl.style.setProperty('--cols', w); boardEl.style.setProperty('--rows', h);
+    wrapEl.style.setProperty('--m', Math.max(w, h));
+    for (var i = 0; i < w * h; i++) {
+      var el = document.createElement('div');
+      el.className = 'cell empty' + (((i % w) + ((i / w) | 0)) % 2 ? ' alt' : '');
+      el.dataset.i = i; el.dataset.c = 0; el.setAttribute('role', 'gridcell');
+      var e = document.createElement('span'); e.className = 'e'; el.appendChild(e);
+      boardEl.appendChild(el); cells.push(el);
+    }
+    bw = w; bh = h; sel = -1; hover = -1;
+    clearCritters();
   }
   boardEl.addEventListener('pointerdown', function (ev) { lastPointer = ev.pointerType || 'touch'; });
   boardEl.addEventListener('click', function (ev) {
@@ -61,10 +71,12 @@
 
   function vibrate(ms) { if (navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } }
 
+  function isCollectible(v) { return v === TT.TREASURE || v === TT.CASH; }
+  function isAnimal(v) { return v === TT.BEAR || v === TT.FOX; }
   // Is idx a legal target for the armed tool (or for placement when none is armed)?
   function targetOk(idx) {
     var v = state.grid[idx];
-    return mode === 'hammer' ? v !== 0 : mode === 'trap' ? v === TT.BEAR : (v === 0 || v === TT.TREASURE);
+    return mode === 'hammer' ? v !== 0 : mode === 'trap' ? isAnimal(v) : (v === 0 || isCollectible(v));
   }
   function doAction(idx) {
     return mode === 'hammer' ? TT.hammer(state, idx) : mode === 'trap' ? TT.trap(state, idx) : TT.place(state, idx);
@@ -75,7 +87,7 @@
   function tap(idx) {
     if (!state || state.over) return;
     if (!targetOk(idx)) { bump(idx); return; }
-    if (!mode && state.grid[idx] === TT.TREASURE) { // opening a treasure is always good news: no confirmation step
+    if (!mode && isCollectible(state.grid[idx])) { // collecting is always good news: no confirmation step
       var o = TT.open(state, idx);
       state = o.state; sel = -1; save(); render(o.events); vibrate(25);
       return;
@@ -98,19 +110,42 @@
     return { x: r.left - b.left + r.width / 2, y: r.top - b.top + r.height / 2, w: r.width, h: r.height };
   }
   function clearAnim() {
-    cells.forEach(function (c) { c.classList.remove('drop', 'pop', 'shake', 'slide'); });
+    cells.forEach(function (c) { c.classList.remove('drop', 'pop', 'shake', 'slide', 'warp'); });
+  }
+
+  // The shop row lists every unlocked building tier plus the crystal; it is rebuilt only when that list changes.
+  function buildShop() {
+    var items = [], k, fresh = shopKey !== '';
+    for (k = 1; k <= TT.unlockedTop(state); k++) items.push(k);
+    items.push(TT.CRYSTAL);
+    var key = items.join(',');
+    if (key === shopKey) return;
+    var known = shopKey ? shopKey.split(',') : [];
+    shopKey = key; shopEl.textContent = '';
+    items.forEach(function (t) {
+      var b = document.createElement('button');
+      b.className = 'tool' + (fresh && known.indexOf(String(t)) < 0 ? ' fresh' : '');
+      b.dataset.tool = t; b.setAttribute('aria-label', 'Buy ' + TT.NAME[t]);
+      b.innerHTML = '<span class="te">' + TT.EMOJI[t] + '</span><span class="tp"></span><span class="tb"></span>';
+      b.addEventListener('click', function () {
+        var s = TT.buy(state, t);
+        if (s) { state = s; save(); render([]); }
+      });
+      shopEl.appendChild(b);
+    });
   }
 
   function render(events) {
+    if (state.w !== bw || state.h !== bh) buildBoard();
     clearAnim();
-    var g = state.grid;
+    var g = state.grid, w = state.w;
     cells.forEach(function (c, i) {
       var code = g[i];
       c.dataset.c = code;
       c.firstChild.textContent = TT.EMOJI[code];
       c.classList.toggle('empty', code === 0);
       c.classList.toggle('hint', hints && !state.over && TT.wouldMerge(state, i));
-      c.setAttribute('aria-label', 'row ' + (((i / TT.W) | 0) + 1) + ' column ' + ((i % TT.W) + 1) + ' ' + TT.NAME[code]);
+      c.setAttribute('aria-label', 'row ' + (((i / w) | 0) + 1) + ' column ' + ((i % w) + 1) + ' ' + TT.NAME[code]);
     });
     if (mode && (state.over || state.coins < TT.PRICE[mode] || !(state.stock[mode] > 0))) mode = null;
     if (sel >= 0 && (state.over || !targetOk(sel))) sel = -1;
@@ -123,25 +158,39 @@
     $('nextItem').textContent = TT.EMOJI[state.next];
     $('holdItem').textContent = state.hold ? TT.EMOJI[state.hold] : '·';
     $('undoBtn').disabled = !TT.canUndo(state);
-    document.querySelectorAll('.tool').forEach(function (b) {
+    buildShop();
+    document.querySelectorAll('.tool[data-tool]').forEach(function (b) {
       var t = b.dataset.tool;
       if (t === 'hammer') {
-        b.disabled = !TT.canHammer(state) || state.over || TT.emptyCount(g) === TT.N;
+        b.disabled = !TT.canHammer(state) || state.over || TT.emptyCount(g) === g.length;
         b.setAttribute('aria-pressed', mode === 'hammer');
       } else if (t === 'trap') {
-        b.disabled = state.over || state.coins < TT.PRICE.trap || !(state.stock.trap > 0) || g.indexOf(TT.BEAR) < 0;
+        b.disabled = state.over || state.coins < TT.PRICE.trap || !(state.stock.trap > 0) || (g.indexOf(TT.BEAR) < 0 && g.indexOf(TT.FOX) < 0);
         b.setAttribute('aria-pressed', mode === 'trap');
-      } else b.disabled = !TT.buy(state, +t);
-      b.querySelector('.tb').textContent = '×' + (state.stock[t] || 0);
+      } else {
+        b.disabled = !TT.buy(state, +t);
+        b.querySelector('.tp').textContent = '🪙' + fmt(TT.priceOf(state, +t));
+        b.classList.toggle('pricey', (state.stock[t] || 0) <= 0); // out of stock: the price has doubled (or more)
+      }
+      b.querySelector('.tb').textContent = '×' + Math.max(0, state.stock[t] || 0);
     });
+    var lp = TT.landPrice(state);
+    document.querySelectorAll('.land').forEach(function (b) {
+      var owned = state.land.indexOf(b.dataset.land) >= 0;
+      b.disabled = state.over || owned || !TT.canLand(state);
+      b.querySelector('.tp').textContent = owned ? '✓' : '🪙' + fmt(lp);
+    });
+    $('landNote').textContent = 'Land ' + state.land.length + '/' + TT.MAX_LAND + (lp ? ' · next side 🪙' + lp : ' · all bought');
     var nextAt = TT.milestoneScore(state.milestone), gifts = [];
     [1, 2, 3, TT.CRYSTAL].forEach(function (c) { gifts.push('+' + TT.RESTOCK[c] + TT.EMOJI[c]); });
-    $('unlock').textContent = 'Shop restocks at score ' + nextAt + ' (' + (nextAt - state.score) + ' to go): ' + gifts.join(' ') + ' +1🪤 +1🔨';
+    $('unlock').textContent = 'Shop restocks at score ' + nextAt + ' (' + (nextAt - state.score) + ' to go): ' + gifts.join(' ') +
+      (TT.unlockedTop(state) > 3 ? ' +1 each higher tier' : '') + ' +1🪤 +1🔨';
     $('undoBtn').textContent = '↶ Undo 🪙' + TT.UNDO_COST;
     $('turn').textContent = 'Turn ' + state.turn;
     $('seed').textContent = 'seed ' + state.seed;
     animate(events);
     updatePreview();
+    syncCritters();
     if (state.over) showOver();
   }
 
@@ -154,23 +203,24 @@
     var note = '', hot = false, pi = sel >= 0 ? sel : (previewOn ? hover : -1), p;
     if (state.over) note = '';
     else if (mode === 'trap') {
-      if (pi >= 0 && state.grid[pi] === TT.BEAR) {
+      if (pi >= 0 && isAnimal(state.grid[pi])) {
         cells[pi].classList.add('target');
         var tr = TT.trap(state, pi);
         var res = tr ? tr.state.grid[pi] : TT.TOMB;
-        note = (sel === pi ? 'Tap again to trap' : 'Trap') + ' the bear -> ' + TT.NAME[res] + ' (-' + TT.PRICE.trap + ' coins)';
+        note = (sel === pi ? 'Tap again to trap' : 'Trap') + ' the ' + TT.NAME[state.grid[pi]] + ' -> ' + TT.NAME[res] + ' (-' + TT.PRICE.trap + ' coins)';
         hot = sel === pi;
-      } else note = '🪤 Tap a bear to kill it';
+      } else note = '🪤 Tap a bear or fox to kill it';
     } else if (mode === 'hammer') {
       if (pi >= 0 && state.grid[pi] !== 0) {
         cells[pi].classList.add('target');
         note = (lastPointer !== 'mouse' && sel === pi ? 'Tap again to smash ' : 'Smash ') + TT.NAME[state.grid[pi]] + ' (-' + TT.PRICE.hammer + ' coins)';
         hot = sel === pi;
       } else note = '🔨 Tap an item to remove it';
-    } else if (pi >= 0 && state.grid[pi] === TT.TREASURE) {
-      note = '💰 Click to open the treasure: +' + TT.TREASURE_COINS + ' coins'; hot = true;
+    } else if (pi >= 0 && isCollectible(state.grid[pi])) {
+      var cash = state.grid[pi] === TT.CASH;
+      note = (cash ? '💵 Click to collect the cash: +' + TT.CASH_COINS : '💰 Click to open the treasure: +' + TT.TREASURE_COINS) + ' coins'; hot = true;
     } else if (TT.emptyCount(state.grid) === 0) {
-      note = 'Board full - use the 🔨 hammer (' + TT.PRICE.hammer + ' coins) to clear a tile'; hot = true;
+      note = 'Board full - use the 🔨 hammer (' + TT.PRICE.hammer + ' coins) or buy land'; hot = true;
     } else if (previewOn && pi >= 0 && (p = TT.preview(state, pi))) {
       cells[pi].classList.add('pv'); cells[pi].setAttribute('data-pv', TT.EMOJI[p.final]);
       p.eaten.forEach(function (i) { cells[i].classList.add('eat'); });
@@ -182,6 +232,17 @@
     } else if (previewOn) note = 'Tap a tile to preview, tap again to place';
     $('note').textContent = note;
     $('note').classList.toggle('hot', hot);
+  }
+
+  function toast(text, yFrac) {
+    var b = fxEl.getBoundingClientRect(), el = document.createElement('div');
+    el.className = 'pts'; el.textContent = text; el.style.left = b.width / 2 + 'px'; el.style.top = b.height * (yFrac || 0.5) + 'px';
+    fxEl.appendChild(el);
+  }
+  function floatAt(idx, text) {
+    var c = cellCenter(idx), el = document.createElement('div');
+    el.className = 'pts'; el.textContent = text; el.style.left = c.x + 'px'; el.style.top = c.y + 'px';
+    fxEl.appendChild(el);
   }
 
   function animate(events) {
@@ -200,36 +261,80 @@
             'px;--dx:' + (to.x - f.x) + 'px;--dy:' + (to.y - f.y) + 'px';
           fxEl.appendChild(gh);
         });
-        var p = document.createElement('div');
-        p.className = 'pts'; p.textContent = '+' + ev.points + (ev.coins ? ' · +' + ev.coins + '🪙' : '');
-        p.style.left = to.x + 'px'; p.style.top = to.y + 'px';
-        fxEl.appendChild(p);
+        floatAt(ev.at, '+' + ev.points + (ev.coins ? ' · +' + ev.coins + '🪙' : ''));
       } else if (ev.type === 'bear') {
         var a = cellCenter(ev.from), b = cellCenter(ev.to), c = cells[ev.to];
         c.style.setProperty('--dx', (a.x - b.x) + 'px'); c.style.setProperty('--dy', (a.y - b.y) + 'px');
         c.classList.add('slide');
+      } else if (ev.type === 'fox') { // warps: a puff where it left, it spins in where it lands
+        floatAt(ev.from, '💨');
+        cells[ev.to].classList.add('warp');
       } else if (ev.type === 'trapped') {
         cells[ev.at].classList.add('shake');
       } else if (ev.type === 'unlock') {
-        var ub = fxEl.getBoundingClientRect(), un = document.createElement('div');
-        un.className = 'pts'; un.textContent = '🛒 Shop restocked!'; un.style.left = ub.width / 2 + 'px'; un.style.top = ub.height / 2 + 'px';
-        fxEl.appendChild(un);
+        toast('🛒 Shop restocked!');
+      } else if (ev.type === 'tierunlock') {
+        toast(TT.EMOJI[ev.tier] + ' ' + TT.NAME[ev.tier] + ' unlocked in the shop!', 0.35);
+      } else if (ev.type === 'land') {
+        toast('🏞️ New land!');
       } else if (ev.type === 'open') {
-        var oc = cellCenter(ev.at), oe = document.createElement('div');
-        oe.className = 'pts'; oe.textContent = '💰 +' + ev.coins + '🪙'; oe.style.left = oc.x + 'px'; oe.style.top = oc.y + 'px';
-        fxEl.appendChild(oe);
+        floatAt(ev.at, (ev.item === TT.CASH ? '💵 +' : '💰 +') + ev.coins + '🪙');
       } else if (ev.type === 'trap') {
-        var tp = cellCenter(ev.at), tel = document.createElement('div');
-        tel.className = 'pts'; tel.textContent = '🪤 -' + TT.PRICE.trap + '🪙'; tel.style.left = tp.x + 'px'; tel.style.top = tp.y + 'px';
-        fxEl.appendChild(tel); cells[ev.at].classList.add('shake');
+        floatAt(ev.at, '🪤 -' + TT.PRICE.trap + '🪙'); cells[ev.at].classList.add('shake');
       } else if (ev.type === 'hammer') {
-        var h = cellCenter(ev.at), hp = document.createElement('div');
-        hp.className = 'pts'; hp.textContent = '🔨 -' + TT.PRICE.hammer + '🪙'; hp.style.left = h.x + 'px'; hp.style.top = h.y + 'px';
-        fxEl.appendChild(hp);
+        floatAt(ev.at, '🔨 -' + TT.PRICE.hammer + '🪙');
       }
     });
     setTimeout(function () { if (fxEl.childNodes.length) fxEl.textContent = ''; }, 1000);
   }
+
+  // ---- ambient critters: purely decorative (never part of the game state). Rabbits and chicks hop around the
+  // residential tiles (camp .. village), ghosts and black cats drift around the tombstone / church / cathedral tiles.
+  var AREAS = [
+    { codes: [4, 5, 6, 7], kinds: ['🐇', '🐤'] },
+    { codes: [TT.TOMB, TT.CHURCH, TT.CATHEDRAL], kinds: ['👻', '🐈‍⬛'] }
+  ];
+  var critters = [];
+  function areaCells(area) {
+    var out = [];
+    state.grid.forEach(function (v, i) { if (area.codes.indexOf(v) >= 0) out.push(i); });
+    return out;
+  }
+  function clearCritters() { critters.forEach(function (c) { c.el.remove(); }); critters = []; }
+  function hop(c, first) {
+    var list = areaCells(c.area);
+    if (!list.length || !cells.length) return;
+    var idx = list[Math.floor(Math.random() * list.length)], p = cellCenter(idx), s = p.w * 0.34;
+    var x = p.x + (Math.random() - 0.5) * (p.w - s) * 0.9, y = p.y + (Math.random() - 0.5) * (p.h - s) * 0.9;
+    c.el.classList.toggle('flip', x < c.x);
+    if (first) { c.el.style.transition = 'none'; }
+    c.el.style.transform = 'translate(' + (x - s / 2) + 'px,' + (y - s / 2) + 'px)';
+    if (first) { void c.el.offsetWidth; c.el.style.transition = ''; }
+    c.x = x; c.next = Date.now() + 1500 + Math.random() * 2500;
+  }
+  function syncCritters() {
+    if (reduceMotion) return;
+    AREAS.forEach(function (area) {
+      var n = areaCells(area).length, want = Math.min(3, Math.floor(n / 2));
+      area.kinds.forEach(function (kind) {
+        var mine = critters.filter(function (c) { return c.kind === kind; });
+        while (mine.length > want) { var gone = mine.pop(); gone.el.remove(); critters.splice(critters.indexOf(gone), 1); }
+        while (mine.length < want) {
+          var el = document.createElement('span');
+          el.className = 'crit'; el.textContent = kind; el.setAttribute('aria-hidden', 'true');
+          critEl.appendChild(el);
+          var c = { el: el, kind: kind, area: area, x: 0, next: 0 };
+          critters.push(c); mine.push(c); hop(c, true);
+        }
+      });
+    });
+  }
+  setInterval(function () {
+    if (document.hidden || !state) return;
+    var now = Date.now();
+    critters.forEach(function (c) { if (now >= c.next) hop(c, false); });
+  }, 600);
+  window.addEventListener('resize', function () { critters.forEach(function (c) { c.next = 0; }); });
 
   function showOver() {
     var newBest = state.score >= best && state.score > 0;
@@ -243,13 +348,15 @@
     var s = TT.swap(state);
     if (s) { state = s; save(); render([]); }
   });
-  document.querySelectorAll('.tool').forEach(function (b) {
+  document.querySelectorAll('.tool[data-tool]').forEach(function (b) { // trap and hammer (the item shop is built in buildShop)
     var t = b.dataset.tool;
     b.querySelector('.tp').textContent = '🪙' + TT.PRICE[t];
+    b.addEventListener('click', function () { mode = mode === t ? null : t; sel = -1; render([]); });
+  });
+  document.querySelectorAll('.land').forEach(function (b) {
     b.addEventListener('click', function () {
-      if (t === 'hammer' || t === 'trap') { mode = mode === t ? null : t; sel = -1; render([]); return; }
-      var s = TT.buy(state, +t);
-      if (s) { state = s; save(); render([]); }
+      var r = TT.buyLand(state, b.dataset.land);
+      if (r) { state = r.state; sel = -1; hover = -1; save(); render(r.events); vibrate(15); }
     });
   });
   $('previewBtn').setAttribute('aria-pressed', previewOn);
@@ -284,10 +391,12 @@
     return out.join('');
   }
   $('guideBody').innerHTML =
-    '<h3>Buildings</h3><div class="chain">' + chain(1, null, 'grand castle (final)') + '</div>' +
+    '<h3>Buildings</h3><div class="chain">' + chain(1, null, 'cash (final)') + '</div>' +
+    '<p class="gnote">💵 Cash is collectible: tap it for +' + TT.CASH_COINS + ' coins. 🐇🐤 hop around the homes (camp to village).</p>' +
     '<h3>Bears</h3><div class="chain">' + chip(TT.BEAR, 'trap it') + '<span class="arrow">&rarr;</span>' +
     chain(TT.TOMB, null, 'treasure: tap to open, +' + TT.TREASURE_COINS + ' coins') + '</div>' +
-    '<h3>Special</h3><div class="chain">' + chip(TT.CRYSTAL, 'wildcard') + '</div>' +
+    '<p class="gnote">👻🐈‍⬛ haunt the tombstones and churches.</p>' +
+    '<h3>Special</h3><div class="chain">' + chip(TT.CRYSTAL, 'wildcard') + chip(TT.FOX, 'warps, trap it') + '</div>' +
     '<p class="gnote">Three or more connected items of the same kind merge into the next one. Bigger groups pay more points and coins.</p>';
   $('guideLink').addEventListener('click', function (e) { e.preventDefault(); $('guide').classList.remove('hidden'); });
   $('guideClose').addEventListener('click', function () { $('guide').classList.add('hidden'); });
@@ -306,7 +415,8 @@
   // test / debugging hooks (read-only view of the game)
   window.ttDebug = {
     state: function () { return JSON.parse(JSON.stringify(state)); },
-    validate: function () { return TT.validate(state); }
+    validate: function () { return TT.validate(state); },
+    critters: function () { return critters.map(function (c) { return c.kind; }); }
   };
 
   if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {

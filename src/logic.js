@@ -4,32 +4,44 @@
   else root.TT = factory();
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
-  var W = 6, H = 6, N = W * H;
+  // The board starts 6x6 and grows by one row/column per bought side (state.w / state.h). W, H, N are the dimensions of the
+  // state being worked on, set by dim() at the start of every public function; the exported W/H/N are the starting size.
+  var DEFAULT_W = 6, DEFAULT_H = 6, W = DEFAULT_W, H = DEFAULT_H, N = W * H;
+  function dim(s) { W = s.w || DEFAULT_W; H = s.h || DEFAULT_H; N = W * H; }
+  var VERSION = 2;
 
-  // Cell / item codes. 0 empty. 1..8 building chain. 9 bear, 10 tombstone, 11 church, 12 cathedral, 13 crystal, 14 treasure
-  // (final tier of the bear chain: tap it to open it for coins).
-  var EMPTY = 0, BEAR = 9, TOMB = 10, CRYSTAL = 13, TREASURE = 14;
-  var EMOJI = ['', '🌱', '🌿', '🌳', '🛖', '🏠', '🏛️', '🏰', '🏯', '🐻', '🪦', '⛪', '🕌', '💎', '💰'];
-  var NAME = ['empty', 'grass', 'bush', 'tree', 'hut', 'house', 'mansion', 'castle', 'grand castle', 'bear', 'tombstone', 'church', 'cathedral', 'crystal', 'treasure'];
-  // code -> code it becomes when 3+ connect. Final tiers (8 grand castle, 12 cathedral), bear and crystal are absent.
-  var NEXT = { 1: 2, 2: 3, 3: 4, 4: 5, 5: 6, 6: 7, 7: 8, 10: 11, 11: 12, 12: 14 };
-  // points per item consumed by a merge, keyed by the consumed code
-  var BASE = { 1: 10, 2: 30, 3: 90, 4: 270, 5: 810, 6: 2430, 7: 7290, 10: 150, 11: 1500, 12: 15000 };
-  // item queue draw weights (sum 100): mostly grass, sometimes bush/tree/bear, rare crystal
-  var WEIGHTS = [[1, 62], [2, 16], [3, 6], [BEAR, 12], [CRYSTAL, 4]];
-  var QUEUE_ITEMS = [1, 2, 3, BEAR, CRYSTAL];
+  // Cell / item codes. 0 empty. 1..10 building chain (10 = mall), 11 cash (collectible, final), 12 bear, 13 tombstone,
+  // 14 church, 15 cathedral, 16 crystal, 17 treasure (final tier of the bear chain: collectible), 18 fox.
+  var EMPTY = 0, LAST_BUILDING = 10, CASH = 11, BEAR = 12, TOMB = 13, CHURCH = 14, CATHEDRAL = 15, CRYSTAL = 16, TREASURE = 17, FOX = 18;
+  var EMOJI = ['', '🌱', '🌿', '🌳', '🏕️', '🛖', '🏠', '🏘️', '🏫', '🏥', '🏬', '💵', '🐻', '🪦', '⛪', '🕌', '💎', '💰', '🦊'];
+  var NAME = ['empty', 'grass', 'bush', 'tree', 'camp', 'hut', 'house', 'village', 'school', 'hospital', 'mall', 'cash', 'bear', 'tombstone', 'church', 'cathedral', 'crystal', 'treasure', 'fox'];
+  // code -> code it becomes when 3+ connect. Final tiers (11 cash, 15->17 treasure), bear, fox and crystal are absent / collectible.
+  var NEXT = { 1: 2, 2: 3, 3: 4, 4: 5, 5: 6, 6: 7, 7: 8, 8: 9, 9: 10, 10: 11, 13: 14, 14: 15, 15: 17 };
+  // points per item consumed by a merge, keyed by the consumed code (buildings x3 per tier)
+  var BASE = { 13: 150, 14: 1500, 15: 15000 };
+  var COIN = { 1: 2, 2: 4, 3: 8, 4: 16, 5: 30, 6: 60, 7: 120, 8: 240, 9: 480, 10: 960, 13: 20, 14: 100, 15: 500 };
+  (function () { var b = 10; for (var k = 1; k <= LAST_BUILDING; k++) { BASE[k] = b; b *= 3; } })();
+  // item queue draw weights (sum 100): mostly grass, sometimes bush/tree/bear, rare crystal and fox
+  var WEIGHTS = [[1, 59], [2, 16], [3, 6], [BEAR, 12], [CRYSTAL, 4], [FOX, 3]];
+  var QUEUE_ITEMS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, BEAR, CRYSTAL, FOX];
   // coins: earned per merge (COIN[consumed code] * (group size - 2)), spent in the shop (free actions, no turn passes)
   var START_COINS = 10;
-  var COIN = { 1: 2, 2: 4, 3: 8, 4: 16, 5: 30, 6: 60, 7: 120, 10: 20, 11: 100, 12: 500 };
   var TREASURE_COINS = 250; // paid when a treasure is opened
-  var PRICE = { 1: 6, 2: 15, 3: 35, 13: 50, hammer: 20, trap: 12 };
-  var BUYABLE = [1, 2, 3, CRYSTAL];
+  var CASH_COINS = 5000;    // paid when cash (the last building tier) is collected
+  var PRICE = { 1: 6, 2: 15, 3: 35, 4: 80, 5: 180, 6: 400, 7: 900, 8: 2000, 9: 4500, 10: 10000, 16: 50, hammer: 20, trap: 12 };
+  var BUYABLE = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, CRYSTAL];
   var UNDO_COST = 5; // coins per undo
-  // The shop has limited stock per game. Reaching a score milestone restocks it (the crystal only appears from the first one).
-  var START_STOCK = { 1: 3, 2: 2, 3: 1, 13: 0, hammer: 2, trap: 2 };
+  // Shop stock per game. An item bought with no stock left still sells, at double the price for every purchase past zero
+  // (stock goes negative = debt, milestone restocks pay it back). Hammer and trap simply run out.
+  var START_STOCK = { 1: 3, 2: 2, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1, 10: 1, 16: 0, hammer: 2, trap: 2 };
   var MILESTONES = [400, 1200, 3000, 7000, 15000, 30000]; // after the last one a restock comes every 30000 more points
-  var RESTOCK = { 1: 2, 2: 1, 3: 1, 13: 1, hammer: 1, trap: 1 };
+  var RESTOCK = { 1: 2, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1, 10: 1, 16: 1, hammer: 1, trap: 1 };
   function milestoneScore(n) { return n < MILESTONES.length ? MILESTONES[n] : MILESTONES[MILESTONES.length - 1] * (n - MILESTONES.length + 2); }
+  // Land: one extra row/column per side, each side once, dearer every time.
+  var SIDES = ['top', 'bottom', 'left', 'right'];
+  var LAND_PRICE = [150, 400, 1000, 2500];
+  // The shop always sells grass, bush and tree; a higher building tier is unlocked once one has stood on the board.
+  var STARTER_TIER = 3;
 
   // ---- seeded RNG (mulberry32). The state is one uint32 kept inside the game state, so undo/replay is exact.
   function rand(s) {
@@ -47,13 +59,14 @@
   }
 
   function clone(s) {
-    return { grid: s.grid.slice(), cur: s.cur, next: s.next, hold: s.hold, score: s.score, coins: s.coins, stock: Object.assign({}, s.stock), milestone: s.milestone, turn: s.turn,
-      over: s.over, rng: s.rng, seed: s.seed, undo: s.undo };
+    return { ver: s.ver, w: s.w, h: s.h, land: s.land.slice(), top: s.top, grid: s.grid.slice(), cur: s.cur, next: s.next, hold: s.hold, score: s.score, coins: s.coins,
+      stock: Object.assign({}, s.stock), milestone: s.milestone, turn: s.turn, over: s.over, rng: s.rng, seed: s.seed, undo: s.undo };
   }
 
   function newGame(seed) {
     seed = (seed >>> 0) || 1;
-    var s = { grid: new Array(N).fill(EMPTY), cur: 1, next: 1, hold: 0, score: 0, coins: START_COINS, stock: Object.assign({}, START_STOCK), milestone: 0, turn: 0, over: false, rng: seed, seed: seed, undo: null };
+    var s = { ver: VERSION, w: DEFAULT_W, h: DEFAULT_H, land: [], top: 1, grid: new Array(DEFAULT_W * DEFAULT_H).fill(EMPTY), cur: 1, next: 1, hold: 0, score: 0, coins: START_COINS,
+      stock: Object.assign({}, START_STOCK), milestone: 0, turn: 0, over: false, rng: seed, seed: seed, undo: null };
     s.next = drawItem(s); // always open with grass
     return s;
   }
@@ -98,7 +111,7 @@
   }
 
   // Item kinds a crystal can stand in for, best first: the bear chain (cathedral -> treasure, church, tombstone), then buildings.
-  var CRYSTAL_AS = [12, 11, 10, 7, 6, 5, 4, 3, 2, 1];
+  var CRYSTAL_AS = [CATHEDRAL, CHURCH, TOMB, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
   // Best kind the crystal at `at` could stand in for to form a 3+ group; 0 if none (grid is left unchanged).
   function crystalTier(grid, at) {
     var keep = grid[at], found = 0;
@@ -122,20 +135,24 @@
     }
   }
 
-  // Put `item` on empty cell idx and resolve every merge it causes (no bear movement). Mutates s.
+  // Put `item` on empty cell idx and resolve every merge it causes (no animal movement). Mutates s.
   function applyItem(s, idx, item, events) {
     s.grid[idx] = item;
     if (item === CRYSTAL) settleCrystals(s, events, idx);
     else { resolveAt(s, idx, events); settleCrystals(s, events); }
   }
 
+  function emptyCount(grid) { var n = 0; for (var i = 0; i < grid.length; i++) if (grid[i] === EMPTY) n++; return n; }
+
   // Bears are trapped per pocket: a pocket is a connected area of empty cells and bears. A pocket with no empty cell left
   // turns all its bears into tombstones; in a pocket that still has room every bear that can step does, and a bear that
   // is boxed in by other bears just waits (it does not die while a neighbour can still free a cell for it).
+  // Foxes do not walk: each turn a fox warps to a random empty cell anywhere. They are only trapped by the shop trap, or
+  // when the board is completely full (nowhere left to warp to).
   // `last` is the cell just played: if it was trapped, its tombstones merge there first (the church forms where the
-  // last bear went in), then the rest in board order.
+  // last animal went in), then the rest in board order.
   function moveBears(s, events, last) {
-    var seen = {}, trapped = [], bears = [], i;
+    var seen = {}, trapped = [], bears = [], i, full = emptyCount(s.grid) === 0;
     for (i = 0; i < N; i++) {
       if (seen[i] || (s.grid[i] !== BEAR && s.grid[i] !== EMPTY)) continue;
       var stack = [i], pocket = [], room = false;
@@ -148,6 +165,7 @@
       }
       if (!room) pocket.forEach(function (c) { if (s.grid[c] === BEAR) trapped.push(c); });
     }
+    if (full) for (i = 0; i < N; i++) if (s.grid[i] === FOX) trapped.push(i);
     trapped.sort(function (a, b) { return (b === last) - (a === last) || a - b; });
     trapped.forEach(function (at) { s.grid[at] = TOMB; events.push({ type: 'trapped', at: at }); });
     for (i = 0; i < N; i++) if (s.grid[i] === BEAR) bears.push(i);
@@ -158,24 +176,62 @@
       s.grid[from] = EMPTY; s.grid[to] = BEAR;
       events.push({ type: 'bear', from: from, to: to });
     });
+    if (!full) {
+      var foxes = [];
+      for (i = 0; i < N; i++) if (s.grid[i] === FOX) foxes.push(i);
+      foxes.forEach(function (from) {
+        var empties = [];
+        for (var j = 0; j < N; j++) if (s.grid[j] === EMPTY) empties.push(j);
+        var to = empties[randInt(s, empties.length)]; // never empty: a fox leaves its own cell free behind it
+        s.grid[from] = EMPTY; s.grid[to] = FOX;
+        events.push({ type: 'fox', from: from, to: to });
+      });
+    }
     trapped.forEach(function (at) { if (s.grid[at] === TOMB) resolveAt(s, at, events); });
   }
 
-  function emptyCount(grid) { var n = 0; for (var i = 0; i < N; i++) if (grid[i] === EMPTY) n++; return n; }
-  // A full board only ends the game when the player cannot afford a hammer to clear a tile.
+  // ---- shop helpers
+  // Highest building tier unlocked in the shop (a tier unlocks once one has stood on the board; s.top remembers it).
+  function unlockedTop(s) { return Math.max(STARTER_TIER, s.top || 0); }
+  function isAvailable(s, item) {
+    if (BUYABLE.indexOf(item) < 0) return false;
+    if (item === CRYSTAL) return s.milestone >= 1;
+    return item <= unlockedTop(s);
+  }
+  // Price of the next purchase: base price while stock lasts, doubling for every purchase beyond it.
+  function priceOf(s, item) {
+    var base = PRICE[item], st = s.stock[item] || 0;
+    if (BUYABLE.indexOf(item) >= 0 && st <= 0) base *= Math.pow(2, 1 - st);
+    return base;
+  }
+  // Remember the highest building tier seen on the board; unlocking a new shop tier emits an event. Mutates s.
+  function noteTop(s, events) {
+    var m = s.top || 1, before = unlockedTop(s);
+    for (var i = 0; i < N; i++) { var v = s.grid[i]; if (v > m && v <= LAST_BUILDING) m = v; }
+    s.top = m;
+    if (unlockedTop(s) > before) events.push({ type: 'tierunlock', tier: unlockedTop(s) });
+  }
+
+  // A full board only ends the game when the player can neither hammer a tile nor afford more land.
   function canHammer(s) { return s.coins >= PRICE.hammer && s.stock.hammer > 0; }
-  function isOver(s) { return emptyCount(s.grid) === 0 && !canHammer(s); }
-  // Score milestones restock the shop. Mutates s.
+  function landPrice(s) { return s.land.length < SIDES.length ? LAND_PRICE[s.land.length] : null; }
+  function canLand(s) { return s.land.length < SIDES.length && s.coins >= LAND_PRICE[s.land.length]; }
+  function isOver(s) { return emptyCount(s.grid) === 0 && !canHammer(s) && !canLand(s); }
+  // Score milestones restock the shop (only tiers that are unlocked). Mutates s.
   function grantMilestones(s, events) {
     while (s.score >= milestoneScore(s.milestone)) {
       s.milestone++;
-      for (var k in RESTOCK) s.stock[k] = (s.stock[k] || 0) + RESTOCK[k];
+      for (var k in RESTOCK) {
+        if (+k <= LAST_BUILDING && +k > unlockedTop(s)) continue;
+        s.stock[k] = (s.stock[k] || 0) + RESTOCK[k];
+      }
       events.push({ type: 'unlock', milestone: s.milestone });
     }
   }
 
   // Play one turn: put s.cur on empty cell idx. Returns {state, events}, or null if the move is illegal.
   function place(state, idx) {
+    dim(state);
     if (state.over || !(idx >= 0 && idx < N) || state.grid[idx] !== EMPTY) return null;
     var s = clone(state), events = [], item = s.cur;
     s.undo = clone(state); s.undo.undo = null; // one level of undo, no nesting
@@ -183,6 +239,7 @@
     applyItem(s, idx, item, events);
     moveBears(s, events, idx);
     settleCrystals(s, events); // new tombstones / churches may complete a group for a waiting crystal
+    noteTop(s, events);
     grantMilestones(s, events);
     s.cur = s.next; s.next = drawItem(s); s.turn++;
     if (isOver(s)) { s.over = true; events.push({ type: 'over', score: s.score }); }
@@ -199,47 +256,73 @@
   }
 
   // Shop: swap the current item for a bought one (cost in coins, free action). The old current item becomes `next`;
-  // the old `next` is discarded. Returns a new state or null (cannot afford, not sold, already current, game over).
+  // the old `next` is discarded. Returns a new state or null (cannot afford, locked, already current, game over).
   function buy(state, item) {
-    if (state.over || BUYABLE.indexOf(item) < 0 || state.coins < PRICE[item] || !(state.stock[item] > 0) || state.cur === item) return null;
+    dim(state);
+    if (state.over || !isAvailable(state, item) || state.coins < priceOf(state, item) || state.cur === item) return null;
     var s = clone(state);
-    s.coins -= PRICE[item]; s.stock[item]--; s.next = s.cur; s.cur = item;
+    s.coins -= priceOf(state, item); s.stock[item] = (s.stock[item] || 0) - 1; s.next = s.cur; s.cur = item;
     return isOver(s) ? null : s; // never let a purchase strand a full board without hammer money
   }
 
   // Shop: the hammer removes whatever stands on cell idx (free action, costs coins). Returns {state, events} or null.
   function hammer(state, idx) {
+    dim(state);
     if (state.over || !(idx >= 0 && idx < N) || state.grid[idx] === EMPTY || !canHammer(state)) return null;
     var s = clone(state), item = s.grid[idx];
     s.grid[idx] = EMPTY; s.coins -= PRICE.hammer; s.stock.hammer--; s.over = isOver(s);
     return { state: s, events: [{ type: 'hammer', at: idx, item: item }] };
   }
 
-  // Open the treasure on cell idx: it disappears and pays TREASURE_COINS (free action). Returns {state, events} or null.
+  // Collect the treasure or the cash on cell idx: it disappears and pays coins (free action). Returns {state, events} or null.
   function open(state, idx) {
-    if (state.over || !(idx >= 0 && idx < N) || state.grid[idx] !== TREASURE) return null;
-    var s = clone(state);
-    s.grid[idx] = EMPTY; s.coins += TREASURE_COINS;
-    return { state: s, events: [{ type: 'open', at: idx, coins: TREASURE_COINS }] };
+    dim(state);
+    if (state.over || !(idx >= 0 && idx < N) || (state.grid[idx] !== TREASURE && state.grid[idx] !== CASH)) return null;
+    var s = clone(state), item = s.grid[idx], coins = item === CASH ? CASH_COINS : TREASURE_COINS;
+    s.grid[idx] = EMPTY; s.coins += coins;
+    return { state: s, events: [{ type: 'open', at: idx, item: item, coins: coins }] };
   }
 
-  // Shop: the bear trap kills the bear on cell idx on the spot: it becomes a tombstone (which may merge into a church
-  // right away). Free action, costs coins. Returns {state, events} or null (no bear there, too poor, or it would
+  // Shop: the trap kills the bear or fox on cell idx on the spot: it becomes a tombstone (which may merge into a church
+  // right away). Free action, costs coins. Returns {state, events} or null (nothing to trap there, too poor, or it would
   // leave a full board without hammer money).
   function trap(state, idx) {
-    if (state.over || !(idx >= 0 && idx < N) || state.grid[idx] !== BEAR || state.coins < PRICE.trap || !(state.stock.trap > 0)) return null;
+    dim(state);
+    if (state.over || !(idx >= 0 && idx < N) || (state.grid[idx] !== BEAR && state.grid[idx] !== FOX) || state.coins < PRICE.trap || !(state.stock.trap > 0)) return null;
     var s = clone(state), events = [{ type: 'trap', at: idx }];
     s.coins -= PRICE.trap; s.stock.trap--; s.grid[idx] = TOMB;
     resolveAt(s, idx, events);
     settleCrystals(s, events);
+    noteTop(s, events);
     grantMilestones(s, events);
     s.over = isOver(s);
     return s.over ? null : { state: s, events: events };
   }
 
-  // What would placing the current item at idx do? Pure (no bear movement, no rng use). Returns null for an illegal move,
+  // Shop: buy one more row (top/bottom) or column (left/right) of land; each side once, dearer every time. Free action.
+  // Returns {state, events} or null.
+  function buyLand(state, side) {
+    dim(state);
+    if (state.over || SIDES.indexOf(side) < 0 || state.land.indexOf(side) >= 0 || !canLand(state)) return null;
+    var s = clone(state), g = state.grid, w = W, h = H;
+    s.coins -= LAND_PRICE[state.land.length];
+    s.land.push(side);
+    if (side === 'top') { g = new Array(w).fill(EMPTY).concat(g); s.h++; }
+    else if (side === 'bottom') { g = g.concat(new Array(w).fill(EMPTY)); s.h++; }
+    else {
+      var out = [];
+      for (var r = 0; r < h; r++) { var row = g.slice(r * w, (r + 1) * w); out = out.concat(side === 'left' ? [EMPTY].concat(row) : row.concat([EMPTY])); }
+      g = out; s.w++;
+    }
+    s.grid = g;
+    s.over = false;
+    return { state: s, events: [{ type: 'land', side: side, w: s.w, h: s.h }] };
+  }
+
+  // What would placing the current item at idx do? Pure (no animal movement, no rng use). Returns null for an illegal move,
   // else {item, final (code left on idx), eaten (other cells emptied by merges), points, coins, merged}.
   function preview(state, idx) {
+    dim(state);
     if (state.over || !(idx >= 0 && idx < N) || state.grid[idx] !== EMPTY) return null;
     var s = clone(state), events = [], eaten = [], pts = 0, coins = 0;
     applyItem(s, idx, s.cur, events);
@@ -251,22 +334,49 @@
   // Undo is possible when there is a snapshot and the player can pay UNDO_COST (taken from the restored coins).
   function canUndo(state) { return !!state.undo && state.undo.coins >= UNDO_COST; }
 
-  // Revert the last placement (one level, including any shop use / swap made since) for UNDO_COST coins.
+  // Revert the last placement (one level, including any shop use / swap / land bought since) for UNDO_COST coins.
   // Returns null if there is nothing to undo or the player cannot pay.
   function undo(state) {
     if (!canUndo(state)) return null;
     var s = clone(state.undo);
+    dim(s);
     s.undo = null; s.coins -= UNDO_COST; s.over = isOver(s);
     return s;
   }
 
-  // Fill in fields that older saves lack (coins, stock, milestone) on s and its undo snapshot. Mutates s.
+  // Old (version 1) saves used other codes for everything after the tree: hut..grand castle moved up one or more places
+  // to make room for the new building tiers, and the bear chain moved to the end of the table.
+  var V1_CODE = { 4: 5, 5: 6, 6: 7, 7: 8, 8: 9, 9: BEAR, 10: TOMB, 11: CHURCH, 12: CATHEDRAL, 13: CRYSTAL, 14: TREASURE };
+  function v1Code(v) { return V1_CODE[v] || v; }
+  function upgradeV1(x) {
+    if (Array.isArray(x.grid)) x.grid = x.grid.map(v1Code);
+    ['cur', 'next', 'hold'].forEach(function (k) { if (x[k]) x[k] = v1Code(x[k]); });
+    var ns = Object.assign({}, START_STOCK);
+    if (x.stock && typeof x.stock === 'object') for (var k in x.stock) ns[k === '13' ? CRYSTAL : k] = x.stock[k];
+    x.stock = ns;
+    x.ver = VERSION; x.w = DEFAULT_W; x.h = DEFAULT_H; x.land = [];
+    x.top = STARTER_TIER;
+    if (Array.isArray(x.grid)) x.grid.forEach(function (v) { if (v > x.top && v <= LAST_BUILDING) x.top = v; });
+  }
+
+  // Fill in fields that older saves lack (coins, stock, milestone, land, new codes) on s and its undo snapshot. Mutates s.
+  // Tiers that no longer end the chain (the old grand castles) may now form a group: settle those so the save is valid.
   function migrate(s) {
     [s, s && s.undo].forEach(function (x) {
       if (!x || typeof x !== 'object') return;
       if (typeof x.coins !== 'number') x.coins = START_COINS;
+      var old = !(x.ver >= VERSION);
+      if (old) upgradeV1(x);
       if (!x.stock || typeof x.stock !== 'object') x.stock = Object.assign({}, START_STOCK);
       if (typeof x.milestone !== 'number') { x.milestone = 0; while (x.score >= milestoneScore(x.milestone)) x.milestone++; }
+      if (old && Array.isArray(x.grid) && x.grid.length === DEFAULT_W * DEFAULT_H) {
+        dim(x);
+        var ev = [];
+        for (var i = 0; i < N; i++) resolveAt(x, i, ev);
+        settleCrystals(x, ev);
+        grantMilestones(x, ev);
+        x.over = isOver(x);
+      }
     });
     return s;
   }
@@ -274,10 +384,20 @@
   // Returns a list of problems (empty = valid). Used by tests and before restoring a saved game.
   function validate(s) {
     var p = [], i;
-    if (!s || !Array.isArray(s.grid) || s.grid.length !== N) return ['bad grid'];
+    if (!s || typeof s !== 'object') return ['bad state'];
+    var ok = function (v) { return v === (v | 0) && v >= DEFAULT_W && v <= DEFAULT_W + 2; };
+    if (!ok(s.w) || !ok(s.h) || !Array.isArray(s.land)) return ['bad board size'];
+    dim(s);
+    if (!Array.isArray(s.grid) || s.grid.length !== N) return ['bad grid'];
+    var lr = 0, tb = 0;
+    s.land.forEach(function (side, k) {
+      if (SIDES.indexOf(side) < 0 || s.land.indexOf(side) !== k) p.push('bad land ' + side);
+      else if (side === 'left' || side === 'right') lr++; else tb++;
+    });
+    if (s.w !== DEFAULT_W + lr || s.h !== DEFAULT_H + tb) p.push('board size does not match the land bought');
     for (i = 0; i < N; i++) {
       var v = s.grid[i];
-      if (v !== (v | 0) || v < 0 || v > TREASURE) p.push('bad code at ' + i + ': ' + v);
+      if (v !== (v | 0) || v < 0 || v > FOX) p.push('bad code at ' + i + ': ' + v);
     }
     if (p.length) return p;
     if (QUEUE_ITEMS.indexOf(s.cur) < 0) p.push('bad current item ' + s.cur);
@@ -285,8 +405,12 @@
     if (s.hold && QUEUE_ITEMS.indexOf(s.hold) < 0) p.push('bad hold ' + s.hold);
     if (typeof s.score !== 'number' || s.score < 0 || s.score !== (s.score | 0)) p.push('bad score ' + s.score);
     if (typeof s.coins !== 'number' || s.coins < 0 || s.coins !== (s.coins | 0)) p.push('bad coins ' + s.coins);
+    if (!(s.top >= 1 && s.top <= LAST_BUILDING) || s.top !== (s.top | 0)) p.push('bad top tier ' + s.top);
     if (!s.stock || typeof s.stock !== 'object') return ['bad stock'];
-    for (var sk in START_STOCK) if (!(s.stock[sk] >= 0) || s.stock[sk] !== (s.stock[sk] | 0)) p.push('bad stock ' + sk + ': ' + s.stock[sk]);
+    for (var sk in START_STOCK) {
+      var n = s.stock[sk];
+      if (typeof n !== 'number' || n !== (n | 0) || ((sk === 'hammer' || sk === 'trap') && n < 0)) p.push('bad stock ' + sk + ': ' + n);
+    }
     if (!(s.milestone >= 0) || s.milestone !== (s.milestone | 0)) p.push('bad milestone ' + s.milestone);
     else if (s.score < (s.milestone ? milestoneScore(s.milestone - 1) : 0) || s.score >= milestoneScore(s.milestone)) p.push('milestone ' + s.milestone + ' inconsistent with score ' + s.score);
     if (p.length) return p;
@@ -310,12 +434,15 @@
   function wouldMerge(state, idx) { var p = preview(state, idx); return !!p && p.merged; }
 
   return {
-    W: W, H: H, N: N, EMPTY: EMPTY, BEAR: BEAR, TOMB: TOMB, CRYSTAL: CRYSTAL, TREASURE: TREASURE, TREASURE_COINS: TREASURE_COINS,
+    W: DEFAULT_W, H: DEFAULT_H, N: DEFAULT_W * DEFAULT_H, MAX_LAND: SIDES.length, SIDES: SIDES, LAND_PRICE: LAND_PRICE, LAST_BUILDING: LAST_BUILDING, VERSION: VERSION,
+    EMPTY: EMPTY, CASH: CASH, BEAR: BEAR, TOMB: TOMB, CHURCH: CHURCH, CATHEDRAL: CATHEDRAL, CRYSTAL: CRYSTAL, TREASURE: TREASURE, FOX: FOX,
+    TREASURE_COINS: TREASURE_COINS, CASH_COINS: CASH_COINS,
     EMOJI: EMOJI, NAME: NAME, NEXT: NEXT, BASE: BASE, WEIGHTS: WEIGHTS,
     START_COINS: START_COINS, COIN: COIN, PRICE: PRICE, BUYABLE: BUYABLE, UNDO_COST: UNDO_COST, START_STOCK: START_STOCK,
     RESTOCK: RESTOCK, MILESTONES: MILESTONES, milestoneScore: milestoneScore, canUndo: canUndo, canHammer: canHammer, migrate: migrate,
     rand: rand, drawItem: drawItem, newGame: newGame, neighbors: neighbors, group: group,
     place: place, swap: swap, undo: undo, validate: validate, wouldMerge: wouldMerge, emptyCount: emptyCount,
-    buy: buy, hammer: hammer, trap: trap, open: open, preview: preview, isOver: isOver
+    buy: buy, hammer: hammer, trap: trap, open: open, buyLand: buyLand, preview: preview, isOver: isOver,
+    priceOf: priceOf, isAvailable: isAvailable, unlockedTop: unlockedTop, landPrice: landPrice, canLand: canLand
   };
 });
