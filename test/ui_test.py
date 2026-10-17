@@ -508,6 +508,7 @@ with sync_playwright() as p:
     guide = page.inner_text('#guideBody')
     for e in ['🌱', '🏕️', '🏘️', '🏫', '🏥', '🏬', '💵', '🐻', '🪦', '⛪', '🕌', '💰', '💎', '🦊']:
         assert e in guide, f'guide misses {e}'
+    assert 'Lucky drops' in guide, 'guide explains lucky drops'
     page.screenshot(path=os.path.join(args.shots, '4_guide.png'))
     page.tap('#guideClose')
     assert page.locator('#guide').is_hidden()
