@@ -26,6 +26,51 @@ t('queue distribution matches weights', () => {
   TT.WEIGHTS.forEach(([code, w]) => assert(Math.abs(cnt[code] / 200 - w) < 2, `item ${code}: ${cnt[code] / 200}% vs ${w}%`));
 });
 
+t('lucky drops: only tiers you have already built, never above a house, never before a camp is possible', () => {
+  const draws = (map, top, n = 4000) => { const s = { rng: 12345, map, top }, out = {}; for (let i = 0; i < n; i++) { const d = TT.drawItem(s); out[d] = (out[d] || 0) + 1; } return out; };
+  const luckyOnly = (o) => Object.keys(o).map(Number).filter((k) => k >= 4 && k <= 10).sort((a, b) => a - b);
+  assert.deepStrictEqual(luckyOnly(draws('easy', 1)), [], 'nothing built yet');
+  assert.deepStrictEqual(luckyOnly(draws('easy', 4)), [], 'a camp must be below the best tier first');
+  assert.deepStrictEqual(luckyOnly(draws('easy', 5)), [4], 'with a hut built: camps');
+  assert.deepStrictEqual(luckyOnly(draws('easy', 6)), [4, 5], 'with a house built: camps and huts');
+  assert.deepStrictEqual(luckyOnly(draws('easy', 7)), [4, 5, 6], 'with a village built: camps, huts, houses');
+  assert.deepStrictEqual(luckyOnly(draws('easy', 10)), [4, 5, 6], 'never above a house');
+  assert.deepStrictEqual(luckyOnly(draws('hard', 10)), [], 'no lucky drops on the hard map');
+  assert.deepStrictEqual(luckyOnly(draws(undefined, 10)), [], 'an unknown map gets none');
+});
+
+t('lucky drops: rate per map, lower tiers likelier, and the rest of the queue still follows its weights', () => {
+  const N = 60000;
+  const share = (map) => { const s = { rng: 777, map, top: 10 }, c = {}; for (let i = 0; i < N; i++) { const d = TT.drawItem(s); c[d] = (c[d] || 0) + 1; } return c; };
+  [['easy', 0.06], ['standard', 0.04], ['medium', 0.03]].forEach(([map, rate]) => {
+    const c = share(map), lucky = (c[4] || 0) + (c[5] || 0) + (c[6] || 0);
+    assert(Math.abs(lucky / N - rate) < 0.006, map + ' lucky share ' + lucky / N + ' vs ' + rate);
+    assert(c[4] > c[5] && c[5] > c[6], 'camp > hut > house');
+    assert(Math.abs((c[4] / lucky) - 0.5) < 0.04 && Math.abs((c[6] / lucky) - 1 / 6) < 0.04, 'about 3 : 2 : 1');
+    const base = N - lucky;
+    TT.WEIGHTS.forEach(([code, w]) => assert(Math.abs(c[code] / base * 100 - w) < 1.2, map + ' item ' + code + ': ' + (c[code] / base * 100) + '% vs ' + w + '%'));
+  });
+});
+
+t('lucky drops: early games and the hard map draw exactly the old sequence; a real game shows lucky items in Next once tiers are built', () => {
+  // identical draws (and rng consumption) while no drop is possible: early in the game, and on the hard map at any tier
+  const same = (state) => { const s = Object.assign({ rng: 99 }, state), old = { rng: 99 }; for (let i = 0; i < 300; i++) assert.strictEqual(TT.drawItem(s), TT.drawItem(old)); assert.strictEqual(s.rng, old.rng); };
+  same({ map: 'easy', top: 3 }); same({ map: 'easy', top: 4 }); same({ map: 'hard', top: 10 }); same({});
+  assert.strictEqual(TT.newGame(5).next, TT.newGame(5, { map: 'easy', wild: true }).next);
+  // in a played game with a high top tier, the queue now serves camps / huts / houses
+  let seen = 0;
+  for (let seed = 1; seed <= 20; seed++) {
+    let g = TT.newGame(seed); g.top = 8;
+    for (let k = 0; k < 60 && !g.over; k++) {
+      if ([4, 5, 6].includes(g.next)) seen++;
+      const e = g.grid.indexOf(0); if (e < 0) break;
+      g = TT.place(g, e).state;
+      assert.deepStrictEqual(TT.validate(g), []);
+    }
+  }
+  assert(seen > 20, 'lucky items show up in Next: ' + seen);
+});
+
 t('same seed => same game; different seed differs', () => {
   const play = (seed) => { let s = TT.newGame(seed); for (let k = 0; k < 10; k++) { const e = s.grid.findIndex((v) => v === 0); s = TT.place(s, e).state; } return JSON.stringify(s); };
   assert.strictEqual(play(5), play(5));

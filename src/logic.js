@@ -37,6 +37,11 @@
   (function () { var b = 10; for (var k = 1; k <= LAST_BUILDING; k++) { BASE[k] = b; b *= 3; } })();
   // item queue draw weights (sum 100): mostly grass, sometimes bush/tree/bear, rare crystal and fox
   var WEIGHTS = [[1, 59], [2, 16], [3, 6], [BEAR, 12], [CRYSTAL, 4], [FOX, 3]];
+  // Lucky drops: once you have built a tier, the next item is now and then a camp / hut / house (never above a house, and only tiers
+  // below the best one you have built), more often on the easier maps. The extra random numbers are drawn only when a drop is
+  // possible, so early games (and the whole Hard map) draw exactly the sequence they always did.
+  var LUCKY_RATE = { easy: 0.06, standard: 0.04, medium: 0.03, hard: 0 };
+  var LUCKY_MIN_TIER = 4, LUCKY_MAX_TIER = 6;
   var QUEUE_ITEMS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, BEAR, CRYSTAL, FOX];
   // coins: earned per merge (COIN[consumed code] * (group size - 2)), spent in the shop (free actions, no turn passes)
   var START_COINS = 10;
@@ -66,7 +71,19 @@
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   }
   function randInt(s, n) { return Math.floor(rand(s) * n); }
+  // A lucky building tier for the next item, or 0. Lower tiers are likelier (camp 3 : hut 2 : house 1 when all three are possible).
+  function luckyTier(s) {
+    var rate = LUCKY_RATE[s.map], hi = Math.min((s.top || 0) - 1, LUCKY_MAX_TIER);
+    if (!rate || hi < LUCKY_MIN_TIER || rand(s) >= rate) return 0;
+    var total = 0, k;
+    for (k = LUCKY_MIN_TIER; k <= hi; k++) total += hi - k + 1;
+    var r = randInt(s, total);
+    for (k = LUCKY_MIN_TIER; k <= hi; k++) { r -= hi - k + 1; if (r < 0) return k; }
+    return LUCKY_MIN_TIER;
+  }
   function drawItem(s) {
+    var lucky = luckyTier(s);
+    if (lucky) return lucky;
     var r = randInt(s, 100), acc = 0;
     for (var i = 0; i < WEIGHTS.length; i++) { acc += WEIGHTS[i][1]; if (r < acc) return WEIGHTS[i][0]; }
     return 1;
@@ -597,7 +614,7 @@
 
   return {
     W: DEFAULT_W, H: DEFAULT_H, N: DEFAULT_W * DEFAULT_H, MAX_LAND: SIDES.length, SIDES: SIDES, LAND_PRICE: LAND_PRICE, LAST_BUILDING: LAST_BUILDING, VERSION: VERSION,
-    EMPTY: EMPTY, CASH: CASH, BEAR: BEAR, BEAR_GROWL: BEAR_GROWL, BEAR_ANGRY: BEAR_ANGRY, WATER: WATER, MAUL_MAX: MAUL_MAX, isBear: isBear, MAPS: MAPS, MEDIUM_WATER: MEDIUM_WATER, STANDARD_ITEMS: STANDARD_ITEMS,
+    EMPTY: EMPTY, CASH: CASH, BEAR: BEAR, BEAR_GROWL: BEAR_GROWL, BEAR_ANGRY: BEAR_ANGRY, WATER: WATER, MAUL_MAX: MAUL_MAX, isBear: isBear, MAPS: MAPS, LUCKY_RATE: LUCKY_RATE, LUCKY_MIN_TIER: LUCKY_MIN_TIER, LUCKY_MAX_TIER: LUCKY_MAX_TIER, MEDIUM_WATER: MEDIUM_WATER, STANDARD_ITEMS: STANDARD_ITEMS,
     BREED_MAX_POCKET: BREED_MAX_POCKET, BREED_MAX_BEARS: BREED_MAX_BEARS, BREED_CHANCE: BREED_CHANCE, TOMB: TOMB, CHURCH: CHURCH, CATHEDRAL: CATHEDRAL, CRYSTAL: CRYSTAL, TREASURE: TREASURE, FOX: FOX,
     TREASURE_COINS: TREASURE_COINS, CASH_COINS: CASH_COINS,
     EMOJI: EMOJI, NAME: NAME, NEXT: NEXT, BASE: BASE, WEIGHTS: WEIGHTS,
