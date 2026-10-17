@@ -66,12 +66,12 @@ t('chain merge: result keeps merging with neighbours', () => {
 });
 
 t('bear chain: tombs -> church -> cathedral -> treasure in one chain; treasure is final', () => {
-  const s = withGrid({ [I(2, 2)]: TT.BEAR, [I(2, 1)]: 5, [I(2, 3)]: TT.TOMB, [I(2, 4)]: TT.TOMB, [I(1, 2)]: 11, [I(0, 2)]: 11, [I(3, 2)]: 12, [I(4, 2)]: 12 });
+  const s = withGrid({ [I(2, 2)]: TT.BEAR, [I(2, 1)]: 5, [I(2, 3)]: TT.TOMB, [I(2, 4)]: TT.TOMB, [I(1, 2)]: TT.CHURCH, [I(0, 2)]: TT.CHURCH, [I(3, 2)]: TT.CATHEDRAL, [I(4, 2)]: TT.CATHEDRAL });
   const r = TT.place(s, I(5, 5)); // the bear at (2,2) has no exit: tomb -> church -> cathedral -> treasure
   assert.strictEqual(r.state.grid[I(2, 2)], TT.TREASURE);
   assert.strictEqual(r.events.filter((e) => e.type === 'merge').length, 3);
   assert.deepStrictEqual(TT.validate(r.state), []);
-  const g = withGrid({ [I(0, 0)]: 14, [I(0, 1)]: 14, [I(0, 2)]: 14 });
+  const g = withGrid({ [I(0, 0)]: TT.TREASURE, [I(0, 1)]: TT.TREASURE, [I(0, 2)]: TT.TREASURE });
   assert.deepStrictEqual(TT.validate(g), [], 'treasures never merge');
 });
 
@@ -85,35 +85,35 @@ t('open: treasure pays coins, free action, only on a treasure', () => {
 });
 
 t('final tiers never merge', () => {
-  const g = withGrid({ [I(0, 0)]: 8, [I(0, 1)]: 8, [I(0, 2)]: 8, [I(3, 0)]: 14, [I(3, 1)]: 14, [I(3, 2)]: 14 });
-  assert.deepStrictEqual(TT.validate(g), [], 'grand castles and treasures are final');
+  const g = withGrid({ [I(0, 0)]: TT.CASH, [I(0, 1)]: TT.CASH, [I(0, 2)]: TT.CASH, [I(3, 0)]: TT.TREASURE, [I(3, 1)]: TT.TREASURE, [I(3, 2)]: TT.TREASURE });
+  assert.deepStrictEqual(TT.validate(g), [], 'cash and treasures are final');
 });
 
-t('castle trio (via crystal) becomes a grand castle', () => {
-  const s = withGrid({ [I(0, 0)]: 7, [I(0, 2)]: 7 }, { cur: TT.CRYSTAL });
+t('mall trio (via crystal) becomes cash', () => {
+  const s = withGrid({ [I(0, 0)]: TT.LAST_BUILDING, [I(0, 2)]: TT.LAST_BUILDING }, { cur: TT.CRYSTAL });
   const r = TT.place(s, I(0, 1));
-  assert.strictEqual(r.state.grid[I(0, 1)], 8);
+  assert.strictEqual(r.state.grid[I(0, 1)], TT.CASH);
 });
 
 t('crystal picks the best merge available, else waits as an inert wildcard', () => {
   let s = withGrid({ [I(0, 0)]: 1, [I(0, 2)]: 1, [I(2, 1)]: 3, [I(3, 1)]: 3 }, { cur: TT.CRYSTAL });
   // cell (1,1): up (0,1) empty, left/right (1,0)/(1,2) empty, down (2,1) tree -> crystal as tree makes tree trio with (2,1),(3,1)
   let r = TT.place(s, I(1, 1));
-  assert.strictEqual(r.state.grid[I(1, 1)], 4, 'tree trio -> hut');
+  assert.strictEqual(r.state.grid[I(1, 1)], 4, 'tree trio -> camp');
   s = withGrid({ [I(0, 0)]: 1 }, { cur: TT.CRYSTAL });
   r = TT.place(s, I(5, 5));
   assert.strictEqual(r.state.grid[I(5, 5)], TT.CRYSTAL);
 });
 
 t('crystal also stands in for cathedral / church / tombstone (bear chain)', () => {
-  let s = withGrid({ [I(2, 1)]: 12, [I(2, 3)]: 12 }, { cur: TT.CRYSTAL });
+  let s = withGrid({ [I(2, 1)]: TT.CATHEDRAL, [I(2, 3)]: TT.CATHEDRAL }, { cur: TT.CRYSTAL });
   let r = TT.place(s, I(2, 2));
   assert.strictEqual(r.state.grid[I(2, 2)], TT.TREASURE, 'crystal as cathedral -> treasure');
-  s = withGrid({ [I(2, 1)]: 11, [I(2, 3)]: 11 }, { cur: TT.CRYSTAL });
-  assert.strictEqual(TT.place(s, I(2, 2)).state.grid[I(2, 2)], 12, 'crystal as church -> cathedral');
+  s = withGrid({ [I(2, 1)]: TT.CHURCH, [I(2, 3)]: TT.CHURCH }, { cur: TT.CRYSTAL });
+  assert.strictEqual(TT.place(s, I(2, 2)).state.grid[I(2, 2)], TT.CATHEDRAL, 'crystal as church -> cathedral');
   s = withGrid({ [I(2, 1)]: TT.TOMB, [I(2, 3)]: TT.TOMB }, { cur: TT.CRYSTAL });
-  assert.strictEqual(TT.place(s, I(2, 2)).state.grid[I(2, 2)], 11, 'crystal as tombstone -> church');
-  assert.strictEqual(TT.preview(s, I(2, 2)).final, 11);
+  assert.strictEqual(TT.place(s, I(2, 2)).state.grid[I(2, 2)], TT.CHURCH, 'crystal as tombstone -> church');
+  assert.strictEqual(TT.preview(s, I(2, 2)).final, TT.CHURCH);
 });
 
 t('a waiting crystal merges as soon as a later placement makes a group possible', () => {
@@ -153,19 +153,52 @@ t('buy: spends coins, makes the item current, pushes the old current to next, fr
   assert.strictEqual(TT.buy(s, TT.BEAR), null, 'not for sale');
 });
 
-t('shop stock is limited; spending decrements it, sold-out items cannot be bought', () => {
-  let s = withGrid({}, { cur: TT.BEAR, coins: 500 });
-  for (let k = 0; k < TT.START_STOCK[1]; k++) { s.cur = TT.BEAR; s = TT.buy(s, 1); assert(s, 'stock left'); }
+t('shop stock: while it lasts the price is flat, past zero it doubles for every purchase; hammer and trap just run out', () => {
+  let s = withGrid({}, { cur: TT.BEAR, coins: 5000 });
+  for (let k = 0; k < TT.START_STOCK[1]; k++) { assert.strictEqual(TT.priceOf(s, 1), TT.PRICE[1]); const c = s.coins; s.cur = TT.BEAR; s = TT.buy(s, 1); assert(s, 'stock left'); assert.strictEqual(c - s.coins, TT.PRICE[1]); }
   assert.strictEqual(s.stock[1], 0);
-  s.cur = TT.BEAR;
-  assert.strictEqual(TT.buy(s, 1), null, 'sold out');
-  assert.strictEqual(TT.buy(withGrid({}, { coins: 500, cur: TT.BEAR }), TT.CRYSTAL), null, 'crystal starts locked (0 stock)');
+  for (let extra = 1; extra <= 3; extra++) {
+    assert.strictEqual(TT.priceOf(s, 1), TT.PRICE[1] * 2 ** extra, 'purchase ' + extra + ' past the stock');
+    const c = s.coins; s.cur = TT.BEAR; s = TT.buy(s, 1);
+    assert.strictEqual(c - s.coins, TT.PRICE[1] * 2 ** extra);
+    assert.deepStrictEqual(TT.validate(s), [], 'negative stock (debt) is valid');
+  }
+  s.cur = TT.BEAR; s.coins = TT.priceOf(s, 1) - 1;
+  assert.strictEqual(TT.buy(s, 1), null, 'cannot afford the surcharge');
+  assert.strictEqual(TT.buy(withGrid({}, { coins: 500, cur: TT.BEAR }), TT.CRYSTAL), null, 'crystal is locked until the first milestone');
   const h = withGrid({ [I(0, 0)]: 5 }, { coins: 500 });
   h.stock.hammer = 0;
   assert.strictEqual(TT.hammer(h, I(0, 0)), null, 'no hammers left');
   const tp = withGrid({ [I(0, 0)]: TT.BEAR }, { coins: 500 });
   tp.stock.trap = 0;
   assert.strictEqual(TT.trap(tp, I(0, 0)), null, 'no traps left');
+});
+
+t('a milestone restock pays back stock debt', () => {
+  const s = withGrid({ [I(2, 2)]: 1, [I(2, 4)]: 1 }, { score: TT.milestoneScore(0) - 10 });
+  s.stock[1] = -2;
+  const r = TT.place(s, I(2, 3));
+  assert.strictEqual(r.state.stock[1], -2 + TT.RESTOCK[1]);
+  assert.deepStrictEqual(TT.validate(r.state), []);
+});
+
+t('higher building tiers unlock in the shop once one has stood on the board', () => {
+  let s = withGrid({ [I(1, 1)]: 5, [I(1, 2)]: 5 }, { cur: 5, coins: 1000 });
+  assert(TT.isAvailable(s, 3) && !TT.isAvailable(s, 4) && !TT.isAvailable(s, 6), 'grass/bush/tree only at the start');
+  assert.strictEqual(TT.buy(s, 4), null, 'camp is locked');
+  const r = TT.place(s, I(1, 3)); // hut trio -> house
+  assert.strictEqual(r.state.grid[I(1, 3)], 6);
+  assert.strictEqual(r.state.top, 6);
+  assert(r.events.some((e) => e.type === 'tierunlock' && e.tier === 6));
+  s = r.state;
+  [4, 5, 6].forEach((t) => assert(TT.isAvailable(s, t), 'tier ' + t + ' unlocked'));
+  assert(!TT.isAvailable(s, 7), 'only up to the best tier reached');
+  s.cur = 1; s.coins = 1000;
+  const b = TT.buy(s, 6);
+  assert.strictEqual(b.cur, 6); assert.strictEqual(b.coins, 1000 - TT.PRICE[6]);
+  assert.deepStrictEqual(TT.validate(b), []);
+  // the unlock sticks after the house itself is gone
+  assert(TT.isAvailable(TT.hammer(Object.assign({}, s, { coins: 1000 }), I(1, 3)).state, 6));
 });
 
 t('score milestones restock the shop (crystal unlocks) and the state stays valid', () => {
@@ -178,18 +211,24 @@ t('score milestones restock the shop (crystal unlocks) and the state stays valid
   assert(r.events.some((e) => e.type === 'unlock'));
   assert.strictEqual(r.state.stock[TT.CRYSTAL], 1);
   assert.strictEqual(r.state.stock[1], TT.START_STOCK[1] + TT.RESTOCK[1]);
+  assert.strictEqual(r.state.stock[4], TT.START_STOCK[4], 'locked tiers are not restocked');
   assert.deepStrictEqual(TT.validate(r.state), []);
   const bought = TT.buy(Object.assign(r.state, { cur: 1, coins: 100 }), TT.CRYSTAL);
   assert.strictEqual(bought.cur, TT.CRYSTAL); assert.strictEqual(bought.coins, 100 - TT.PRICE[TT.CRYSTAL]);
   assert.deepStrictEqual(TT.validate(bought), []);
 });
 
-t('a full board with money but no hammers left is game over', () => {
+t('a full board with money but no hammers left is game over, unless land can still be bought', () => {
   const cells = {};
   for (let i = 0; i < 35; i++) cells[i] = ((i % 6) + ((i / 6) | 0)) % 2 ? 5 : 6;
-  const s = withGrid(cells, { cur: 4, coins: 500 });
+  const s = withGrid(cells, { cur: 4, coins: TT.LAND_PRICE[0] - 1 });
   s.stock.hammer = 0;
-  assert(TT.place(s, 35).state.over);
+  assert(TT.place(s, 35).state.over, 'no hammer and too poor for land');
+  const rich = withGrid(cells, { cur: 4, coins: 500 });
+  rich.stock.hammer = 0;
+  const f = TT.place(rich, 35).state;
+  assert(!f.over, 'can still buy land');
+  assert.deepStrictEqual(TT.validate(f), []);
 });
 
 t('undo costs coins; refused when the restored state cannot pay', () => {
@@ -210,6 +249,31 @@ t('migrate fills coins / stock / milestone for old saves, including the undo sna
   assert.deepStrictEqual(TT.validate(old), []);
 });
 
+t('migrate upgrades a version-1 save: codes shift, grand castles merge into malls, bears keep walking', () => {
+  const g = new Array(36).fill(0);
+  [14, 15, 16, 21].forEach((i) => { g[i] = 8; });        // 4 connected grand castles (a dead end in v1)
+  g[0] = 9; g[1] = 10; g[2] = 11; g[3] = 12; g[4] = 14; g[5] = 13; g[6] = 4; g[7] = 7; // bear, tomb, church, cathedral, treasure, crystal, hut, castle
+  const old = { grid: g, cur: 9, next: 13, hold: 4, score: 737910, coins: 13392, stock: { 1: 5, 2: 0, 3: 1, 13: 2, hammer: 1, trap: 0 }, milestone: 0, turn: 300, over: false, rng: 5, seed: 5,
+    undo: null };
+  while (old.score >= TT.milestoneScore(old.milestone)) old.milestone++;
+  old.undo = JSON.parse(JSON.stringify(old));
+  TT.migrate(old);
+  assert.deepStrictEqual(TT.validate(old), []);
+  assert.strictEqual(old.ver, TT.VERSION); assert.strictEqual(old.w, 6); assert.deepStrictEqual(old.land, []);
+  assert.strictEqual(old.cur, TT.BEAR); assert.strictEqual(old.next, TT.CRYSTAL); assert.strictEqual(old.hold, 5, 'hut is tier 5 now');
+  assert.strictEqual(old.grid[0], TT.BEAR); assert.strictEqual(old.grid[1], TT.TOMB); assert.strictEqual(old.grid[2], TT.CHURCH);
+  assert.strictEqual(old.grid[3], TT.CATHEDRAL); assert.strictEqual(old.grid[4], TT.TREASURE); assert.strictEqual(old.grid[5], TT.CRYSTAL);
+  assert.strictEqual(old.grid[6], 5); assert.strictEqual(old.grid[7], 8);
+  assert.strictEqual(old.grid.filter((v) => v === 9).length, 0, 'the four hospitals merged');
+  assert.strictEqual(old.grid.filter((v) => v === TT.LAST_BUILDING).length, 1, '...into one mall');
+  assert(old.stock[TT.CRYSTAL] >= 2 && old.stock[1] >= 5 && old.stock[4] >= TT.START_STOCK[4], 'stock carried over (merging the castles may also pay milestone restocks)');
+  assert(old.score > 737910, 'the merge paid points');
+  assert(old.top >= 8);
+  assert.deepStrictEqual(TT.validate(old.undo), [], 'the undo snapshot is upgraded too');
+  const again = JSON.stringify(old); TT.migrate(old);
+  assert.strictEqual(JSON.stringify(old), again, 'migrating twice changes nothing');
+});
+
 t('hammer removes an item for coins; empty cells and poor players are rejected', () => {
   const s = withGrid({ [I(1, 1)]: TT.BEAR, [I(4, 4)]: 6 }, { coins: 25 });
   const r = TT.hammer(s, I(1, 1));
@@ -224,13 +288,13 @@ t('hammer removes an item for coins; empty cells and poor players are rejected',
 t('trap: kills a bear instantly into a tombstone (chaining into a church), costs coins, needs a bear', () => {
   const s = withGrid({ [I(2, 2)]: TT.BEAR, [I(2, 3)]: TT.TOMB, [I(2, 4)]: TT.TOMB, [I(5, 5)]: 1 }, { coins: 30 });
   const r = TT.trap(s, I(2, 2));
-  assert.strictEqual(r.state.grid[I(2, 2)], 11, 'tomb trio becomes a church on the trapped cell');
-  assert.strictEqual(r.state.coins, 30 - TT.PRICE.trap + TT.COIN[10]);
+  assert.strictEqual(r.state.grid[I(2, 2)], TT.CHURCH, 'tomb trio becomes a church on the trapped cell');
+  assert.strictEqual(r.state.coins, 30 - TT.PRICE.trap + TT.COIN[TT.TOMB]);
   assert.strictEqual(r.state.turn, s.turn, 'free action');
   assert.deepStrictEqual(TT.validate(r.state), []);
   const lone = TT.trap(withGrid({ [I(0, 0)]: TT.BEAR }, { coins: 30 }), I(0, 0));
   assert.strictEqual(lone.state.grid[I(0, 0)], TT.TOMB);
-  assert.strictEqual(TT.trap(s, I(5, 5)), null, 'only bears');
+  assert.strictEqual(TT.trap(s, I(5, 5)), null, 'only bears and foxes');
   assert.strictEqual(TT.trap(withGrid({ [I(0, 0)]: TT.BEAR }, { coins: TT.PRICE.trap - 1 }), I(0, 0)), null, 'too poor');
 });
 
@@ -312,7 +376,7 @@ t('a pocket with no free cell left turns all its bears into tombstones', () => {
 t('the last bear into a full pocket: the church forms where it was placed', () => {
   const s = withGrid(Object.assign({ [I(0, 0)]: TT.BEAR, [I(0, 1)]: TT.BEAR }, pocketWalls), { cur: TT.BEAR });
   const r = TT.place(s, I(0, 2));
-  assert.strictEqual(r.state.grid[I(0, 2)], 11, 'church on the tapped cell');
+  assert.strictEqual(r.state.grid[I(0, 2)], TT.CHURCH, 'church on the tapped cell');
   assert.strictEqual(r.state.grid[I(0, 0)], 0);
   assert.strictEqual(r.state.grid[I(0, 1)], 0);
   assert.strictEqual(r.events.find((e) => e.type === 'merge').at, I(0, 2));
@@ -322,16 +386,144 @@ t('the last bear into a full pocket: the church forms where it was placed', () =
 t('3 tombstones merge into a church where the bear died', () => {
   const s = withGrid({ [I(0, 0)]: TT.BEAR, [I(0, 1)]: TT.TOMB, [I(0, 2)]: TT.TOMB, [I(1, 0)]: 5 });
   const r = TT.place(s, I(5, 5)); // bear at (0,0) has no free neighbour -> trapped
-  assert.strictEqual(r.state.grid[I(0, 0)], 11);
+  assert.strictEqual(r.state.grid[I(0, 0)], TT.CHURCH);
   assert.strictEqual(r.state.grid[I(0, 1)], 0);
-  assert.strictEqual(r.state.score, 3 * TT.BASE[10]);
+  assert.strictEqual(r.state.score, 3 * TT.BASE[TT.TOMB]);
 });
 
 t('church formed next to 2 churches chains into a cathedral', () => {
-  const s = withGrid({ [I(0, 0)]: TT.BEAR, [I(0, 1)]: TT.TOMB, [I(0, 2)]: TT.TOMB, [I(1, 0)]: 11, [I(2, 0)]: 11 });
+  const s = withGrid({ [I(0, 0)]: TT.BEAR, [I(0, 1)]: TT.TOMB, [I(0, 2)]: TT.TOMB, [I(1, 0)]: TT.CHURCH, [I(2, 0)]: TT.CHURCH });
   const r = TT.place(s, I(5, 5));
-  assert.strictEqual(r.state.grid[I(0, 0)], 12);
-  assert.strictEqual(r.state.score, 3 * TT.BASE[10] + 3 * TT.BASE[11]);
+  assert.strictEqual(r.state.grid[I(0, 0)], TT.CATHEDRAL);
+  assert.strictEqual(r.state.score, 3 * TT.BASE[TT.TOMB] + 3 * TT.BASE[TT.CHURCH]);
+});
+
+t('building chain: 10 tiers, each x3, ending in collectible cash', () => {
+  assert.strictEqual(TT.EMOJI.slice(1, 12).join(' '), '🌱 🌿 🌳 🏕️ 🛖 🏠 🏘️ 🏫 🏥 🏬 💵');
+  for (let k = 1; k <= TT.LAST_BUILDING; k++) assert.strictEqual(TT.NEXT[k], k + 1);
+  assert(!TT.NEXT[TT.CASH], 'cash is final');
+  for (let k = 2; k <= TT.LAST_BUILDING; k++) assert.strictEqual(TT.BASE[k], TT.BASE[k - 1] * 3);
+  // three malls in a row become cash on the tapped tile
+  const r = TT.place(withGrid({ [I(0, 0)]: 10, [I(0, 2)]: 10 }, { cur: 10 }), I(0, 1));
+  assert.strictEqual(r.state.grid[I(0, 1)], TT.CASH);
+  assert.strictEqual(r.state.score, 3 * TT.BASE[10]);
+  assert.deepStrictEqual(TT.validate(r.state), []);
+});
+
+t('open: cash pays more than a treasure, free action', () => {
+  const s = withGrid({ [I(1, 1)]: TT.CASH, [I(2, 2)]: TT.TREASURE }, { coins: 3 });
+  const r = TT.open(s, I(1, 1));
+  assert.strictEqual(r.state.grid[I(1, 1)], 0); assert.strictEqual(r.state.coins, 3 + TT.CASH_COINS); assert.strictEqual(r.state.turn, s.turn);
+  assert(TT.CASH_COINS > TT.TREASURE_COINS);
+  assert.strictEqual(r.events[0].coins, TT.CASH_COINS);
+  assert.deepStrictEqual(TT.validate(r.state), []);
+});
+
+t('fox: warps to a random empty cell anywhere, not just to a neighbour', () => {
+  let far = 0, runs = 0;
+  for (let seed = 1; seed <= 60; seed++) {
+    const s = withGrid({ [I(3, 3)]: TT.FOX }, { rng: seed });
+    const r = TT.place(s, I(0, 0));
+    const at = r.state.grid.indexOf(TT.FOX);
+    assert(at >= 0 && at !== I(3, 3), 'the fox moved (seed ' + seed + ')');
+    assert.strictEqual(r.state.grid.filter((v) => v === TT.FOX).length, 1);
+    assert.strictEqual(r.state.grid[I(3, 3)], 0);
+    assert(r.events.some((e) => e.type === 'fox' && e.from === I(3, 3) && e.to === at));
+    assert.deepStrictEqual(TT.validate(r.state), []);
+    runs++; if (!TT.neighbors(I(3, 3)).includes(at)) far++;
+  }
+  assert(far > runs / 2, 'most warps land beyond the neighbouring cells');
+});
+
+t('fox is not trapped by walls (it warps out) as long as any empty cell exists', () => {
+  const s = withGrid({ [I(0, 0)]: TT.FOX, [I(0, 1)]: 5, [I(1, 0)]: 6, [I(1, 1)]: 7 });
+  const r = TT.place(s, I(5, 5));
+  assert.strictEqual(r.state.grid.filter((v) => v === TT.FOX).length, 1, 'still alive');
+  assert(!r.events.some((e) => e.type === 'trapped'));
+  assert.strictEqual(r.state.grid[I(0, 0)], 0, 'warped out of its walled-in cell');
+});
+
+t('fox dies only when the board is completely full (the church forms where the last animal was placed)', () => {
+  const cells = {};
+  for (let i = 0; i < 35; i++) cells[i] = ((i % 6) + ((i / 6) | 0)) % 2 ? 5 : 6;
+  cells[34] = TT.FOX; cells[33] = TT.TOMB; cells[28] = TT.TOMB;
+  const s = withGrid(cells, { cur: TT.FOX, coins: 0 });
+  const r = TT.place(s, 35); // fills the last cell: no warp possible, both foxes become tombstones
+  assert(r.events.some((e) => e.type === 'trapped' && e.at === 35));
+  assert(r.events.some((e) => e.type === 'trapped' && e.at === 34));
+  assert.strictEqual(r.state.grid[35], TT.CHURCH, 'tombs 33/34/35/28 merge on the placed cell');
+  assert.deepStrictEqual(TT.validate(r.state), []);
+});
+
+t('trap item kills a fox too (it becomes a tombstone)', () => {
+  const s = withGrid({ [I(2, 2)]: TT.FOX }, { coins: 30 });
+  const r = TT.trap(s, I(2, 2));
+  assert.strictEqual(r.state.grid[I(2, 2)], TT.TOMB);
+  assert.strictEqual(r.state.coins, 30 - TT.PRICE.trap);
+  assert.deepStrictEqual(TT.validate(r.state), []);
+});
+
+t('hammer can clear a fox; crystal and fox queue weights are valid', () => {
+  assert.strictEqual(TT.WEIGHTS.reduce((a, w) => a + w[1], 0), 100);
+  assert(TT.WEIGHTS.some((w) => w[0] === TT.FOX));
+  const r = TT.hammer(withGrid({ [I(1, 1)]: TT.FOX }, { coins: 25 }), I(1, 1));
+  assert.strictEqual(r.state.grid[I(1, 1)], 0);
+});
+
+t('land: each side once, dearer every time, items keep their place, board grows', () => {
+  let s = withGrid({ [I(0, 0)]: 1, [I(5, 5)]: 2 }, { coins: 10000 });
+  assert.strictEqual(TT.landPrice(s), TT.LAND_PRICE[0]);
+  assert(TT.LAND_PRICE.every((p, k) => k === 0 || p > TT.LAND_PRICE[k - 1]), 'prices rise');
+  let r = TT.buyLand(s, 'top');
+  assert.strictEqual(r.state.h, 7); assert.strictEqual(r.state.w, 6); assert.strictEqual(r.state.grid.length, 42);
+  assert.strictEqual(r.state.grid[6 + 0], 1, 'old (0,0) is now (1,0)'); assert.strictEqual(r.state.grid[6 + 35], 2);
+  assert.strictEqual(r.state.coins, 10000 - TT.LAND_PRICE[0]); assert.strictEqual(r.state.turn, s.turn, 'free action');
+  assert.deepStrictEqual(TT.validate(r.state), []);
+  s = r.state;
+  assert.strictEqual(TT.buyLand(s, 'top'), null, 'one row per side');
+  assert.strictEqual(TT.buyLand(s, 'sideways'), null);
+  r = TT.buyLand(s, 'left'); // new column: every row grows by one at the front
+  s = r.state;
+  assert.strictEqual(s.w, 7); assert.strictEqual(s.grid.length, 49);
+  assert.strictEqual(s.grid[7 * 1 + 1], 1, 'old item shifted down a row and right a column');
+  assert.strictEqual(r.state.coins, 10000 - TT.LAND_PRICE[0] - TT.LAND_PRICE[1]);
+  s = TT.buyLand(s, 'right').state; s = TT.buyLand(s, 'bottom').state;
+  assert.strictEqual(s.w, 8); assert.strictEqual(s.h, 8); assert.strictEqual(s.grid.length, 64);
+  assert.strictEqual(TT.landPrice(s), null); assert.strictEqual(TT.buyLand(s, 'top'), null, 'at most 4');
+  assert.deepStrictEqual(TT.validate(s), []);
+  assert.strictEqual(s.grid.filter((v) => v === 1).length, 1); assert.strictEqual(s.grid.filter((v) => v === 2).length, 1);
+  assert.strictEqual(TT.buyLand(withGrid({}, { coins: TT.LAND_PRICE[0] - 1 }), 'top'), null, 'too poor');
+});
+
+t('land: merges, bears and the game-over check work on the bigger board', () => {
+  let s = withGrid({}, { coins: 10000 });
+  ['right', 'bottom'].forEach((side) => { s = TT.buyLand(s, side).state; });
+  assert.strictEqual(s.w, 7); assert.strictEqual(s.h, 7);
+  const I7 = (r, c) => r * 7 + c;
+  // grass in the new last column connects with grass next to it
+  s.grid[I7(2, 5)] = 1; s.grid[I7(2, 6)] = 1; s.cur = 1;
+  const r = TT.place(s, I7(2, 4));
+  assert.strictEqual(r.state.grid[I7(2, 4)], 2, 'merge across the new column');
+  assert.deepStrictEqual(TT.validate(r.state), []);
+  // a bear walks into the new bottom row (index 42..48)
+  const b = withGrid({}, { coins: 10000 });
+  let bs = TT.buyLand(b, 'bottom').state; bs.grid[5 * 6 + 3] = TT.BEAR;
+  const walls = [4 * 6 + 3, 5 * 6 + 2, 5 * 6 + 4];
+  walls.forEach((i, k) => { bs.grid[i] = 5 + k; });
+  const moved = TT.place(bs, 0).state;
+  assert.strictEqual(moved.grid[6 * 6 + 3], TT.BEAR, 'the only exit was the new row');
+  // full board: poor + no hammer is over; with land money it is not
+  const full = withGrid({}, {}); full.grid = full.grid.map((_, i) => ((i % 6) + ((i / 6) | 0)) % 2 ? 5 : 6);
+  full.stock.hammer = 0; full.coins = 0; assert(TT.isOver(full));
+  full.coins = TT.LAND_PRICE[0]; assert(!TT.isOver(full));
+});
+
+t('validate rejects a board whose size does not match the land bought', () => {
+  const s = TT.buyLand(withGrid({}, { coins: 1000 }), 'top').state;
+  assert.deepStrictEqual(TT.validate(s), []);
+  assert(TT.validate(Object.assign({}, s, { land: [] })).length);
+  assert(TT.validate(Object.assign({}, s, { w: 9 })).length);
+  assert(TT.validate(Object.assign({}, s, { grid: s.grid.slice(1) })).length);
 });
 
 t('swap stores the item, then exchanges', () => {
@@ -362,6 +554,7 @@ t('illegal moves are rejected', () => {
   assert.strictEqual(TT.place(s, I(0, 0)), null);
   assert.strictEqual(TT.place(s, -1), null);
   assert.strictEqual(TT.place(s, 36), null);
+  assert.strictEqual(TT.place(s, 1000), null);
   const over = Object.assign({}, s, { over: true });
   assert.strictEqual(TT.place(over, 5), null);
   assert.strictEqual(TT.swap(over), null);
@@ -384,7 +577,7 @@ t('wouldMerge agrees with place', () => {
 });
 
 t('fuzz: 400 random games keep state valid and always terminate', () => {
-  let maxTurns = 0, merges = 0, trapped = 0, churches = 0, hammers = 0;
+  let maxTurns = 0, merges = 0, trapped = 0, churches = 0, hammers = 0, lands = 0, foxMoves = 0, maxTier = 0;
   for (let seed = 1; seed <= 400; seed++) {
     let s = TT.newGame(seed);
     const pick = TT.newGame(seed * 7919 + 1); // independent chooser rng
@@ -398,10 +591,19 @@ t('fuzz: 400 random games keep state valid and always terminate', () => {
       }
       const empties = [], occupied = [];
       s.grid.forEach((v, i) => { (v === 0 ? empties : occupied).push(i); });
+      if (TT.rand(pick) < 0.01 || !empties.length) { // buy land now and then, and whenever stuck
+        const side = TT.SIDES[Math.floor(TT.rand(pick) * TT.SIDES.length)];
+        const l = TT.buyLand(s, side);
+        if (l) { lands++; s = l.state; assert.deepStrictEqual(TT.validate(s), []); continue; }
+      }
       if (!empties.length || TT.rand(pick) < 0.03) { // full board (rich) or a random hammer
         const h = TT.hammer(s, occupied[Math.floor(TT.rand(pick) * occupied.length)]);
         if (h) { hammers++; s = h.state; assert.deepStrictEqual(TT.validate(s), []); continue; }
-        assert(empties.length, 'full board must either be over or hammerable');
+        if (!empties.length) { // out of hammers: only the remaining land can save the game
+          const side = TT.SIDES.find((x) => TT.buyLand(s, x));
+          assert(side, 'full board must either be over or rescuable');
+          s = TT.buyLand(s, side).state; lands++; assert.deepStrictEqual(TT.validate(s), []); continue;
+        }
       }
       const idx = empties[Math.floor(TT.rand(pick) * empties.length)];
       const r = TT.place(s, idx);
@@ -409,7 +611,7 @@ t('fuzz: 400 random games keep state valid and always terminate', () => {
       const prob = TT.validate(r.state);
       assert.deepStrictEqual(prob, [], `seed ${seed} turn ${s.turn}: ${prob.join(', ')}`);
       assert(r.state.score >= s.score);
-      r.events.forEach((e) => { if (e.type === 'merge') { merges++; if (e.to === 11) churches++; } if (e.type === 'trapped') trapped++; });
+      r.events.forEach((e) => { if (e.type === 'merge') { merges++; if (e.to === TT.CHURCH) churches++; } if (e.type === 'trapped') trapped++; if (e.type === 'fox') foxMoves++; if (e.type === 'merge') maxTier = Math.max(maxTier, e.to); });
       if (TT.rand(pick) < 0.05) {
         const u = TT.undo(r.state);
         assert.strictEqual(!!u, TT.canUndo(r.state));
@@ -419,8 +621,8 @@ t('fuzz: 400 random games keep state valid and always terminate', () => {
     }
     maxTurns = Math.max(maxTurns, s.turn);
   }
-  assert(merges > 0 && trapped > 0, 'fuzz exercised merges and trapped bears');
-  console.log(`  fuzz: max ${maxTurns} turns, ${merges} merges, ${trapped} trapped bears, ${churches} churches, ${hammers} hammers`);
+  assert(merges > 0 && trapped > 0 && foxMoves > 0, 'fuzz exercised merges, trapped bears and fox warps');
+  console.log(`  fuzz: max ${maxTurns} turns, ${merges} merges, ${trapped} trapped bears, ${churches} churches, ${hammers} hammers, ${lands} land purchases, ${foxMoves} fox warps, best tier ${maxTier}`);
 });
 
 console.log(`OK: ${n} logic tests passed`);

@@ -13,7 +13,7 @@
   --bg: #0f2418; --bg2: #14301f; --ink: #eaf6e6; --muted: #8fb39a; --accent: #ffd45a;
   --g1: #86c862; --g2: #74b550; --line: #3f7a2a;
   /* board side: as wide as the phone allows, as tall as the screen allows after the controls underneath */
-  --bs: max(280px, min(100vw - 12px, calc(100dvh - 352px), 640px));
+  --bs: max(280px, min(100vw - 12px, calc(100dvh - 420px), 640px));
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; height: 100%; background: radial-gradient(circle at 50% 0, var(--bg2), var(--bg)); color: var(--ink);
@@ -23,13 +23,13 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 .hidden { display: none !important; }
 
 .hud { width: var(--bs); display: flex; align-items: center; gap: 8px; }
-.brand { flex: 1; font-size: 22px; font-weight: 800; letter-spacing: .3px; min-width: 0; }
+.brand { flex: 1; font-size: clamp(16px, 4.2vw, 22px); line-height: 1.05; font-weight: 800; letter-spacing: .3px; min-width: 0; overflow: hidden; }
 .brand span { color: var(--accent); }
-.stat { text-align: right; min-width: 0; margin-left: 6px; }
+.stat { text-align: right; flex: none; margin-left: 6px; white-space: nowrap; }
 .stat small { display: block; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .8px; }
-.stat b { font-size: 19px; font-variant-numeric: tabular-nums; }
+.stat b { font-size: clamp(15px, 4vw, 19px); font-variant-numeric: tabular-nums; }
 .stat.coins b { color: var(--accent); }
-@media (max-width: 460px) { .brand { display: none; } .hud { justify-content: space-between; } .stat { flex: 1; text-align: center; } }
+@media (max-width: 460px) { .brand { display: none; } .hud { justify-content: space-between; } .stat { flex: 1; text-align: center; margin-left: 0; } }
 
 /* reserve tray: top-left of the play area */
 .tray { position: relative; flex: none; width: 62px; height: 62px; display: flex; align-items: center; justify-content: center;
@@ -38,12 +38,13 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 .tray .emoji { font-size: 32px; line-height: 1; margin-top: 10px; }
 .tray:active { filter: brightness(1.3); }
 
-#boardWrap { position: relative; width: var(--bs); height: var(--bs); }
+/* the wrap stays square; the board inside grows by whole rows/columns as land is bought (--m = longest side in cells) */
+#boardWrap { position: relative; width: var(--bs); height: var(--bs); display: flex; align-items: center; justify-content: center; --m: 6; }
 /* plain checkerboard field: flat squares, no gaps, no rounded bubbles */
-#board { width: 100%; height: 100%; display: grid; grid-template: repeat(6, 1fr) / repeat(6, 1fr); gap: 0; padding: 0;
+#board { --cols: 6; --rows: 6; width: calc(100% * var(--cols) / var(--m)); height: calc(100% * var(--rows) / var(--m)); flex: none; display: grid; grid-template: repeat(var(--rows), 1fr) / repeat(var(--cols), 1fr); gap: 0; padding: 0;
   background: var(--g1); border-radius: 4px; overflow: hidden; box-shadow: 0 8px 28px #0008, 0 0 0 3px #1d4a30; touch-action: manipulation; }
 .cell { position: relative; display: flex; align-items: center; justify-content: center;
-  font-size: calc(var(--bs) / 6 * .62); line-height: 1; cursor: pointer; background: var(--g1);
+  font-size: calc(var(--bs) / var(--m) * .62); line-height: 1; cursor: pointer; background: var(--g1);
   outline: 1px solid #0000001a; outline-offset: -1px; }
 .cell.alt { background: var(--g2); }
 .cell.empty:active { filter: brightness(1.12); }
@@ -66,14 +67,21 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 .cell.pop .e { animation: pop .38s cubic-bezier(.2, 1.6, .4, 1); }
 .cell.shake { animation: shake .45s; }
 .cell.slide .e { animation: slide .28s ease-out; }
+.cell.warp .e { animation: warp .45s ease-out; }
 @keyframes drop { from { transform: translateY(-60%) scale(.5); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes pop { 0% { transform: scale(.4); } 60% { transform: scale(1.35); } 100% { transform: scale(1); } }
 @keyframes shake { 0%, 100% { transform: translateX(0); } 15% { transform: translateX(-7px) rotate(-4deg); } 35% { transform: translateX(7px) rotate(4deg); }
   55% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+@keyframes warp { 0% { transform: scale(0) rotate(-220deg); opacity: 0; } 70% { transform: scale(1.25) rotate(12deg); opacity: 1; } 100% { transform: none; } }
 @keyframes slide { from { transform: translate(var(--dx), var(--dy)); } to { transform: none; } }
 
+/* ambient critters: decorative only, they wander over the board without ever taking a tap */
+#critters { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 1; }
+.crit { position: absolute; left: 0; top: 0; display: block; font-size: calc(var(--bs) / var(--m) * .3); line-height: 1; opacity: .92;
+  transition: transform 1.6s ease-in-out; filter: drop-shadow(0 1px 1px #0006); }
+.crit.flip { scale: -1 1; }
 #fx { position: absolute; inset: 0; pointer-events: none; overflow: visible; z-index: 2; }
-.ghost { position: absolute; display: flex; align-items: center; justify-content: center; font-size: calc(var(--bs) / 6 * .62);
+.ghost { position: absolute; display: flex; align-items: center; justify-content: center; font-size: calc(var(--bs) / var(--m) * .62);
   animation: fly .3s ease-in forwards; }
 @keyframes fly { to { transform: translate(var(--dx), var(--dy)); opacity: 0; } }
 .pts { position: absolute; font-weight: 800; color: var(--accent); text-shadow: 0 2px 4px #000c; transform: translate(-50%, -50%);
@@ -95,14 +103,21 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 .slot.next { opacity: .85; }
 .slot.next .emoji { font-size: 30px; }
 
-/* shop */
+/* shop: the item row scrolls sideways once many tiers are unlocked; tools and land sit in a fixed row of six */
 .tools { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+.tools.shop { display: flex; overflow-x: auto; scrollbar-width: thin; padding-bottom: 2px; }
+/* 6.5 buttons wide: the half button peeking in on the right shows that the row scrolls */
+.tools.shop .tool { flex: 0 0 calc((100% - 30px) / 6.5); }
 .unlock { margin: -2px 0 0; font-size: 11px; color: var(--muted); text-align: center; min-height: 1.3em; }
 .tool { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 6px 2px; border-radius: 12px;
   border: 2px solid #8a6d1c; background: #2a2410; color: var(--ink); font: inherit; cursor: pointer; }
 .tool .te { font-size: 22px; line-height: 1.1; }
 .tool .tb { position: absolute; top: 1px; right: 3px; font-size: 10px; font-weight: 800; color: var(--ink); opacity: .85; }
-.tool .tp { font-size: 11px; font-weight: 700; color: var(--accent); }
+.tool .tp { font-size: 11px; font-weight: 700; color: var(--accent); white-space: nowrap; }
+.tool.pricey .tp { color: #ff9a5a; }
+.tool.fresh { animation: fresh 1s ease-out 3; }
+.tool.land { border-color: #2f6f8a; background: #10262e; }
+@keyframes fresh { 50% { box-shadow: 0 0 0 3px var(--accent); } }
 .tool:active:not(:disabled) { filter: brightness(1.3); }
 .tool:disabled { opacity: .35; }
 .tool[aria-pressed="true"] { background: #5a1f1f; border-color: #ff5a5a; }
@@ -142,7 +157,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   .tray { width: 72px; height: 72px; }
   .tray .emoji { font-size: 38px; }
 }
-@media (prefers-reduced-motion: reduce) { .cell .e, .cell, .ghost, .pts, .cell::before { animation-duration: .01s !important; } }
+@media (prefers-reduced-motion: reduce) { .cell .e, .cell, .ghost, .pts, .cell::before, .tool { animation-duration: .01s !important; } .crit { display: none; } }
 </style>
 </head>
 <body>
@@ -159,6 +174,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 
   <div id="boardWrap">
     <div id="board" role="grid" aria-label="Game board"></div>
+    <div id="critters" aria-hidden="true"></div>
     <div id="fx" aria-hidden="true"></div>
   </div>
 
@@ -172,14 +188,16 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       <div class="slot next"><small>Next</small><span class="emoji" id="nextItem"></span></div>
     </section>
 
-    <section class="tools" aria-label="Shop">
-      <button class="tool" data-tool="1" aria-label="Buy grass"><span class="te">🌱</span><span class="tp"></span><span class="tb"></span></button>
-      <button class="tool" data-tool="2" aria-label="Buy bush"><span class="te">🌿</span><span class="tp"></span><span class="tb"></span></button>
-      <button class="tool" data-tool="3" aria-label="Buy tree"><span class="te">🌳</span><span class="tp"></span><span class="tb"></span></button>
-      <button class="tool" data-tool="13" aria-label="Buy crystal"><span class="te">💎</span><span class="tp"></span><span class="tb"></span></button>
-      <button class="tool" data-tool="trap" id="trapBtn" aria-pressed="false" aria-label="Bear trap: kill a bear instantly"><span class="te">🪤</span><span class="tp"></span><span class="tb"></span></button>
+    <section id="shop" class="tools shop" aria-label="Shop: items"></section>
+    <section class="tools util" aria-label="Shop: tools and land">
+      <button class="tool" data-tool="trap" id="trapBtn" aria-pressed="false" aria-label="Trap: kill a bear or fox instantly"><span class="te">🪤</span><span class="tp"></span><span class="tb"></span></button>
       <button class="tool" data-tool="hammer" id="hammerBtn" aria-pressed="false" aria-label="Hammer: remove a placed item"><span class="te">🔨</span><span class="tp"></span><span class="tb"></span></button>
+      <button class="tool land" data-land="top" aria-label="Buy land: a new row on top"><span class="te">⬆️</span><span class="tp"></span></button>
+      <button class="tool land" data-land="bottom" aria-label="Buy land: a new row at the bottom"><span class="te">⬇️</span><span class="tp"></span></button>
+      <button class="tool land" data-land="left" aria-label="Buy land: a new column on the left"><span class="te">⬅️</span><span class="tp"></span></button>
+      <button class="tool land" data-land="right" aria-label="Buy land: a new column on the right"><span class="te">➡️</span><span class="tp"></span></button>
     </section>
+    <p id="landNote" class="unlock"></p>
     <p id="unlock" class="unlock"></p>
 
     <div class="actions">
@@ -217,10 +235,12 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     <h2>How to play</h2>
     <ul>
       <li>On a computer, hover a tile to preview the move (the result shows faintly, merged items are outlined) and click to place the item shown in <b>Place</b>. On a touch screen, tap to preview and tap again to place. Turn <b>Preview</b> off to place with one tap.</li>
-      <li>Connect <b>3 or more</b> identical items (up, down, left, right) and <i>all</i> of them merge into one of the next tier on the tile you tapped (4 or 5 pay more points and coins, nothing is left over):<br>🌱 → 🌿 → 🌳 → 🛖 → 🏠 → 🏛️ → 🏰 → 🏯</li>
-      <li>🐻 <b>Bears</b> wander one step each turn. Box one in so it cannot move and it becomes a 🪦. Three connected 🪦 merge into ⛪, three ⛪ into 🕌, three 🕌 into a 💰 <b>treasure</b>: tap it to open it for coins.</li>
+      <li>Connect <b>3 or more</b> identical items (up, down, left, right) and <i>all</i> of them merge into one of the next tier on the tile you tapped (4 or 5 pay more points and coins, nothing is left over):<br>🌱 → 🌿 → 🌳 → 🏕️ → 🛖 → 🏠 → 🏘️ → 🏫 → 🏥 → 🏬 → 💵 <b>cash</b>: tap it to collect coins.</li>
+      <li>🐻 <b>Bears</b> wander one step each turn. Box one in so it cannot move and it becomes a 🪦 (bears sharing a pocket that still has room are safe). Three connected 🪦 merge into ⛪, three ⛪ into 🕌, three 🕌 into a 💰 <b>treasure</b>: tap it to open it for coins.</li>
+      <li>🦊 The <b>fox</b> never walks: every turn it <b>warps</b> to a random empty tile. Walls cannot trap it. Only the 🪤 trap, or a completely full board, turns it into a 🪦.</li>
       <li>💎 The <b>crystal</b> is a wildcard: it turns into whatever makes the best merge (buildings, 🪦, ⛪ or 🕌). If it cannot merge yet it waits, and merges as soon as a group of 3 is possible next to it.</li>
-      <li>🪙 <b>Coins</b> come from merges. Spend them in the shop: buy 🌱 🌿 🌳 💎 as your current item (the old one moves to Next), use the 🪤 <b>bear trap</b> to kill a bear on the spot (it turns into a 🪦), or the 🔨 hammer to remove any placed item. Shop actions are free but <b>stock is limited</b> (the ×N badge): reaching score milestones restocks it and unlocks the 💎.</li>
+      <li>🪙 <b>Coins</b> come from merges. Spend them in the shop: buy an item as your current one (the old one moves to Next). You can buy 🌱 🌿 🌳, and any higher tier once you have built one. Stock is limited (the ×N badge): after it runs out the price <b>doubles</b> with every purchase, and score milestones restock it.</li>
+      <li>🪤 kills a bear or fox on the spot, 🔨 removes any placed item, and ⬆️⬇️⬅️➡️ buy <b>land</b>: one more row or column on that side (each side once, dearer every time).</li>
       <li>The <b>Reserve</b> tray (top left) stores the current item for later (free swap). <b>Undo</b> takes back your last move for a few coins.</li>
       <li>The game ends when the board is full and you cannot afford a hammer.</li>
     </ul>
@@ -234,32 +254,44 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   else root.TT = factory();
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
-  var W = 6, H = 6, N = W * H;
+  // The board starts 6x6 and grows by one row/column per bought side (state.w / state.h). W, H, N are the dimensions of the
+  // state being worked on, set by dim() at the start of every public function; the exported W/H/N are the starting size.
+  var DEFAULT_W = 6, DEFAULT_H = 6, W = DEFAULT_W, H = DEFAULT_H, N = W * H;
+  function dim(s) { W = s.w || DEFAULT_W; H = s.h || DEFAULT_H; N = W * H; }
+  var VERSION = 2;
 
-  // Cell / item codes. 0 empty. 1..8 building chain. 9 bear, 10 tombstone, 11 church, 12 cathedral, 13 crystal, 14 treasure
-  // (final tier of the bear chain: tap it to open it for coins).
-  var EMPTY = 0, BEAR = 9, TOMB = 10, CRYSTAL = 13, TREASURE = 14;
-  var EMOJI = ['', '🌱', '🌿', '🌳', '🛖', '🏠', '🏛️', '🏰', '🏯', '🐻', '🪦', '⛪', '🕌', '💎', '💰'];
-  var NAME = ['empty', 'grass', 'bush', 'tree', 'hut', 'house', 'mansion', 'castle', 'grand castle', 'bear', 'tombstone', 'church', 'cathedral', 'crystal', 'treasure'];
-  // code -> code it becomes when 3+ connect. Final tiers (8 grand castle, 12 cathedral), bear and crystal are absent.
-  var NEXT = { 1: 2, 2: 3, 3: 4, 4: 5, 5: 6, 6: 7, 7: 8, 10: 11, 11: 12, 12: 14 };
-  // points per item consumed by a merge, keyed by the consumed code
-  var BASE = { 1: 10, 2: 30, 3: 90, 4: 270, 5: 810, 6: 2430, 7: 7290, 10: 150, 11: 1500, 12: 15000 };
-  // item queue draw weights (sum 100): mostly grass, sometimes bush/tree/bear, rare crystal
-  var WEIGHTS = [[1, 62], [2, 16], [3, 6], [BEAR, 12], [CRYSTAL, 4]];
-  var QUEUE_ITEMS = [1, 2, 3, BEAR, CRYSTAL];
+  // Cell / item codes. 0 empty. 1..10 building chain (10 = mall), 11 cash (collectible, final), 12 bear, 13 tombstone,
+  // 14 church, 15 cathedral, 16 crystal, 17 treasure (final tier of the bear chain: collectible), 18 fox.
+  var EMPTY = 0, LAST_BUILDING = 10, CASH = 11, BEAR = 12, TOMB = 13, CHURCH = 14, CATHEDRAL = 15, CRYSTAL = 16, TREASURE = 17, FOX = 18;
+  var EMOJI = ['', '🌱', '🌿', '🌳', '🏕️', '🛖', '🏠', '🏘️', '🏫', '🏥', '🏬', '💵', '🐻', '🪦', '⛪', '🕌', '💎', '💰', '🦊'];
+  var NAME = ['empty', 'grass', 'bush', 'tree', 'camp', 'hut', 'house', 'village', 'school', 'hospital', 'mall', 'cash', 'bear', 'tombstone', 'church', 'cathedral', 'crystal', 'treasure', 'fox'];
+  // code -> code it becomes when 3+ connect. Final tiers (11 cash, 15->17 treasure), bear, fox and crystal are absent / collectible.
+  var NEXT = { 1: 2, 2: 3, 3: 4, 4: 5, 5: 6, 6: 7, 7: 8, 8: 9, 9: 10, 10: 11, 13: 14, 14: 15, 15: 17 };
+  // points per item consumed by a merge, keyed by the consumed code (buildings x3 per tier)
+  var BASE = { 13: 150, 14: 1500, 15: 15000 };
+  var COIN = { 1: 2, 2: 4, 3: 8, 4: 16, 5: 30, 6: 60, 7: 120, 8: 240, 9: 480, 10: 960, 13: 20, 14: 100, 15: 500 };
+  (function () { var b = 10; for (var k = 1; k <= LAST_BUILDING; k++) { BASE[k] = b; b *= 3; } })();
+  // item queue draw weights (sum 100): mostly grass, sometimes bush/tree/bear, rare crystal and fox
+  var WEIGHTS = [[1, 59], [2, 16], [3, 6], [BEAR, 12], [CRYSTAL, 4], [FOX, 3]];
+  var QUEUE_ITEMS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, BEAR, CRYSTAL, FOX];
   // coins: earned per merge (COIN[consumed code] * (group size - 2)), spent in the shop (free actions, no turn passes)
   var START_COINS = 10;
-  var COIN = { 1: 2, 2: 4, 3: 8, 4: 16, 5: 30, 6: 60, 7: 120, 10: 20, 11: 100, 12: 500 };
   var TREASURE_COINS = 250; // paid when a treasure is opened
-  var PRICE = { 1: 6, 2: 15, 3: 35, 13: 50, hammer: 20, trap: 12 };
-  var BUYABLE = [1, 2, 3, CRYSTAL];
+  var CASH_COINS = 5000;    // paid when cash (the last building tier) is collected
+  var PRICE = { 1: 6, 2: 15, 3: 35, 4: 80, 5: 180, 6: 400, 7: 900, 8: 2000, 9: 4500, 10: 10000, 16: 50, hammer: 20, trap: 12 };
+  var BUYABLE = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, CRYSTAL];
   var UNDO_COST = 5; // coins per undo
-  // The shop has limited stock per game. Reaching a score milestone restocks it (the crystal only appears from the first one).
-  var START_STOCK = { 1: 3, 2: 2, 3: 1, 13: 0, hammer: 2, trap: 2 };
+  // Shop stock per game. An item bought with no stock left still sells, at double the price for every purchase past zero
+  // (stock goes negative = debt, milestone restocks pay it back). Hammer and trap simply run out.
+  var START_STOCK = { 1: 3, 2: 2, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1, 10: 1, 16: 0, hammer: 2, trap: 2 };
   var MILESTONES = [400, 1200, 3000, 7000, 15000, 30000]; // after the last one a restock comes every 30000 more points
-  var RESTOCK = { 1: 2, 2: 1, 3: 1, 13: 1, hammer: 1, trap: 1 };
+  var RESTOCK = { 1: 2, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1, 10: 1, 16: 1, hammer: 1, trap: 1 };
   function milestoneScore(n) { return n < MILESTONES.length ? MILESTONES[n] : MILESTONES[MILESTONES.length - 1] * (n - MILESTONES.length + 2); }
+  // Land: one extra row/column per side, each side once, dearer every time.
+  var SIDES = ['top', 'bottom', 'left', 'right'];
+  var LAND_PRICE = [150, 400, 1000, 2500];
+  // The shop always sells grass, bush and tree; a higher building tier is unlocked once one has stood on the board.
+  var STARTER_TIER = 3;
 
   // ---- seeded RNG (mulberry32). The state is one uint32 kept inside the game state, so undo/replay is exact.
   function rand(s) {
@@ -277,13 +309,14 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   }
 
   function clone(s) {
-    return { grid: s.grid.slice(), cur: s.cur, next: s.next, hold: s.hold, score: s.score, coins: s.coins, stock: Object.assign({}, s.stock), milestone: s.milestone, turn: s.turn,
-      over: s.over, rng: s.rng, seed: s.seed, undo: s.undo };
+    return { ver: s.ver, w: s.w, h: s.h, land: s.land.slice(), top: s.top, grid: s.grid.slice(), cur: s.cur, next: s.next, hold: s.hold, score: s.score, coins: s.coins,
+      stock: Object.assign({}, s.stock), milestone: s.milestone, turn: s.turn, over: s.over, rng: s.rng, seed: s.seed, undo: s.undo };
   }
 
   function newGame(seed) {
     seed = (seed >>> 0) || 1;
-    var s = { grid: new Array(N).fill(EMPTY), cur: 1, next: 1, hold: 0, score: 0, coins: START_COINS, stock: Object.assign({}, START_STOCK), milestone: 0, turn: 0, over: false, rng: seed, seed: seed, undo: null };
+    var s = { ver: VERSION, w: DEFAULT_W, h: DEFAULT_H, land: [], top: 1, grid: new Array(DEFAULT_W * DEFAULT_H).fill(EMPTY), cur: 1, next: 1, hold: 0, score: 0, coins: START_COINS,
+      stock: Object.assign({}, START_STOCK), milestone: 0, turn: 0, over: false, rng: seed, seed: seed, undo: null };
     s.next = drawItem(s); // always open with grass
     return s;
   }
@@ -328,7 +361,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   }
 
   // Item kinds a crystal can stand in for, best first: the bear chain (cathedral -> treasure, church, tombstone), then buildings.
-  var CRYSTAL_AS = [12, 11, 10, 7, 6, 5, 4, 3, 2, 1];
+  var CRYSTAL_AS = [CATHEDRAL, CHURCH, TOMB, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
   // Best kind the crystal at `at` could stand in for to form a 3+ group; 0 if none (grid is left unchanged).
   function crystalTier(grid, at) {
     var keep = grid[at], found = 0;
@@ -352,20 +385,24 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     }
   }
 
-  // Put `item` on empty cell idx and resolve every merge it causes (no bear movement). Mutates s.
+  // Put `item` on empty cell idx and resolve every merge it causes (no animal movement). Mutates s.
   function applyItem(s, idx, item, events) {
     s.grid[idx] = item;
     if (item === CRYSTAL) settleCrystals(s, events, idx);
     else { resolveAt(s, idx, events); settleCrystals(s, events); }
   }
 
+  function emptyCount(grid) { var n = 0; for (var i = 0; i < grid.length; i++) if (grid[i] === EMPTY) n++; return n; }
+
   // Bears are trapped per pocket: a pocket is a connected area of empty cells and bears. A pocket with no empty cell left
   // turns all its bears into tombstones; in a pocket that still has room every bear that can step does, and a bear that
   // is boxed in by other bears just waits (it does not die while a neighbour can still free a cell for it).
+  // Foxes do not walk: each turn a fox warps to a random empty cell anywhere. They are only trapped by the shop trap, or
+  // when the board is completely full (nowhere left to warp to).
   // `last` is the cell just played: if it was trapped, its tombstones merge there first (the church forms where the
-  // last bear went in), then the rest in board order.
+  // last animal went in), then the rest in board order.
   function moveBears(s, events, last) {
-    var seen = {}, trapped = [], bears = [], i;
+    var seen = {}, trapped = [], bears = [], i, full = emptyCount(s.grid) === 0;
     for (i = 0; i < N; i++) {
       if (seen[i] || (s.grid[i] !== BEAR && s.grid[i] !== EMPTY)) continue;
       var stack = [i], pocket = [], room = false;
@@ -378,6 +415,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       }
       if (!room) pocket.forEach(function (c) { if (s.grid[c] === BEAR) trapped.push(c); });
     }
+    if (full) for (i = 0; i < N; i++) if (s.grid[i] === FOX) trapped.push(i);
     trapped.sort(function (a, b) { return (b === last) - (a === last) || a - b; });
     trapped.forEach(function (at) { s.grid[at] = TOMB; events.push({ type: 'trapped', at: at }); });
     for (i = 0; i < N; i++) if (s.grid[i] === BEAR) bears.push(i);
@@ -388,24 +426,62 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       s.grid[from] = EMPTY; s.grid[to] = BEAR;
       events.push({ type: 'bear', from: from, to: to });
     });
+    if (!full) {
+      var foxes = [];
+      for (i = 0; i < N; i++) if (s.grid[i] === FOX) foxes.push(i);
+      foxes.forEach(function (from) {
+        var empties = [];
+        for (var j = 0; j < N; j++) if (s.grid[j] === EMPTY) empties.push(j);
+        var to = empties[randInt(s, empties.length)]; // never empty: a fox leaves its own cell free behind it
+        s.grid[from] = EMPTY; s.grid[to] = FOX;
+        events.push({ type: 'fox', from: from, to: to });
+      });
+    }
     trapped.forEach(function (at) { if (s.grid[at] === TOMB) resolveAt(s, at, events); });
   }
 
-  function emptyCount(grid) { var n = 0; for (var i = 0; i < N; i++) if (grid[i] === EMPTY) n++; return n; }
-  // A full board only ends the game when the player cannot afford a hammer to clear a tile.
+  // ---- shop helpers
+  // Highest building tier unlocked in the shop (a tier unlocks once one has stood on the board; s.top remembers it).
+  function unlockedTop(s) { return Math.max(STARTER_TIER, s.top || 0); }
+  function isAvailable(s, item) {
+    if (BUYABLE.indexOf(item) < 0) return false;
+    if (item === CRYSTAL) return s.milestone >= 1;
+    return item <= unlockedTop(s);
+  }
+  // Price of the next purchase: base price while stock lasts, doubling for every purchase beyond it.
+  function priceOf(s, item) {
+    var base = PRICE[item], st = s.stock[item] || 0;
+    if (BUYABLE.indexOf(item) >= 0 && st <= 0) base *= Math.pow(2, 1 - st);
+    return base;
+  }
+  // Remember the highest building tier seen on the board; unlocking a new shop tier emits an event. Mutates s.
+  function noteTop(s, events) {
+    var m = s.top || 1, before = unlockedTop(s);
+    for (var i = 0; i < N; i++) { var v = s.grid[i]; if (v > m && v <= LAST_BUILDING) m = v; }
+    s.top = m;
+    if (unlockedTop(s) > before) events.push({ type: 'tierunlock', tier: unlockedTop(s) });
+  }
+
+  // A full board only ends the game when the player can neither hammer a tile nor afford more land.
   function canHammer(s) { return s.coins >= PRICE.hammer && s.stock.hammer > 0; }
-  function isOver(s) { return emptyCount(s.grid) === 0 && !canHammer(s); }
-  // Score milestones restock the shop. Mutates s.
+  function landPrice(s) { return s.land.length < SIDES.length ? LAND_PRICE[s.land.length] : null; }
+  function canLand(s) { return s.land.length < SIDES.length && s.coins >= LAND_PRICE[s.land.length]; }
+  function isOver(s) { return emptyCount(s.grid) === 0 && !canHammer(s) && !canLand(s); }
+  // Score milestones restock the shop (only tiers that are unlocked). Mutates s.
   function grantMilestones(s, events) {
     while (s.score >= milestoneScore(s.milestone)) {
       s.milestone++;
-      for (var k in RESTOCK) s.stock[k] = (s.stock[k] || 0) + RESTOCK[k];
+      for (var k in RESTOCK) {
+        if (+k <= LAST_BUILDING && +k > unlockedTop(s)) continue;
+        s.stock[k] = (s.stock[k] || 0) + RESTOCK[k];
+      }
       events.push({ type: 'unlock', milestone: s.milestone });
     }
   }
 
   // Play one turn: put s.cur on empty cell idx. Returns {state, events}, or null if the move is illegal.
   function place(state, idx) {
+    dim(state);
     if (state.over || !(idx >= 0 && idx < N) || state.grid[idx] !== EMPTY) return null;
     var s = clone(state), events = [], item = s.cur;
     s.undo = clone(state); s.undo.undo = null; // one level of undo, no nesting
@@ -413,6 +489,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     applyItem(s, idx, item, events);
     moveBears(s, events, idx);
     settleCrystals(s, events); // new tombstones / churches may complete a group for a waiting crystal
+    noteTop(s, events);
     grantMilestones(s, events);
     s.cur = s.next; s.next = drawItem(s); s.turn++;
     if (isOver(s)) { s.over = true; events.push({ type: 'over', score: s.score }); }
@@ -429,47 +506,73 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   }
 
   // Shop: swap the current item for a bought one (cost in coins, free action). The old current item becomes `next`;
-  // the old `next` is discarded. Returns a new state or null (cannot afford, not sold, already current, game over).
+  // the old `next` is discarded. Returns a new state or null (cannot afford, locked, already current, game over).
   function buy(state, item) {
-    if (state.over || BUYABLE.indexOf(item) < 0 || state.coins < PRICE[item] || !(state.stock[item] > 0) || state.cur === item) return null;
+    dim(state);
+    if (state.over || !isAvailable(state, item) || state.coins < priceOf(state, item) || state.cur === item) return null;
     var s = clone(state);
-    s.coins -= PRICE[item]; s.stock[item]--; s.next = s.cur; s.cur = item;
+    s.coins -= priceOf(state, item); s.stock[item] = (s.stock[item] || 0) - 1; s.next = s.cur; s.cur = item;
     return isOver(s) ? null : s; // never let a purchase strand a full board without hammer money
   }
 
   // Shop: the hammer removes whatever stands on cell idx (free action, costs coins). Returns {state, events} or null.
   function hammer(state, idx) {
+    dim(state);
     if (state.over || !(idx >= 0 && idx < N) || state.grid[idx] === EMPTY || !canHammer(state)) return null;
     var s = clone(state), item = s.grid[idx];
     s.grid[idx] = EMPTY; s.coins -= PRICE.hammer; s.stock.hammer--; s.over = isOver(s);
     return { state: s, events: [{ type: 'hammer', at: idx, item: item }] };
   }
 
-  // Open the treasure on cell idx: it disappears and pays TREASURE_COINS (free action). Returns {state, events} or null.
+  // Collect the treasure or the cash on cell idx: it disappears and pays coins (free action). Returns {state, events} or null.
   function open(state, idx) {
-    if (state.over || !(idx >= 0 && idx < N) || state.grid[idx] !== TREASURE) return null;
-    var s = clone(state);
-    s.grid[idx] = EMPTY; s.coins += TREASURE_COINS;
-    return { state: s, events: [{ type: 'open', at: idx, coins: TREASURE_COINS }] };
+    dim(state);
+    if (state.over || !(idx >= 0 && idx < N) || (state.grid[idx] !== TREASURE && state.grid[idx] !== CASH)) return null;
+    var s = clone(state), item = s.grid[idx], coins = item === CASH ? CASH_COINS : TREASURE_COINS;
+    s.grid[idx] = EMPTY; s.coins += coins;
+    return { state: s, events: [{ type: 'open', at: idx, item: item, coins: coins }] };
   }
 
-  // Shop: the bear trap kills the bear on cell idx on the spot: it becomes a tombstone (which may merge into a church
-  // right away). Free action, costs coins. Returns {state, events} or null (no bear there, too poor, or it would
+  // Shop: the trap kills the bear or fox on cell idx on the spot: it becomes a tombstone (which may merge into a church
+  // right away). Free action, costs coins. Returns {state, events} or null (nothing to trap there, too poor, or it would
   // leave a full board without hammer money).
   function trap(state, idx) {
-    if (state.over || !(idx >= 0 && idx < N) || state.grid[idx] !== BEAR || state.coins < PRICE.trap || !(state.stock.trap > 0)) return null;
+    dim(state);
+    if (state.over || !(idx >= 0 && idx < N) || (state.grid[idx] !== BEAR && state.grid[idx] !== FOX) || state.coins < PRICE.trap || !(state.stock.trap > 0)) return null;
     var s = clone(state), events = [{ type: 'trap', at: idx }];
     s.coins -= PRICE.trap; s.stock.trap--; s.grid[idx] = TOMB;
     resolveAt(s, idx, events);
     settleCrystals(s, events);
+    noteTop(s, events);
     grantMilestones(s, events);
     s.over = isOver(s);
     return s.over ? null : { state: s, events: events };
   }
 
-  // What would placing the current item at idx do? Pure (no bear movement, no rng use). Returns null for an illegal move,
+  // Shop: buy one more row (top/bottom) or column (left/right) of land; each side once, dearer every time. Free action.
+  // Returns {state, events} or null.
+  function buyLand(state, side) {
+    dim(state);
+    if (state.over || SIDES.indexOf(side) < 0 || state.land.indexOf(side) >= 0 || !canLand(state)) return null;
+    var s = clone(state), g = state.grid, w = W, h = H;
+    s.coins -= LAND_PRICE[state.land.length];
+    s.land.push(side);
+    if (side === 'top') { g = new Array(w).fill(EMPTY).concat(g); s.h++; }
+    else if (side === 'bottom') { g = g.concat(new Array(w).fill(EMPTY)); s.h++; }
+    else {
+      var out = [];
+      for (var r = 0; r < h; r++) { var row = g.slice(r * w, (r + 1) * w); out = out.concat(side === 'left' ? [EMPTY].concat(row) : row.concat([EMPTY])); }
+      g = out; s.w++;
+    }
+    s.grid = g;
+    s.over = false;
+    return { state: s, events: [{ type: 'land', side: side, w: s.w, h: s.h }] };
+  }
+
+  // What would placing the current item at idx do? Pure (no animal movement, no rng use). Returns null for an illegal move,
   // else {item, final (code left on idx), eaten (other cells emptied by merges), points, coins, merged}.
   function preview(state, idx) {
+    dim(state);
     if (state.over || !(idx >= 0 && idx < N) || state.grid[idx] !== EMPTY) return null;
     var s = clone(state), events = [], eaten = [], pts = 0, coins = 0;
     applyItem(s, idx, s.cur, events);
@@ -481,22 +584,49 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   // Undo is possible when there is a snapshot and the player can pay UNDO_COST (taken from the restored coins).
   function canUndo(state) { return !!state.undo && state.undo.coins >= UNDO_COST; }
 
-  // Revert the last placement (one level, including any shop use / swap made since) for UNDO_COST coins.
+  // Revert the last placement (one level, including any shop use / swap / land bought since) for UNDO_COST coins.
   // Returns null if there is nothing to undo or the player cannot pay.
   function undo(state) {
     if (!canUndo(state)) return null;
     var s = clone(state.undo);
+    dim(s);
     s.undo = null; s.coins -= UNDO_COST; s.over = isOver(s);
     return s;
   }
 
-  // Fill in fields that older saves lack (coins, stock, milestone) on s and its undo snapshot. Mutates s.
+  // Old (version 1) saves used other codes for everything after the tree: hut..grand castle moved up one or more places
+  // to make room for the new building tiers, and the bear chain moved to the end of the table.
+  var V1_CODE = { 4: 5, 5: 6, 6: 7, 7: 8, 8: 9, 9: BEAR, 10: TOMB, 11: CHURCH, 12: CATHEDRAL, 13: CRYSTAL, 14: TREASURE };
+  function v1Code(v) { return V1_CODE[v] || v; }
+  function upgradeV1(x) {
+    if (Array.isArray(x.grid)) x.grid = x.grid.map(v1Code);
+    ['cur', 'next', 'hold'].forEach(function (k) { if (x[k]) x[k] = v1Code(x[k]); });
+    var ns = Object.assign({}, START_STOCK);
+    if (x.stock && typeof x.stock === 'object') for (var k in x.stock) ns[k === '13' ? CRYSTAL : k] = x.stock[k];
+    x.stock = ns;
+    x.ver = VERSION; x.w = DEFAULT_W; x.h = DEFAULT_H; x.land = [];
+    x.top = STARTER_TIER;
+    if (Array.isArray(x.grid)) x.grid.forEach(function (v) { if (v > x.top && v <= LAST_BUILDING) x.top = v; });
+  }
+
+  // Fill in fields that older saves lack (coins, stock, milestone, land, new codes) on s and its undo snapshot. Mutates s.
+  // Tiers that no longer end the chain (the old grand castles) may now form a group: settle those so the save is valid.
   function migrate(s) {
     [s, s && s.undo].forEach(function (x) {
       if (!x || typeof x !== 'object') return;
       if (typeof x.coins !== 'number') x.coins = START_COINS;
+      var old = !(x.ver >= VERSION);
+      if (old) upgradeV1(x);
       if (!x.stock || typeof x.stock !== 'object') x.stock = Object.assign({}, START_STOCK);
       if (typeof x.milestone !== 'number') { x.milestone = 0; while (x.score >= milestoneScore(x.milestone)) x.milestone++; }
+      if (old && Array.isArray(x.grid) && x.grid.length === DEFAULT_W * DEFAULT_H) {
+        dim(x);
+        var ev = [];
+        for (var i = 0; i < N; i++) resolveAt(x, i, ev);
+        settleCrystals(x, ev);
+        grantMilestones(x, ev);
+        x.over = isOver(x);
+      }
     });
     return s;
   }
@@ -504,10 +634,20 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   // Returns a list of problems (empty = valid). Used by tests and before restoring a saved game.
   function validate(s) {
     var p = [], i;
-    if (!s || !Array.isArray(s.grid) || s.grid.length !== N) return ['bad grid'];
+    if (!s || typeof s !== 'object') return ['bad state'];
+    var ok = function (v) { return v === (v | 0) && v >= DEFAULT_W && v <= DEFAULT_W + 2; };
+    if (!ok(s.w) || !ok(s.h) || !Array.isArray(s.land)) return ['bad board size'];
+    dim(s);
+    if (!Array.isArray(s.grid) || s.grid.length !== N) return ['bad grid'];
+    var lr = 0, tb = 0;
+    s.land.forEach(function (side, k) {
+      if (SIDES.indexOf(side) < 0 || s.land.indexOf(side) !== k) p.push('bad land ' + side);
+      else if (side === 'left' || side === 'right') lr++; else tb++;
+    });
+    if (s.w !== DEFAULT_W + lr || s.h !== DEFAULT_H + tb) p.push('board size does not match the land bought');
     for (i = 0; i < N; i++) {
       var v = s.grid[i];
-      if (v !== (v | 0) || v < 0 || v > TREASURE) p.push('bad code at ' + i + ': ' + v);
+      if (v !== (v | 0) || v < 0 || v > FOX) p.push('bad code at ' + i + ': ' + v);
     }
     if (p.length) return p;
     if (QUEUE_ITEMS.indexOf(s.cur) < 0) p.push('bad current item ' + s.cur);
@@ -515,8 +655,12 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     if (s.hold && QUEUE_ITEMS.indexOf(s.hold) < 0) p.push('bad hold ' + s.hold);
     if (typeof s.score !== 'number' || s.score < 0 || s.score !== (s.score | 0)) p.push('bad score ' + s.score);
     if (typeof s.coins !== 'number' || s.coins < 0 || s.coins !== (s.coins | 0)) p.push('bad coins ' + s.coins);
+    if (!(s.top >= 1 && s.top <= LAST_BUILDING) || s.top !== (s.top | 0)) p.push('bad top tier ' + s.top);
     if (!s.stock || typeof s.stock !== 'object') return ['bad stock'];
-    for (var sk in START_STOCK) if (!(s.stock[sk] >= 0) || s.stock[sk] !== (s.stock[sk] | 0)) p.push('bad stock ' + sk + ': ' + s.stock[sk]);
+    for (var sk in START_STOCK) {
+      var n = s.stock[sk];
+      if (typeof n !== 'number' || n !== (n | 0) || ((sk === 'hammer' || sk === 'trap') && n < 0)) p.push('bad stock ' + sk + ': ' + n);
+    }
     if (!(s.milestone >= 0) || s.milestone !== (s.milestone | 0)) p.push('bad milestone ' + s.milestone);
     else if (s.score < (s.milestone ? milestoneScore(s.milestone - 1) : 0) || s.score >= milestoneScore(s.milestone)) p.push('milestone ' + s.milestone + ' inconsistent with score ' + s.score);
     if (p.length) return p;
@@ -540,13 +684,16 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   function wouldMerge(state, idx) { var p = preview(state, idx); return !!p && p.merged; }
 
   return {
-    W: W, H: H, N: N, EMPTY: EMPTY, BEAR: BEAR, TOMB: TOMB, CRYSTAL: CRYSTAL, TREASURE: TREASURE, TREASURE_COINS: TREASURE_COINS,
+    W: DEFAULT_W, H: DEFAULT_H, N: DEFAULT_W * DEFAULT_H, MAX_LAND: SIDES.length, SIDES: SIDES, LAND_PRICE: LAND_PRICE, LAST_BUILDING: LAST_BUILDING, VERSION: VERSION,
+    EMPTY: EMPTY, CASH: CASH, BEAR: BEAR, TOMB: TOMB, CHURCH: CHURCH, CATHEDRAL: CATHEDRAL, CRYSTAL: CRYSTAL, TREASURE: TREASURE, FOX: FOX,
+    TREASURE_COINS: TREASURE_COINS, CASH_COINS: CASH_COINS,
     EMOJI: EMOJI, NAME: NAME, NEXT: NEXT, BASE: BASE, WEIGHTS: WEIGHTS,
     START_COINS: START_COINS, COIN: COIN, PRICE: PRICE, BUYABLE: BUYABLE, UNDO_COST: UNDO_COST, START_STOCK: START_STOCK,
     RESTOCK: RESTOCK, MILESTONES: MILESTONES, milestoneScore: milestoneScore, canUndo: canUndo, canHammer: canHammer, migrate: migrate,
     rand: rand, drawItem: drawItem, newGame: newGame, neighbors: neighbors, group: group,
     place: place, swap: swap, undo: undo, validate: validate, wouldMerge: wouldMerge, emptyCount: emptyCount,
-    buy: buy, hammer: hammer, trap: trap, open: open, preview: preview, isOver: isOver
+    buy: buy, hammer: hammer, trap: trap, open: open, buyLand: buyLand, preview: preview, isOver: isOver,
+    priceOf: priceOf, isAvailable: isAvailable, unlockedTop: unlockedTop, landPrice: landPrice, canLand: canLand
   };
 });
 </script>
@@ -559,17 +706,19 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
   };
 
-  var boardEl = $('board'), fxEl = $('fx');
+  var boardEl = $('board'), fxEl = $('fx'), wrapEl = $('boardWrap'), shopEl = $('shop'), critEl = $('critters');
   var state, best = store.get('tt-best', 0), hints = false;
   var previewOn = store.get('tt-preview', true) !== false;
   var sel = -1, hover = -1, mode = null, lastPointer = 'touch'; // UI-only: tile awaiting confirmation, mouse hover, armed tool ('hammer'|'trap'), last input type
-  var cells = [];
+  var cells = [], bw = 0, bh = 0, shopKey = '';
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   function seedFromHash() {
     var m = /seed=(\d+)/.exec(location.hash);
     return m ? (parseInt(m[1], 10) >>> 0) || 1 : 0;
   }
   function randomSeed() { return ((Math.random() * 4294967295) >>> 0) || 1; }
+  function fmt(n) { return n >= 10000 ? Math.round(n / 1000) + 'k' : n >= 1000 ? (Math.round(n / 100) / 10) + 'k' : String(n); }
 
   function startNew(seed) {
     state = TT.newGame(seed || randomSeed());
@@ -582,18 +731,26 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 
   function loadSaved() {
     var s = store.get('tt-save', null);
-    try { if (s) TT.migrate(s); } catch (e) { return null; } // saves from before coins / stock existed
+    try { if (s) TT.migrate(s); } catch (e) { return null; } // saves from before coins / stock / land / the new building chain
     try { if (s && TT.validate(s).length === 0 && typeof s.rng === 'number') return s; } catch (e) {}
     return null;
   }
 
-  // ---- board construction
-  for (var i = 0; i < TT.N; i++) {
-    var el = document.createElement('div');
-    el.className = 'cell empty' + (((i % TT.W) + ((i / TT.W) | 0)) % 2 ? ' alt' : '');
-    el.dataset.i = i; el.dataset.c = 0; el.setAttribute('role', 'gridcell');
-    var e = document.createElement('span'); e.className = 'e'; el.appendChild(e);
-    boardEl.appendChild(el); cells.push(el);
+  // ---- board construction (rebuilt whenever the land size changes)
+  function buildBoard() {
+    var w = state.w, h = state.h;
+    boardEl.textContent = ''; cells = [];
+    boardEl.style.setProperty('--cols', w); boardEl.style.setProperty('--rows', h);
+    wrapEl.style.setProperty('--m', Math.max(w, h));
+    for (var i = 0; i < w * h; i++) {
+      var el = document.createElement('div');
+      el.className = 'cell empty' + (((i % w) + ((i / w) | 0)) % 2 ? ' alt' : '');
+      el.dataset.i = i; el.dataset.c = 0; el.setAttribute('role', 'gridcell');
+      var e = document.createElement('span'); e.className = 'e'; el.appendChild(e);
+      boardEl.appendChild(el); cells.push(el);
+    }
+    bw = w; bh = h; sel = -1; hover = -1;
+    clearCritters();
   }
   boardEl.addEventListener('pointerdown', function (ev) { lastPointer = ev.pointerType || 'touch'; });
   boardEl.addEventListener('click', function (ev) {
@@ -613,10 +770,12 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 
   function vibrate(ms) { if (navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } }
 
+  function isCollectible(v) { return v === TT.TREASURE || v === TT.CASH; }
+  function isAnimal(v) { return v === TT.BEAR || v === TT.FOX; }
   // Is idx a legal target for the armed tool (or for placement when none is armed)?
   function targetOk(idx) {
     var v = state.grid[idx];
-    return mode === 'hammer' ? v !== 0 : mode === 'trap' ? v === TT.BEAR : (v === 0 || v === TT.TREASURE);
+    return mode === 'hammer' ? v !== 0 : mode === 'trap' ? isAnimal(v) : (v === 0 || isCollectible(v));
   }
   function doAction(idx) {
     return mode === 'hammer' ? TT.hammer(state, idx) : mode === 'trap' ? TT.trap(state, idx) : TT.place(state, idx);
@@ -627,7 +786,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   function tap(idx) {
     if (!state || state.over) return;
     if (!targetOk(idx)) { bump(idx); return; }
-    if (!mode && state.grid[idx] === TT.TREASURE) { // opening a treasure is always good news: no confirmation step
+    if (!mode && isCollectible(state.grid[idx])) { // collecting is always good news: no confirmation step
       var o = TT.open(state, idx);
       state = o.state; sel = -1; save(); render(o.events); vibrate(25);
       return;
@@ -650,19 +809,42 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     return { x: r.left - b.left + r.width / 2, y: r.top - b.top + r.height / 2, w: r.width, h: r.height };
   }
   function clearAnim() {
-    cells.forEach(function (c) { c.classList.remove('drop', 'pop', 'shake', 'slide'); });
+    cells.forEach(function (c) { c.classList.remove('drop', 'pop', 'shake', 'slide', 'warp'); });
+  }
+
+  // The shop row lists every unlocked building tier plus the crystal; it is rebuilt only when that list changes.
+  function buildShop() {
+    var items = [], k, fresh = shopKey !== '';
+    for (k = 1; k <= TT.unlockedTop(state); k++) items.push(k);
+    items.push(TT.CRYSTAL);
+    var key = items.join(',');
+    if (key === shopKey) return;
+    var known = shopKey ? shopKey.split(',') : [];
+    shopKey = key; shopEl.textContent = '';
+    items.forEach(function (t) {
+      var b = document.createElement('button');
+      b.className = 'tool' + (fresh && known.indexOf(String(t)) < 0 ? ' fresh' : '');
+      b.dataset.tool = t; b.setAttribute('aria-label', 'Buy ' + TT.NAME[t]);
+      b.innerHTML = '<span class="te">' + TT.EMOJI[t] + '</span><span class="tp"></span><span class="tb"></span>';
+      b.addEventListener('click', function () {
+        var s = TT.buy(state, t);
+        if (s) { state = s; save(); render([]); }
+      });
+      shopEl.appendChild(b);
+    });
   }
 
   function render(events) {
+    if (state.w !== bw || state.h !== bh) buildBoard();
     clearAnim();
-    var g = state.grid;
+    var g = state.grid, w = state.w;
     cells.forEach(function (c, i) {
       var code = g[i];
       c.dataset.c = code;
       c.firstChild.textContent = TT.EMOJI[code];
       c.classList.toggle('empty', code === 0);
       c.classList.toggle('hint', hints && !state.over && TT.wouldMerge(state, i));
-      c.setAttribute('aria-label', 'row ' + (((i / TT.W) | 0) + 1) + ' column ' + ((i % TT.W) + 1) + ' ' + TT.NAME[code]);
+      c.setAttribute('aria-label', 'row ' + (((i / w) | 0) + 1) + ' column ' + ((i % w) + 1) + ' ' + TT.NAME[code]);
     });
     if (mode && (state.over || state.coins < TT.PRICE[mode] || !(state.stock[mode] > 0))) mode = null;
     if (sel >= 0 && (state.over || !targetOk(sel))) sel = -1;
@@ -675,25 +857,39 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     $('nextItem').textContent = TT.EMOJI[state.next];
     $('holdItem').textContent = state.hold ? TT.EMOJI[state.hold] : '·';
     $('undoBtn').disabled = !TT.canUndo(state);
-    document.querySelectorAll('.tool').forEach(function (b) {
+    buildShop();
+    document.querySelectorAll('.tool[data-tool]').forEach(function (b) {
       var t = b.dataset.tool;
       if (t === 'hammer') {
-        b.disabled = !TT.canHammer(state) || state.over || TT.emptyCount(g) === TT.N;
+        b.disabled = !TT.canHammer(state) || state.over || TT.emptyCount(g) === g.length;
         b.setAttribute('aria-pressed', mode === 'hammer');
       } else if (t === 'trap') {
-        b.disabled = state.over || state.coins < TT.PRICE.trap || !(state.stock.trap > 0) || g.indexOf(TT.BEAR) < 0;
+        b.disabled = state.over || state.coins < TT.PRICE.trap || !(state.stock.trap > 0) || (g.indexOf(TT.BEAR) < 0 && g.indexOf(TT.FOX) < 0);
         b.setAttribute('aria-pressed', mode === 'trap');
-      } else b.disabled = !TT.buy(state, +t);
-      b.querySelector('.tb').textContent = '×' + (state.stock[t] || 0);
+      } else {
+        b.disabled = !TT.buy(state, +t);
+        b.querySelector('.tp').textContent = '🪙' + fmt(TT.priceOf(state, +t));
+        b.classList.toggle('pricey', (state.stock[t] || 0) <= 0); // out of stock: the price has doubled (or more)
+      }
+      b.querySelector('.tb').textContent = '×' + Math.max(0, state.stock[t] || 0);
     });
+    var lp = TT.landPrice(state);
+    document.querySelectorAll('.land').forEach(function (b) {
+      var owned = state.land.indexOf(b.dataset.land) >= 0;
+      b.disabled = state.over || owned || !TT.canLand(state);
+      b.querySelector('.tp').textContent = owned ? '✓' : '🪙' + fmt(lp);
+    });
+    $('landNote').textContent = 'Land ' + state.land.length + '/' + TT.MAX_LAND + (lp ? ' · next side 🪙' + lp : ' · all bought');
     var nextAt = TT.milestoneScore(state.milestone), gifts = [];
     [1, 2, 3, TT.CRYSTAL].forEach(function (c) { gifts.push('+' + TT.RESTOCK[c] + TT.EMOJI[c]); });
-    $('unlock').textContent = 'Shop restocks at score ' + nextAt + ' (' + (nextAt - state.score) + ' to go): ' + gifts.join(' ') + ' +1🪤 +1🔨';
+    $('unlock').textContent = 'Shop restocks at score ' + nextAt + ' (' + (nextAt - state.score) + ' to go): ' + gifts.join(' ') +
+      (TT.unlockedTop(state) > 3 ? ' +1 each higher tier' : '') + ' +1🪤 +1🔨';
     $('undoBtn').textContent = '↶ Undo 🪙' + TT.UNDO_COST;
     $('turn').textContent = 'Turn ' + state.turn;
     $('seed').textContent = 'seed ' + state.seed;
     animate(events);
     updatePreview();
+    syncCritters();
     if (state.over) showOver();
   }
 
@@ -706,23 +902,24 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     var note = '', hot = false, pi = sel >= 0 ? sel : (previewOn ? hover : -1), p;
     if (state.over) note = '';
     else if (mode === 'trap') {
-      if (pi >= 0 && state.grid[pi] === TT.BEAR) {
+      if (pi >= 0 && isAnimal(state.grid[pi])) {
         cells[pi].classList.add('target');
         var tr = TT.trap(state, pi);
         var res = tr ? tr.state.grid[pi] : TT.TOMB;
-        note = (sel === pi ? 'Tap again to trap' : 'Trap') + ' the bear -> ' + TT.NAME[res] + ' (-' + TT.PRICE.trap + ' coins)';
+        note = (sel === pi ? 'Tap again to trap' : 'Trap') + ' the ' + TT.NAME[state.grid[pi]] + ' -> ' + TT.NAME[res] + ' (-' + TT.PRICE.trap + ' coins)';
         hot = sel === pi;
-      } else note = '🪤 Tap a bear to kill it';
+      } else note = '🪤 Tap a bear or fox to kill it';
     } else if (mode === 'hammer') {
       if (pi >= 0 && state.grid[pi] !== 0) {
         cells[pi].classList.add('target');
         note = (lastPointer !== 'mouse' && sel === pi ? 'Tap again to smash ' : 'Smash ') + TT.NAME[state.grid[pi]] + ' (-' + TT.PRICE.hammer + ' coins)';
         hot = sel === pi;
       } else note = '🔨 Tap an item to remove it';
-    } else if (pi >= 0 && state.grid[pi] === TT.TREASURE) {
-      note = '💰 Click to open the treasure: +' + TT.TREASURE_COINS + ' coins'; hot = true;
+    } else if (pi >= 0 && isCollectible(state.grid[pi])) {
+      var cash = state.grid[pi] === TT.CASH;
+      note = (cash ? '💵 Click to collect the cash: +' + TT.CASH_COINS : '💰 Click to open the treasure: +' + TT.TREASURE_COINS) + ' coins'; hot = true;
     } else if (TT.emptyCount(state.grid) === 0) {
-      note = 'Board full - use the 🔨 hammer (' + TT.PRICE.hammer + ' coins) to clear a tile'; hot = true;
+      note = 'Board full - use the 🔨 hammer (' + TT.PRICE.hammer + ' coins) or buy land'; hot = true;
     } else if (previewOn && pi >= 0 && (p = TT.preview(state, pi))) {
       cells[pi].classList.add('pv'); cells[pi].setAttribute('data-pv', TT.EMOJI[p.final]);
       p.eaten.forEach(function (i) { cells[i].classList.add('eat'); });
@@ -734,6 +931,17 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     } else if (previewOn) note = 'Tap a tile to preview, tap again to place';
     $('note').textContent = note;
     $('note').classList.toggle('hot', hot);
+  }
+
+  function toast(text, yFrac) {
+    var b = fxEl.getBoundingClientRect(), el = document.createElement('div');
+    el.className = 'pts'; el.textContent = text; el.style.left = b.width / 2 + 'px'; el.style.top = b.height * (yFrac || 0.5) + 'px';
+    fxEl.appendChild(el);
+  }
+  function floatAt(idx, text) {
+    var c = cellCenter(idx), el = document.createElement('div');
+    el.className = 'pts'; el.textContent = text; el.style.left = c.x + 'px'; el.style.top = c.y + 'px';
+    fxEl.appendChild(el);
   }
 
   function animate(events) {
@@ -752,36 +960,80 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
             'px;--dx:' + (to.x - f.x) + 'px;--dy:' + (to.y - f.y) + 'px';
           fxEl.appendChild(gh);
         });
-        var p = document.createElement('div');
-        p.className = 'pts'; p.textContent = '+' + ev.points + (ev.coins ? ' · +' + ev.coins + '🪙' : '');
-        p.style.left = to.x + 'px'; p.style.top = to.y + 'px';
-        fxEl.appendChild(p);
+        floatAt(ev.at, '+' + ev.points + (ev.coins ? ' · +' + ev.coins + '🪙' : ''));
       } else if (ev.type === 'bear') {
         var a = cellCenter(ev.from), b = cellCenter(ev.to), c = cells[ev.to];
         c.style.setProperty('--dx', (a.x - b.x) + 'px'); c.style.setProperty('--dy', (a.y - b.y) + 'px');
         c.classList.add('slide');
+      } else if (ev.type === 'fox') { // warps: a puff where it left, it spins in where it lands
+        floatAt(ev.from, '💨');
+        cells[ev.to].classList.add('warp');
       } else if (ev.type === 'trapped') {
         cells[ev.at].classList.add('shake');
       } else if (ev.type === 'unlock') {
-        var ub = fxEl.getBoundingClientRect(), un = document.createElement('div');
-        un.className = 'pts'; un.textContent = '🛒 Shop restocked!'; un.style.left = ub.width / 2 + 'px'; un.style.top = ub.height / 2 + 'px';
-        fxEl.appendChild(un);
+        toast('🛒 Shop restocked!');
+      } else if (ev.type === 'tierunlock') {
+        toast(TT.EMOJI[ev.tier] + ' ' + TT.NAME[ev.tier] + ' unlocked in the shop!', 0.35);
+      } else if (ev.type === 'land') {
+        toast('🏞️ New land!');
       } else if (ev.type === 'open') {
-        var oc = cellCenter(ev.at), oe = document.createElement('div');
-        oe.className = 'pts'; oe.textContent = '💰 +' + ev.coins + '🪙'; oe.style.left = oc.x + 'px'; oe.style.top = oc.y + 'px';
-        fxEl.appendChild(oe);
+        floatAt(ev.at, (ev.item === TT.CASH ? '💵 +' : '💰 +') + ev.coins + '🪙');
       } else if (ev.type === 'trap') {
-        var tp = cellCenter(ev.at), tel = document.createElement('div');
-        tel.className = 'pts'; tel.textContent = '🪤 -' + TT.PRICE.trap + '🪙'; tel.style.left = tp.x + 'px'; tel.style.top = tp.y + 'px';
-        fxEl.appendChild(tel); cells[ev.at].classList.add('shake');
+        floatAt(ev.at, '🪤 -' + TT.PRICE.trap + '🪙'); cells[ev.at].classList.add('shake');
       } else if (ev.type === 'hammer') {
-        var h = cellCenter(ev.at), hp = document.createElement('div');
-        hp.className = 'pts'; hp.textContent = '🔨 -' + TT.PRICE.hammer + '🪙'; hp.style.left = h.x + 'px'; hp.style.top = h.y + 'px';
-        fxEl.appendChild(hp);
+        floatAt(ev.at, '🔨 -' + TT.PRICE.hammer + '🪙');
       }
     });
     setTimeout(function () { if (fxEl.childNodes.length) fxEl.textContent = ''; }, 1000);
   }
+
+  // ---- ambient critters: purely decorative (never part of the game state). Rabbits and chicks hop around the
+  // residential tiles (camp .. village), ghosts and black cats drift around the tombstone / church / cathedral tiles.
+  var AREAS = [
+    { codes: [4, 5, 6, 7], kinds: ['🐇', '🐤'] },
+    { codes: [TT.TOMB, TT.CHURCH, TT.CATHEDRAL], kinds: ['👻', '🐈‍⬛'] }
+  ];
+  var critters = [];
+  function areaCells(area) {
+    var out = [];
+    state.grid.forEach(function (v, i) { if (area.codes.indexOf(v) >= 0) out.push(i); });
+    return out;
+  }
+  function clearCritters() { critters.forEach(function (c) { c.el.remove(); }); critters = []; }
+  function hop(c, first) {
+    var list = areaCells(c.area);
+    if (!list.length || !cells.length) return;
+    var idx = list[Math.floor(Math.random() * list.length)], p = cellCenter(idx), s = p.w * 0.34;
+    var x = p.x + (Math.random() - 0.5) * (p.w - s) * 0.9, y = p.y + (Math.random() - 0.5) * (p.h - s) * 0.9;
+    c.el.classList.toggle('flip', x < c.x);
+    if (first) { c.el.style.transition = 'none'; }
+    c.el.style.transform = 'translate(' + (x - s / 2) + 'px,' + (y - s / 2) + 'px)';
+    if (first) { void c.el.offsetWidth; c.el.style.transition = ''; }
+    c.x = x; c.next = Date.now() + 1500 + Math.random() * 2500;
+  }
+  function syncCritters() {
+    if (reduceMotion) return;
+    AREAS.forEach(function (area) {
+      var n = areaCells(area).length, want = Math.min(3, Math.floor(n / 2));
+      area.kinds.forEach(function (kind) {
+        var mine = critters.filter(function (c) { return c.kind === kind; });
+        while (mine.length > want) { var gone = mine.pop(); gone.el.remove(); critters.splice(critters.indexOf(gone), 1); }
+        while (mine.length < want) {
+          var el = document.createElement('span');
+          el.className = 'crit'; el.textContent = kind; el.setAttribute('aria-hidden', 'true');
+          critEl.appendChild(el);
+          var c = { el: el, kind: kind, area: area, x: 0, next: 0 };
+          critters.push(c); mine.push(c); hop(c, true);
+        }
+      });
+    });
+  }
+  setInterval(function () {
+    if (document.hidden || !state) return;
+    var now = Date.now();
+    critters.forEach(function (c) { if (now >= c.next) hop(c, false); });
+  }, 600);
+  window.addEventListener('resize', function () { critters.forEach(function (c) { c.next = 0; }); });
 
   function showOver() {
     var newBest = state.score >= best && state.score > 0;
@@ -795,13 +1047,15 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     var s = TT.swap(state);
     if (s) { state = s; save(); render([]); }
   });
-  document.querySelectorAll('.tool').forEach(function (b) {
+  document.querySelectorAll('.tool[data-tool]').forEach(function (b) { // trap and hammer (the item shop is built in buildShop)
     var t = b.dataset.tool;
     b.querySelector('.tp').textContent = '🪙' + TT.PRICE[t];
+    b.addEventListener('click', function () { mode = mode === t ? null : t; sel = -1; render([]); });
+  });
+  document.querySelectorAll('.land').forEach(function (b) {
     b.addEventListener('click', function () {
-      if (t === 'hammer' || t === 'trap') { mode = mode === t ? null : t; sel = -1; render([]); return; }
-      var s = TT.buy(state, +t);
-      if (s) { state = s; save(); render([]); }
+      var r = TT.buyLand(state, b.dataset.land);
+      if (r) { state = r.state; sel = -1; hover = -1; save(); render(r.events); vibrate(15); }
     });
   });
   $('previewBtn').setAttribute('aria-pressed', previewOn);
@@ -836,10 +1090,12 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     return out.join('');
   }
   $('guideBody').innerHTML =
-    '<h3>Buildings</h3><div class="chain">' + chain(1, null, 'grand castle (final)') + '</div>' +
+    '<h3>Buildings</h3><div class="chain">' + chain(1, null, 'cash (final)') + '</div>' +
+    '<p class="gnote">💵 Cash is collectible: tap it for +' + TT.CASH_COINS + ' coins. 🐇🐤 hop around the homes (camp to village).</p>' +
     '<h3>Bears</h3><div class="chain">' + chip(TT.BEAR, 'trap it') + '<span class="arrow">&rarr;</span>' +
     chain(TT.TOMB, null, 'treasure: tap to open, +' + TT.TREASURE_COINS + ' coins') + '</div>' +
-    '<h3>Special</h3><div class="chain">' + chip(TT.CRYSTAL, 'wildcard') + '</div>' +
+    '<p class="gnote">👻🐈‍⬛ haunt the tombstones and churches.</p>' +
+    '<h3>Special</h3><div class="chain">' + chip(TT.CRYSTAL, 'wildcard') + chip(TT.FOX, 'warps, trap it') + '</div>' +
     '<p class="gnote">Three or more connected items of the same kind merge into the next one. Bigger groups pay more points and coins.</p>';
   $('guideLink').addEventListener('click', function (e) { e.preventDefault(); $('guide').classList.remove('hidden'); });
   $('guideClose').addEventListener('click', function () { $('guide').classList.add('hidden'); });
@@ -858,7 +1114,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   // test / debugging hooks (read-only view of the game)
   window.ttDebug = {
     state: function () { return JSON.parse(JSON.stringify(state)); },
-    validate: function () { return TT.validate(state); }
+    validate: function () { return TT.validate(state); },
+    critters: function () { return critters.map(function (c) { return c.kind; }); }
   };
 
   if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {

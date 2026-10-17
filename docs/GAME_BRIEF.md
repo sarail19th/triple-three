@@ -3,15 +3,16 @@
 Single-file HTML game, (no framework, installable PWA, no image assets).
 
 ## Rules
-- 6x6 grid. Each turn the player places the "next item" on an empty cell.
+- 6x6 grid (the player can buy up to four extra rows/columns, one per side). Each turn the player places the "next item" on an empty cell.
 - 3+ orthogonally connected identical items merge into one of the next tier, placed on the cell just tapped.
-- Tiers: grass, bush, tree, hut, house, mansion, castle (then stop or loop to a bonus tier).
+- Tiers: grass, bush, tree, camp, hut, house, village, school, hospital, mall, then cash (collectible for coins).
 - Bears wander one step randomly each turn into empty cells. Bears in a closed pocket with no empty cell left are trapped and become tombstones; bears sharing a pocket that still has room are safe, and the church forms on the cell just played. 3 connected tombstones merge into a church, then cathedral.
-- Item queue: mostly grass, sometimes bush/tree/bear, rare "crystal" that merges with anything. One swap/storage slot.
+- Item queue: mostly grass, sometimes bush/tree/bear, rare "crystal" that merges with anything and rare fox that warps to a random empty cell (only the trap item or a full board stops it). One swap/storage slot.
+- Shop: items cost more once their stock is used up; higher tiers unlock once built; land can be bought.
 - Game ends when the grid is full. Score = sum of merge values; keep a local best.
 
 ## Graphics (emoji, no files)
-grass 🌱, bush 🌿, tree 🌳, hut 🛖, house 🏠, mansion 🏛️, castle 🏰, bear 🐻, tombstone 🪦, church ⛪, cathedral 🕌, crystal 💎. Styled board with tinted tiles, pop animation on merge, shake when a bear is trapped.
+grass 🌱, bush 🌿, tree 🌳, camp 🏕️, hut 🛖, house 🏠, village 🏘️, school 🏫, hospital 🏥, mall 🏬, cash 💵, bear 🐻, fox 🦊, tombstone 🪦, church ⛪, cathedral 🕌, crystal 💎, treasure 💰. Small decorative critters wander around homes (🐇🐤) and graves (👻🐈‍⬛). Styled board with tinted tiles, pop animation on merge, shake when a bear is trapped.
 
 ## Build order
 1. Pure logic module (grid, merge flood-fill, bear movement, scoring) with Node tests.
