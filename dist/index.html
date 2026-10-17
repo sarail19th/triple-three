@@ -359,13 +359,31 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     else { resolveAt(s, idx, events); settleCrystals(s, events); }
   }
 
-  // Each bear takes one random step into an empty neighbour; a bear with none is trapped and becomes a tombstone.
-  function moveBears(s, events) {
-    var bears = [], trapped = [], i;
+  // Bears are trapped per pocket: a pocket is a connected area of empty cells and bears. A pocket with no empty cell left
+  // turns all its bears into tombstones; in a pocket that still has room every bear that can step does, and a bear that
+  // is boxed in by other bears just waits (it does not die while a neighbour can still free a cell for it).
+  // `last` is the cell just played: if it was trapped, its tombstones merge there first (the church forms where the
+  // last bear went in), then the rest in board order.
+  function moveBears(s, events, last) {
+    var seen = {}, trapped = [], bears = [], i;
+    for (i = 0; i < N; i++) {
+      if (seen[i] || (s.grid[i] !== BEAR && s.grid[i] !== EMPTY)) continue;
+      var stack = [i], pocket = [], room = false;
+      seen[i] = true;
+      while (stack.length) {
+        var c = stack.pop();
+        pocket.push(c);
+        if (s.grid[c] === EMPTY) room = true;
+        neighbors(c).forEach(function (j) { if (!seen[j] && (s.grid[j] === BEAR || s.grid[j] === EMPTY)) { seen[j] = true; stack.push(j); } });
+      }
+      if (!room) pocket.forEach(function (c) { if (s.grid[c] === BEAR) trapped.push(c); });
+    }
+    trapped.sort(function (a, b) { return (b === last) - (a === last) || a - b; });
+    trapped.forEach(function (at) { s.grid[at] = TOMB; events.push({ type: 'trapped', at: at }); });
     for (i = 0; i < N; i++) if (s.grid[i] === BEAR) bears.push(i);
     bears.forEach(function (from) {
       var free = neighbors(from).filter(function (j) { return s.grid[j] === EMPTY; });
-      if (!free.length) { s.grid[from] = TOMB; trapped.push(from); events.push({ type: 'trapped', at: from }); return; }
+      if (!free.length) return;
       var to = free[randInt(s, free.length)];
       s.grid[from] = EMPTY; s.grid[to] = BEAR;
       events.push({ type: 'bear', from: from, to: to });
@@ -393,7 +411,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     s.undo = clone(state); s.undo.undo = null; // one level of undo, no nesting
     events.push({ type: 'place', at: idx, item: item });
     applyItem(s, idx, item, events);
-    moveBears(s, events);
+    moveBears(s, events, idx);
     settleCrystals(s, events); // new tombstones / churches may complete a group for a waiting crystal
     grantMilestones(s, events);
     s.cur = s.next; s.next = drawItem(s); s.turn++;
