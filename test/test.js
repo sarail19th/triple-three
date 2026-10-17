@@ -287,6 +287,38 @@ t('trapped bear becomes a tombstone', () => {
   assert(r.events.some((e) => e.type === 'trapped' && e.at === I(0, 0)));
 });
 
+// a 3-cell pocket along the top edge: (0,0) (0,1) (0,2), walled by distinct buildings so nothing merges
+const pocketWalls = { [I(1, 0)]: 5, [I(1, 1)]: 6, [I(1, 2)]: 7, [I(0, 3)]: 8 };
+
+t('bears sharing a pocket with a free cell do not die', () => {
+  for (let seed = 1; seed < 40; seed++) {
+    const s = withGrid(Object.assign({ [I(0, 0)]: TT.BEAR, [I(0, 1)]: TT.BEAR }, pocketWalls), { rng: seed });
+    const r = TT.place(s, I(5, 5));
+    assert.strictEqual(r.state.grid.filter((v) => v === TT.BEAR).length, 2, 'both bears alive (seed ' + seed + ')');
+    assert(!r.events.some((e) => e.type === 'trapped'));
+    assert(r.events.some((e) => e.type === 'bear'), 'the bear next to the free cell stepped');
+    assert.deepStrictEqual(TT.validate(r.state), []);
+  }
+});
+
+t('a pocket with no free cell left turns all its bears into tombstones', () => {
+  const s = withGrid(Object.assign({ [I(0, 0)]: TT.BEAR, [I(0, 1)]: TT.BEAR }, pocketWalls), { cur: 2 });
+  const r = TT.place(s, I(0, 2)); // fills the last free cell of the pocket
+  assert.strictEqual(r.state.grid[I(0, 0)], TT.TOMB);
+  assert.strictEqual(r.state.grid[I(0, 1)], TT.TOMB);
+  assert.strictEqual(r.events.filter((e) => e.type === 'trapped').length, 2);
+});
+
+t('the last bear into a full pocket: the church forms where it was placed', () => {
+  const s = withGrid(Object.assign({ [I(0, 0)]: TT.BEAR, [I(0, 1)]: TT.BEAR }, pocketWalls), { cur: TT.BEAR });
+  const r = TT.place(s, I(0, 2));
+  assert.strictEqual(r.state.grid[I(0, 2)], 11, 'church on the tapped cell');
+  assert.strictEqual(r.state.grid[I(0, 0)], 0);
+  assert.strictEqual(r.state.grid[I(0, 1)], 0);
+  assert.strictEqual(r.events.find((e) => e.type === 'merge').at, I(0, 2));
+  assert.deepStrictEqual(TT.validate(r.state), []);
+});
+
 t('3 tombstones merge into a church where the bear died', () => {
   const s = withGrid({ [I(0, 0)]: TT.BEAR, [I(0, 1)]: TT.TOMB, [I(0, 2)]: TT.TOMB, [I(1, 0)]: 5 });
   const r = TT.place(s, I(5, 5)); // bear at (0,0) has no free neighbour -> trapped

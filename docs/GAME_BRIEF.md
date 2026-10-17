@@ -6,7 +6,7 @@ Single-file HTML game, (no framework, installable PWA, no image assets).
 - 6x6 grid. Each turn the player places the "next item" on an empty cell.
 - 3+ orthogonally connected identical items merge into one of the next tier, placed on the cell just tapped.
 - Tiers: grass, bush, tree, hut, house, mansion, castle (then stop or loop to a bonus tier).
-- Bears wander one step randomly each turn into empty cells. A bear with no free neighbour is trapped and becomes a tombstone. 3 connected tombstones merge into a church, then cathedral.
+- Bears wander one step randomly each turn into empty cells. Bears in a closed pocket with no empty cell left are trapped and become tombstones; bears sharing a pocket that still has room are safe, and the church forms on the cell just played. 3 connected tombstones merge into a church, then cathedral.
 - Item queue: mostly grass, sometimes bush/tree/bear, rare "crystal" that merges with anything. One swap/storage slot.
 - Game ends when the grid is full. Score = sum of merge values; keep a local best.
 
