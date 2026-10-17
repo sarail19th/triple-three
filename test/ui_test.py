@@ -66,8 +66,8 @@ def check_consistent(page, where):
     assert dom['hold'] == (EMOJI[st['hold']] if st['hold'] else '·'), f'{where}: hold display'
     assert dom['undoDisabled'] == (st['undo'] is None or st['undo']['coins'] < 5), f'{where}: undo button state'
     tools = page.evaluate("[...document.querySelectorAll('.tool[data-tool]')].map(b => b.dataset.tool)")
-    assert tools[:3] == ['1', '2', '3'] and tools[-3:] == ['16', 'trap', 'hammer'], f'{where}: shop items {tools}'
-    assert len(tools) == max(3, st['top']) + 3, f'{where}: one button per unlocked tier + crystal + trap + hammer, got {tools}'
+    assert tools[:3] == ['1', '2', '3'] and tools[-4:] == ['16', 'trap', 'hammer', 'move'], f'{where}: shop items {tools}'
+    assert len(tools) == max(3, st['top']) + 4, f'{where}: one button per unlocked tier + crystal + trap + hammer + mover, got {tools}'
     for tool in tools:
         assert page.inner_text(f'.tool[data-tool="{tool}"] .tb') == f"×{max(0, st['stock'][tool])}", f'{where}: stock badge {tool}'
     return st
@@ -125,7 +125,7 @@ with sync_playwright() as p:
     page.screenshot(path=os.path.join(args.shots, '1_start.png'))
 
     # ---- play random turns until game over
-    turns = swaps = undos = merges = pops = buys = hammers = lands = 0
+    turns = swaps = undos = merges = pops = buys = hammers = lands = moves = 0
     preview_on = True
     assert page.get_attribute('#previewBtn', 'aria-pressed') == 'true'
     prev = st
@@ -152,7 +152,7 @@ with sync_playwright() as p:
             assert after['undo'] is None and page.locator('#undoBtn').is_disabled(), 'single-level undo'
             continue
         if roll < 0.20:  # shop: buy grass / bush / tree if enabled
-            tool = rng.choice([t for t in page.evaluate("[...document.querySelectorAll('.tool[data-tool]')].map(b => b.dataset.tool)") if t not in ('trap', 'hammer')])
+            tool = rng.choice([t for t in page.evaluate("[...document.querySelectorAll('.tool[data-tool]')].map(b => b.dataset.tool)") if t not in ('trap', 'hammer', 'move')])
             btn = page.locator(f'.tool[data-tool="{tool}"]')
             price = page.evaluate('([s, t]) => TT.priceOf(s, +t)', [st, tool])
             if btn.is_enabled():
@@ -187,6 +187,21 @@ with sync_playwright() as p:
             assert hammer_btn.get_attribute('aria-pressed') == 'false', 'hammer disarms after use'
             hammers += 1
             continue
+        move_btn = page.locator('#moveBtn')
+        if roll < 0.30 and move_btn.is_enabled():  # mover: pick up a random non-animal item, drop it on a random empty tile
+            movable = [i for i, v in enumerate(st['grid']) if v not in (0, BEAR, FOX)]
+            if movable:
+                src, dst = rng.choice(movable), rng.choice(empties)
+                move_btn.tap()
+                assert move_btn.get_attribute('aria-pressed') == 'true'
+                page.tap(f'#board .cell[data-i="{src}"]')
+                assert page.locator('#board .cell.pick').count() == 1, 'picked-up tile is highlighted'
+                tap_cell(page, dst, preview_on)
+                after = check_consistent(page, f'move@{turns}')
+                assert after['coins'] >= st['coins'] - 60 and after['stock']['move'] == st['stock']['move'] - 1 and after['turn'] == st['turn'], 'mover costs coins and one stock, free action'
+                assert after['grid'][src] == 0 and move_btn.get_attribute('aria-pressed') == 'false', 'source is empty, mover disarms'
+                moves += 1
+                continue
         idx = rng.choice(empties)
         tap_cell(page, idx, preview_on)
         turns += 1
@@ -293,6 +308,35 @@ with sync_playwright() as p:
     after = check_consistent(page, 'trap fox')
     assert after['grid'][20] == TOMB and after['turn'] == 3 and after['coins'] == 30 - 12, 'trapped fox becomes a tombstone'
 
+    # ---- mover: pick up, preview the drop, confirm; animals cannot be picked up; picking twice cancels
+    g = [0] * 36
+    g[0] = 1; g[2] = 1; g[21] = 1; g[30] = BEAR
+    load(g, coins=100)
+    assert page.locator('#moveBtn').is_enabled() and page.inner_text('#moveBtn .tp') == '🪙60'
+    page.tap('#moveBtn')
+    assert page.get_attribute('#moveBtn', 'aria-pressed') == 'true'
+    page.tap('#board .cell[data-i="30"]')  # a bear: ignored
+    assert page.locator('#board .cell.pick').count() == 0, 'animals cannot be picked up'
+    page.tap('#board .cell[data-i="21"]'); assert page.locator('#board .cell.pick').count() == 1
+    page.tap('#board .cell[data-i="21"]'); assert page.locator('#board .cell.pick').count() == 0, 'second tap puts it back'
+    page.tap('#board .cell[data-i="21"]')
+    page.tap('#board .cell[data-i="1"]')  # first tap on the destination only previews the merge
+    assert state(page)['grid'] == g and page.locator('#board .cell.pv').count() == 1 and page.locator('#board .cell.eat').count() == 2
+    assert 'merge' in page.inner_text('#note').lower()
+    page.tap('#board .cell[data-i="1"]')
+    after = check_consistent(page, 'mover')
+    assert after['grid'][1] == 2 and after['grid'][0] == after['grid'][2] == after['grid'][21] == 0 and after['grid'][30] == BEAR
+    assert after['coins'] == 100 - 60 + 2 and after['turn'] == 3 and after['stock']['move'] == 0, 'merged on the drop tile, free action, stock used'
+    assert page.locator('#moveBtn').is_disabled() and page.get_attribute('#moveBtn', 'aria-pressed') == 'false'
+
+    # ---- fox walled in on every side becomes a tombstone when the next item is placed
+    g = [0] * 36
+    g[14] = FOX; g[8] = 5; g[20] = 6; g[13] = 7; g[15] = 8
+    load(g)
+    tap_cell(page, 0, True)
+    after = check_consistent(page, 'fox walled in')
+    assert after['grid'][14] == TOMB and FOX not in after['grid'], 'a walled-in fox becomes a tombstone'
+
     # ---- shop: higher tiers unlock once built; stock runs out -> price doubles (shown on the button)
     load([0] * 36, coins=500)
     assert page.locator('.tool[data-tool="4"]').count() == 0, 'camp is locked at the start'
@@ -353,6 +397,26 @@ with sync_playwright() as p:
     crit = page.evaluate('window.ttDebug.critters()')
     assert set(crit) == {'🐇', '🐤', '👻', '🐈\u200d⬛'}, f'critters: {crit}'
     assert page.locator('#critters .crit').count() == len(crit) and page.locator('#board .cell').count() == 36
+    inside_js = """() => { const homes = window.ttDebug.critterHomes(), els = [...document.querySelectorAll('#critters .crit')];
+        return els.map((el, i) => { const r = el.getBoundingClientRect(), c = document.querySelector('#board .cell[data-i="' + homes[i].cell + '"]').getBoundingClientRect(),
+            x = r.left + r.width / 2, y = r.top + r.height / 2;
+            return x >= c.left - 1 && x <= c.right + 1 && y >= c.top - 1 && y <= c.bottom + 1; }); }"""
+    homes0 = page.evaluate('window.ttDebug.critterHomes()')
+    area = {'🐇': (4, 5, 6, 7), '🐤': (4, 5, 6, 7), '👻': (13, 14, 15), '🐈\u200d⬛': (13, 14, 15)}
+    assert all(h['code'] in area[h['kind']] for h in homes0), f'every critter lives on a tile of its own area: {homes0}'
+    for _ in range(8):  # they keep hopping, but never leave their own tile
+        assert all(page.evaluate(inside_js)), 'a critter strayed outside its own tile'
+        page.wait_for_timeout(700)
+    assert page.evaluate('window.ttDebug.critterHomes()') == homes0, 'critters keep their tile while it exists'
+    # smash a home tile: critters that lived there move house (snap), the rest stay put
+    gone = homes0[0]['cell']
+    page.tap('#hammerBtn'); tap_cell(page, gone, True)
+    homes1 = page.evaluate('window.ttDebug.critterHomes()')
+    assert all(h['code'] in area[h['kind']] and h['cell'] != gone for h in homes1), f'critters re-homed after their tile vanished: {homes1}'
+    page.wait_for_timeout(300)
+    assert all(page.evaluate(inside_js))
+    load(g)
+    page.wait_for_timeout(200)
     tap_cell(page, 0, True)
     assert state(page)['turn'] == 4, 'critters never block a tap'
     load([0] * 36)
@@ -379,5 +443,5 @@ with sync_playwright() as p:
     browser.close()
 
 print(f'OK: random game reached game over after {turns} turns (+{swaps} swaps, {undos} undos, {merges} scoring turns, '
-      f'{pops} with pop animation, {buys} purchases, {hammers} hammers, {lands} land), final score {final["score"]}')
+      f'{pops} with pop animation, {buys} purchases, {hammers} hammers, {moves} moves, {lands} land), final score {final["score"]}')
 server.shutdown()

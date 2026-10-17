@@ -57,6 +57,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 .cell.pv { box-shadow: inset 0 0 0 3px var(--accent); z-index: 1; }
 .cell.eat { box-shadow: inset 0 0 0 3px #fff9; }
 .cell.eat .e { opacity: .45; transform: scale(.8); transition: transform .15s, opacity .15s; }
+.cell.pick { box-shadow: inset 0 0 0 3px var(--accent); background-image: linear-gradient(#ffd45a55, #ffd45a55); }
+.cell.pick .e { animation: wobble .5s infinite alternate; }
 .cell.target { box-shadow: inset 0 0 0 3px #ff5a5a; background-image: linear-gradient(#ff5a5a44, #ff5a5a44); }
 .cell.target .e { animation: wobble .5s infinite alternate; }
 @keyframes breathe { from { transform: scale(.9); } to { transform: scale(1.05); } }
@@ -78,8 +80,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 /* ambient critters: decorative only, they wander over the board without ever taking a tap */
 #critters { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 1; }
 .crit { position: absolute; left: 0; top: 0; display: block; font-size: calc(var(--bs) / var(--m) * .3); line-height: 1; opacity: .92;
-  transition: transform 1.6s ease-in-out; filter: drop-shadow(0 1px 1px #0006); }
-.crit.flip { scale: -1 1; }
+  transition: transform 1.2s ease-in-out; filter: drop-shadow(0 1px 1px #0006); }
 #fx { position: absolute; inset: 0; pointer-events: none; overflow: visible; z-index: 2; }
 .ghost { position: absolute; display: flex; align-items: center; justify-content: center; font-size: calc(var(--bs) / var(--m) * .62);
   animation: fly .3s ease-in forwards; }
@@ -105,6 +106,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 
 /* shop: the item row scrolls sideways once many tiers are unlocked; tools and land sit in a fixed row of six */
 .tools { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+.tools.util { grid-template-columns: repeat(7, 1fr); }
 .tools.shop { display: flex; overflow-x: auto; scrollbar-width: thin; padding-bottom: 2px; }
 /* 6.5 buttons wide: the half button peeking in on the right shows that the row scrolls */
 .tools.shop .tool { flex: 0 0 calc((100% - 30px) / 6.5); }
@@ -112,6 +114,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 .tool { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 6px 2px; border-radius: 12px;
   border: 2px solid #8a6d1c; background: #2a2410; color: var(--ink); font: inherit; cursor: pointer; }
 .tool .te { font-size: 22px; line-height: 1.1; }
+.tools.util .tool { padding: 6px 0; }
+.tools.util .tp { font-size: 10px; }
 .tool .tb { position: absolute; top: 1px; right: 3px; font-size: 10px; font-weight: 800; color: var(--ink); opacity: .85; }
 .tool .tp { font-size: 11px; font-weight: 700; color: var(--accent); white-space: nowrap; }
 .tool.pricey .tp { color: #ff9a5a; }
@@ -192,6 +196,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     <section class="tools util" aria-label="Shop: tools and land">
       <button class="tool" data-tool="trap" id="trapBtn" aria-pressed="false" aria-label="Trap: kill a bear or fox instantly"><span class="te">🪤</span><span class="tp"></span><span class="tb"></span></button>
       <button class="tool" data-tool="hammer" id="hammerBtn" aria-pressed="false" aria-label="Hammer: remove a placed item"><span class="te">🔨</span><span class="tp"></span><span class="tb"></span></button>
+      <button class="tool" data-tool="move" id="moveBtn" aria-pressed="false" aria-label="Mover: pick up an item and put it on an empty tile"><span class="te">🚚</span><span class="tp"></span><span class="tb"></span></button>
       <button class="tool land" data-land="top" aria-label="Buy land: a new row on top"><span class="te">⬆️</span><span class="tp"></span></button>
       <button class="tool land" data-land="bottom" aria-label="Buy land: a new row at the bottom"><span class="te">⬇️</span><span class="tp"></span></button>
       <button class="tool land" data-land="left" aria-label="Buy land: a new column on the left"><span class="te">⬅️</span><span class="tp"></span></button>
@@ -237,10 +242,10 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       <li>On a computer, hover a tile to preview the move (the result shows faintly, merged items are outlined) and click to place the item shown in <b>Place</b>. On a touch screen, tap to preview and tap again to place. Turn <b>Preview</b> off to place with one tap.</li>
       <li>Connect <b>3 or more</b> identical items (up, down, left, right) and <i>all</i> of them merge into one of the next tier on the tile you tapped (4 or 5 pay more points and coins, nothing is left over):<br>🌱 → 🌿 → 🌳 → 🏕️ → 🛖 → 🏠 → 🏘️ → 🏫 → 🏥 → 🏬 → 💵 <b>cash</b>: tap it to collect coins.</li>
       <li>🐻 <b>Bears</b> wander one step each turn. Box one in so it cannot move and it becomes a 🪦 (bears sharing a pocket that still has room are safe). Three connected 🪦 merge into ⛪, three ⛪ into 🕌, three 🕌 into a 💰 <b>treasure</b>: tap it to open it for coins.</li>
-      <li>🦊 The <b>fox</b> never walks: every turn it <b>warps</b> to a random empty tile. Walls cannot trap it. Only the 🪤 trap, or a completely full board, turns it into a 🪦.</li>
-      <li>💎 The <b>crystal</b> is a wildcard: it turns into whatever makes the best merge (buildings, 🪦, ⛪ or 🕌). If it cannot merge yet it waits, and merges as soon as a group of 3 is possible next to it.</li>
+      <li>🦊 The <b>fox</b> never walks: every turn it <b>warps</b> to a random empty tile. Corner it, though: when walls and items close it in on every side (or you fill the last free tile of its box) it becomes a 🪦, and so does a fox on a full board. The 🪤 trap kills it anywhere.</li>
+      <li>💎 The <b>crystal</b> is a wildcard: it turns into whatever makes the best merge (any building tier up to 🏬 which makes 💵 cash, 🪦, ⛪ or 🕌 which makes a 💰 treasure). If it cannot merge yet it waits, and merges as soon as a group of 3 is possible next to it.</li>
       <li>🪙 <b>Coins</b> come from merges. Spend them in the shop: buy an item as your current one (the old one moves to Next). You can buy 🌱 🌿 🌳, and any higher tier once you have built one. Stock is limited (the ×N badge): after it runs out the price <b>doubles</b> with every purchase, and score milestones restock it.</li>
-      <li>🪤 kills a bear or fox on the spot, 🔨 removes any placed item, and ⬆️⬇️⬅️➡️ buy <b>land</b>: one more row or column on that side (each side once, dearer every time).</li>
+      <li>🪤 kills a bear or fox on the spot, 🔨 removes any placed item, 🚚 <b>moves</b> one item (not animals) to an empty tile, merging it there like a placed item, and ⬆️⬇️⬅️➡️ buy <b>land</b>: one more row or column on that side (each side once, dearer every time).</li>
       <li>The <b>Reserve</b> tray (top left) stores the current item for later (free swap). <b>Undo</b> takes back your last move for a few coins.</li>
       <li>The game ends when the board is full and you cannot afford a hammer.</li>
     </ul>
@@ -278,14 +283,14 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   var START_COINS = 10;
   var TREASURE_COINS = 250; // paid when a treasure is opened
   var CASH_COINS = 5000;    // paid when cash (the last building tier) is collected
-  var PRICE = { 1: 6, 2: 15, 3: 35, 4: 80, 5: 180, 6: 400, 7: 900, 8: 2000, 9: 4500, 10: 10000, 16: 50, hammer: 20, trap: 12 };
+  var PRICE = { 1: 6, 2: 15, 3: 35, 4: 80, 5: 180, 6: 400, 7: 900, 8: 2000, 9: 4500, 10: 10000, 16: 50, hammer: 20, trap: 12, move: 60 };
   var BUYABLE = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, CRYSTAL];
   var UNDO_COST = 5; // coins per undo
   // Shop stock per game. An item bought with no stock left still sells, at double the price for every purchase past zero
-  // (stock goes negative = debt, milestone restocks pay it back). Hammer and trap simply run out.
-  var START_STOCK = { 1: 3, 2: 2, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1, 10: 1, 16: 0, hammer: 2, trap: 2 };
+  // (stock goes negative = debt, milestone restocks pay it back). Hammer, trap and mover simply run out.
+  var START_STOCK = { 1: 3, 2: 2, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1, 10: 1, 16: 0, hammer: 2, trap: 2, move: 1 };
   var MILESTONES = [400, 1200, 3000, 7000, 15000, 30000]; // after the last one a restock comes every 30000 more points
-  var RESTOCK = { 1: 2, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1, 10: 1, 16: 1, hammer: 1, trap: 1 };
+  var RESTOCK = { 1: 2, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1, 10: 1, 16: 1, hammer: 1, trap: 1, move: 1 };
   function milestoneScore(n) { return n < MILESTONES.length ? MILESTONES[n] : MILESTONES[MILESTONES.length - 1] * (n - MILESTONES.length + 2); }
   // Land: one extra row/column per side, each side once, dearer every time.
   var SIDES = ['top', 'bottom', 'left', 'right'];
@@ -394,28 +399,28 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 
   function emptyCount(grid) { var n = 0; for (var i = 0; i < grid.length; i++) if (grid[i] === EMPTY) n++; return n; }
 
-  // Bears are trapped per pocket: a pocket is a connected area of empty cells and bears. A pocket with no empty cell left
-  // turns all its bears into tombstones; in a pocket that still has room every bear that can step does, and a bear that
-  // is boxed in by other bears just waits (it does not die while a neighbour can still free a cell for it).
-  // Foxes do not walk: each turn a fox warps to a random empty cell anywhere. They are only trapped by the shop trap, or
-  // when the board is completely full (nowhere left to warp to).
+  // Animals are trapped per pocket: a pocket is a connected area of empty cells, bears and foxes. A pocket with no empty
+  // cell left turns all its bears and foxes into tombstones (a fox walled in on all sides, or in a corner, or sharing a
+  // pocket whose last free cell just got filled). In a pocket that still has room every bear that can step does, and a
+  // bear that is boxed in by other animals just waits (it does not die while a neighbour can still free a cell for it).
+  // A fox does not walk: if it is not trapped it warps to a random empty cell anywhere on the board.
   // `last` is the cell just played: if it was trapped, its tombstones merge there first (the church forms where the
   // last animal went in), then the rest in board order.
   function moveBears(s, events, last) {
-    var seen = {}, trapped = [], bears = [], i, full = emptyCount(s.grid) === 0;
+    var seen = {}, trapped = [], bears = [], i;
+    function roaming(v) { return v === BEAR || v === FOX || v === EMPTY; }
     for (i = 0; i < N; i++) {
-      if (seen[i] || (s.grid[i] !== BEAR && s.grid[i] !== EMPTY)) continue;
+      if (seen[i] || !roaming(s.grid[i])) continue;
       var stack = [i], pocket = [], room = false;
       seen[i] = true;
       while (stack.length) {
         var c = stack.pop();
         pocket.push(c);
         if (s.grid[c] === EMPTY) room = true;
-        neighbors(c).forEach(function (j) { if (!seen[j] && (s.grid[j] === BEAR || s.grid[j] === EMPTY)) { seen[j] = true; stack.push(j); } });
+        neighbors(c).forEach(function (j) { if (!seen[j] && roaming(s.grid[j])) { seen[j] = true; stack.push(j); } });
       }
-      if (!room) pocket.forEach(function (c) { if (s.grid[c] === BEAR) trapped.push(c); });
+      if (!room) pocket.forEach(function (c) { if (s.grid[c] !== EMPTY) trapped.push(c); });
     }
-    if (full) for (i = 0; i < N; i++) if (s.grid[i] === FOX) trapped.push(i);
     trapped.sort(function (a, b) { return (b === last) - (a === last) || a - b; });
     trapped.forEach(function (at) { s.grid[at] = TOMB; events.push({ type: 'trapped', at: at }); });
     for (i = 0; i < N; i++) if (s.grid[i] === BEAR) bears.push(i);
@@ -426,17 +431,15 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       s.grid[from] = EMPTY; s.grid[to] = BEAR;
       events.push({ type: 'bear', from: from, to: to });
     });
-    if (!full) {
-      var foxes = [];
-      for (i = 0; i < N; i++) if (s.grid[i] === FOX) foxes.push(i);
-      foxes.forEach(function (from) {
-        var empties = [];
-        for (var j = 0; j < N; j++) if (s.grid[j] === EMPTY) empties.push(j);
-        var to = empties[randInt(s, empties.length)]; // never empty: a fox leaves its own cell free behind it
-        s.grid[from] = EMPTY; s.grid[to] = FOX;
-        events.push({ type: 'fox', from: from, to: to });
-      });
-    }
+    var foxes = [];
+    for (i = 0; i < N; i++) if (s.grid[i] === FOX) foxes.push(i);
+    foxes.forEach(function (from) {
+      var empties = [];
+      for (var j = 0; j < N; j++) if (s.grid[j] === EMPTY) empties.push(j);
+      var to = empties[randInt(s, empties.length)]; // never empty: a fox that survived has room in its pocket
+      s.grid[from] = EMPTY; s.grid[to] = FOX;
+      events.push({ type: 'fox', from: from, to: to });
+    });
     trapped.forEach(function (at) { if (s.grid[at] === TOMB) resolveAt(s, at, events); });
   }
 
@@ -549,6 +552,27 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     return s.over ? null : { state: s, events: events };
   }
 
+  // Shop: the mover picks up the item on `from` and drops it on the empty cell `to` (free action, costs coins, limited stock).
+  // It merges there exactly as a placed item would. Bears and foxes cannot be moved (only the trap deals with them).
+  // Returns {state, events} or null.
+  function isMovable(code) { return code !== EMPTY && code !== BEAR && code !== FOX; }
+  function canMove(s) { return s.coins >= PRICE.move && s.stock.move > 0; }
+  function moveLegal(state, from, to) {
+    return !state.over && from >= 0 && from < N && to >= 0 && to < N && from !== to && isMovable(state.grid[from]) && state.grid[to] === EMPTY;
+  }
+  function move(state, from, to) {
+    dim(state);
+    if (!moveLegal(state, from, to) || !canMove(state)) return null;
+    var s = clone(state), item = state.grid[from], events = [{ type: 'move', from: from, to: to, item: item }];
+    s.coins -= PRICE.move; s.stock.move--;
+    s.grid[from] = EMPTY;
+    applyItem(s, to, item, events);
+    noteTop(s, events);
+    grantMilestones(s, events);
+    s.over = isOver(s); // the board is as full as before, so this only ever stays false
+    return { state: s, events: events };
+  }
+
   // Shop: buy one more row (top/bottom) or column (left/right) of land; each side once, dearer every time. Free action.
   // Returns {state, events} or null.
   function buyLand(state, side) {
@@ -579,6 +603,18 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     for (var i = 0; i < N; i++) if (i !== idx && state.grid[i] !== EMPTY && s.grid[i] === EMPTY) eaten.push(i);
     events.forEach(function (e) { if (e.type === 'merge') { pts += e.points; coins += e.coins; } });
     return { item: state.cur, final: s.grid[idx], eaten: eaten, points: pts, coins: coins, merged: pts > 0 };
+  }
+
+  // What would moving the item on `from` to the empty cell `to` do? Pure. Same shape as preview(); `eaten` never lists `from`.
+  function previewMove(state, from, to) {
+    dim(state);
+    if (!moveLegal(state, from, to)) return null;
+    var s = clone(state), events = [], eaten = [], pts = 0, coins = 0, item = state.grid[from];
+    s.grid[from] = EMPTY;
+    applyItem(s, to, item, events);
+    for (var i = 0; i < N; i++) if (i !== to && i !== from && state.grid[i] !== EMPTY && s.grid[i] === EMPTY) eaten.push(i);
+    events.forEach(function (e) { if (e.type === 'merge') { pts += e.points; coins += e.coins; } });
+    return { item: item, final: s.grid[to], eaten: eaten, points: pts, coins: coins, merged: pts > 0 };
   }
 
   // Undo is possible when there is a snapshot and the player can pay UNDO_COST (taken from the restored coins).
@@ -618,6 +654,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       var old = !(x.ver >= VERSION);
       if (old) upgradeV1(x);
       if (!x.stock || typeof x.stock !== 'object') x.stock = Object.assign({}, START_STOCK);
+      for (var sk in START_STOCK) if (typeof x.stock[sk] !== 'number') x.stock[sk] = START_STOCK[sk]; // items added since the save was made
       if (typeof x.milestone !== 'number') { x.milestone = 0; while (x.score >= milestoneScore(x.milestone)) x.milestone++; }
       if (old && Array.isArray(x.grid) && x.grid.length === DEFAULT_W * DEFAULT_H) {
         dim(x);
@@ -659,7 +696,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     if (!s.stock || typeof s.stock !== 'object') return ['bad stock'];
     for (var sk in START_STOCK) {
       var n = s.stock[sk];
-      if (typeof n !== 'number' || n !== (n | 0) || ((sk === 'hammer' || sk === 'trap') && n < 0)) p.push('bad stock ' + sk + ': ' + n);
+      if (typeof n !== 'number' || n !== (n | 0) || ((sk === 'hammer' || sk === 'trap' || sk === 'move') && n < 0)) p.push('bad stock ' + sk + ': ' + n);
     }
     if (!(s.milestone >= 0) || s.milestone !== (s.milestone | 0)) p.push('bad milestone ' + s.milestone);
     else if (s.score < (s.milestone ? milestoneScore(s.milestone - 1) : 0) || s.score >= milestoneScore(s.milestone)) p.push('milestone ' + s.milestone + ' inconsistent with score ' + s.score);
@@ -692,8 +729,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     RESTOCK: RESTOCK, MILESTONES: MILESTONES, milestoneScore: milestoneScore, canUndo: canUndo, canHammer: canHammer, migrate: migrate,
     rand: rand, drawItem: drawItem, newGame: newGame, neighbors: neighbors, group: group,
     place: place, swap: swap, undo: undo, validate: validate, wouldMerge: wouldMerge, emptyCount: emptyCount,
-    buy: buy, hammer: hammer, trap: trap, open: open, buyLand: buyLand, preview: preview, isOver: isOver,
-    priceOf: priceOf, isAvailable: isAvailable, unlockedTop: unlockedTop, landPrice: landPrice, canLand: canLand
+    buy: buy, hammer: hammer, trap: trap, move: move, open: open, buyLand: buyLand, preview: preview, previewMove: previewMove, isOver: isOver,
+    priceOf: priceOf, isMovable: isMovable, canMove: canMove, isAvailable: isAvailable, unlockedTop: unlockedTop, landPrice: landPrice, canLand: canLand
   };
 });
 </script>
@@ -709,7 +746,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   var boardEl = $('board'), fxEl = $('fx'), wrapEl = $('boardWrap'), shopEl = $('shop'), critEl = $('critters');
   var state, best = store.get('tt-best', 0), hints = false;
   var previewOn = store.get('tt-preview', true) !== false;
-  var sel = -1, hover = -1, mode = null, lastPointer = 'touch'; // UI-only: tile awaiting confirmation, mouse hover, armed tool ('hammer'|'trap'), last input type
+  var sel = -1, hover = -1, mode = null, moveFrom = -1, lastPointer = 'touch'; // UI-only: tile awaiting confirmation, mouse hover, armed tool ('hammer'|'trap'|'move'), tile picked up by the mover, last input type
   var cells = [], bw = 0, bh = 0, shopKey = '';
   var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -722,7 +759,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 
   function startNew(seed) {
     state = TT.newGame(seed || randomSeed());
-    sel = -1; hover = -1; mode = null;
+    sel = -1; hover = -1; mode = null; moveFrom = -1;
     $('overlay').classList.add('hidden');
     save();
     render([]);
@@ -749,7 +786,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       var e = document.createElement('span'); e.className = 'e'; el.appendChild(e);
       boardEl.appendChild(el); cells.push(el);
     }
-    bw = w; bh = h; sel = -1; hover = -1;
+    bw = w; bh = h; sel = -1; hover = -1; moveFrom = -1;
     clearCritters();
   }
   boardEl.addEventListener('pointerdown', function (ev) { lastPointer = ev.pointerType || 'touch'; });
@@ -775,6 +812,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   // Is idx a legal target for the armed tool (or for placement when none is armed)?
   function targetOk(idx) {
     var v = state.grid[idx];
+    if (mode === 'move') return TT.isMovable(v) || (v === 0 && moveFrom >= 0); // pick something up, then an empty tile to drop it on
     return mode === 'hammer' ? v !== 0 : mode === 'trap' ? isAnimal(v) : (v === 0 || isCollectible(v));
   }
   function doAction(idx) {
@@ -786,6 +824,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   function tap(idx) {
     if (!state || state.over) return;
     if (!targetOk(idx)) { bump(idx); return; }
+    if (mode === 'move') { tapMove(idx); return; }
     if (!mode && isCollectible(state.grid[idx])) { // collecting is always good news: no confirmation step
       var o = TT.open(state, idx);
       state = o.state; sel = -1; save(); render(o.events); vibrate(25);
@@ -799,6 +838,17 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     state = r.state;
     save();
     render(r.events);
+    vibrate(r.events.some(function (e) { return e.type === 'merge'; }) ? 25 : 8);
+  }
+  // Mover: the first tap picks an item up (tap it again to put it down, tap another to switch); then an empty tile drops it
+  // there (touch: tap to preview the merge, tap again to confirm; mouse: hover previews and one click drops).
+  function tapMove(idx) {
+    if (state.grid[idx] !== 0) { moveFrom = moveFrom === idx ? -1 : idx; sel = -1; updatePreview(); return; }
+    if (previewOn && lastPointer !== 'mouse' && sel !== idx) { sel = idx; hover = -1; updatePreview(); return; }
+    var from = moveFrom, r = TT.move(state, from, idx);
+    sel = -1; mode = null; moveFrom = -1;
+    if (!r) { bump(idx); render([]); return; }
+    state = r.state; save(); render(r.events);
     vibrate(r.events.some(function (e) { return e.type === 'merge'; }) ? 25 : 8);
   }
   function bump(idx) { var c = cells[idx]; c.classList.remove('shake'); void c.offsetWidth; c.classList.add('shake'); }
@@ -847,6 +897,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       c.setAttribute('aria-label', 'row ' + (((i / w) | 0) + 1) + ' column ' + ((i % w) + 1) + ' ' + TT.NAME[code]);
     });
     if (mode && (state.over || state.coins < TT.PRICE[mode] || !(state.stock[mode] > 0))) mode = null;
+    if (mode !== 'move' || (moveFrom >= 0 && !TT.isMovable(g[moveFrom]))) moveFrom = -1;
     if (sel >= 0 && (state.over || !targetOk(sel))) sel = -1;
     $('score').textContent = state.score;
     $('coins').textContent = state.coins;
@@ -863,6 +914,9 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       if (t === 'hammer') {
         b.disabled = !TT.canHammer(state) || state.over || TT.emptyCount(g) === g.length;
         b.setAttribute('aria-pressed', mode === 'hammer');
+      } else if (t === 'move') {
+        b.disabled = state.over || !TT.canMove(state) || !g.some(TT.isMovable) || TT.emptyCount(g) === 0;
+        b.setAttribute('aria-pressed', mode === 'move');
       } else if (t === 'trap') {
         b.disabled = state.over || state.coins < TT.PRICE.trap || !(state.stock.trap > 0) || (g.indexOf(TT.BEAR) < 0 && g.indexOf(TT.FOX) < 0);
         b.setAttribute('aria-pressed', mode === 'trap');
@@ -896,7 +950,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   // ---- move preview: ghost of the resulting item, merged tiles outlined, plus a one-line explanation
   function updatePreview() {
     cells.forEach(function (c) {
-      c.classList.remove('pv', 'eat', 'target');
+      c.classList.remove('pv', 'eat', 'target', 'pick');
       if (c.hasAttribute('data-pv')) c.removeAttribute('data-pv');
     });
     var note = '', hot = false, pi = sel >= 0 ? sel : (previewOn ? hover : -1), p;
@@ -909,6 +963,22 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
         note = (sel === pi ? 'Tap again to trap' : 'Trap') + ' the ' + TT.NAME[state.grid[pi]] + ' -> ' + TT.NAME[res] + ' (-' + TT.PRICE.trap + ' coins)';
         hot = sel === pi;
       } else note = '🪤 Tap a bear or fox to kill it';
+    } else if (mode === 'move') {
+      if (moveFrom < 0) {
+        if (pi >= 0 && TT.isMovable(state.grid[pi])) { cells[pi].classList.add('target'); note = '🚚 Pick up the ' + TT.NAME[state.grid[pi]]; }
+        else note = '🚚 Tap an item to pick it up (-' + TT.PRICE.move + ' coins when you drop it)';
+      } else {
+        cells[moveFrom].classList.add('pick');
+        if (pi >= 0 && state.grid[pi] === 0 && (p = TT.previewMove(state, moveFrom, pi))) {
+          cells[pi].classList.add('pv'); cells[pi].setAttribute('data-pv', TT.EMOJI[p.final]);
+          p.eaten.forEach(function (i) { cells[i].classList.add('eat'); });
+          var mv = sel === pi ? 'Tap again to ' : '';
+          note = p.merged
+            ? (mv ? mv + 'move and merge' : 'Moves and merges') + ' into ' + TT.NAME[p.final] + ' · +' + p.points + ' pts · +' + p.coins + ' coins'
+            : (mv ? mv + 'drop' : 'Drop') + ' the ' + TT.NAME[state.grid[moveFrom]] + ' here (-' + TT.PRICE.move + ' coins)';
+          hot = sel === pi;
+        } else note = '🚚 Tap an empty tile to drop the ' + TT.NAME[state.grid[moveFrom]] + ' (tap it again to put it down)';
+      }
     } else if (mode === 'hammer') {
       if (pi >= 0 && state.grid[pi] !== 0) {
         cells[pi].classList.add('target');
@@ -951,7 +1021,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       if (ev.type === 'place') cells[ev.at].classList.add('drop');
       else if (ev.type === 'merge') {
         var to = cellCenter(ev.at);
-        cells[ev.at].classList.remove('drop'); cells[ev.at].classList.add('pop');
+        cells[ev.at].classList.remove('drop', 'slide'); cells[ev.at].classList.add('pop');
         ev.cells.forEach(function (ci) {
           if (ci === ev.at) return;
           var f = cellCenter(ci), gh = document.createElement('div');
@@ -965,6 +1035,11 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
         var a = cellCenter(ev.from), b = cellCenter(ev.to), c = cells[ev.to];
         c.style.setProperty('--dx', (a.x - b.x) + 'px'); c.style.setProperty('--dy', (a.y - b.y) + 'px');
         c.classList.add('slide');
+      } else if (ev.type === 'move') { // the item glides from where it was picked up
+        var ma = cellCenter(ev.from), mb = cellCenter(ev.to), mc = cells[ev.to];
+        mc.style.setProperty('--dx', (ma.x - mb.x) + 'px'); mc.style.setProperty('--dy', (ma.y - mb.y) + 'px');
+        mc.classList.add('slide');
+        floatAt(ev.to, '🚚 -' + TT.PRICE.move + '🪙');
       } else if (ev.type === 'fox') { // warps: a puff where it left, it spins in where it lands
         floatAt(ev.from, '💨');
         cells[ev.to].classList.add('warp');
@@ -987,11 +1062,12 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     setTimeout(function () { if (fxEl.childNodes.length) fxEl.textContent = ''; }, 1000);
   }
 
-  // ---- ambient critters: purely decorative (never part of the game state). Rabbits and chicks hop around the
-  // residential tiles (camp .. village), ghosts and black cats drift around the tombstone / church / cathedral tiles.
+  // ---- ambient critters: purely decorative (never part of the game state). Rabbits and chicks live on the residential
+  // tiles (camp .. village), ghosts and black cats on the tombstone / church / cathedral tiles. Each critter belongs to ONE
+  // tile and only wanders inside it; if its tile goes away it is re-homed on another matching tile.
   var AREAS = [
     { codes: [4, 5, 6, 7], kinds: ['🐇', '🐤'] },
-    { codes: [TT.TOMB, TT.CHURCH, TT.CATHEDRAL], kinds: ['👻', '🐈‍⬛'] }
+    { codes: [TT.TOMB, TT.CHURCH, TT.CATHEDRAL], kinds: ['👻', '🐈\u200d⬛'] }
   ];
   var critters = [];
   function areaCells(area) {
@@ -1000,29 +1076,40 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     return out;
   }
   function clearCritters() { critters.forEach(function (c) { c.el.remove(); }); critters = []; }
+  // wander to a random spot inside the critter's own tile (first: snap there without gliding)
   function hop(c, first) {
-    var list = areaCells(c.area);
-    if (!list.length || !cells.length) return;
-    var idx = list[Math.floor(Math.random() * list.length)], p = cellCenter(idx), s = p.w * 0.34;
+    var p = cellCenter(c.cell), s = p.w * 0.34;
     var x = p.x + (Math.random() - 0.5) * (p.w - s) * 0.9, y = p.y + (Math.random() - 0.5) * (p.h - s) * 0.9;
-    c.el.classList.toggle('flip', x < c.x);
-    if (first) { c.el.style.transition = 'none'; }
-    c.el.style.transform = 'translate(' + (x - s / 2) + 'px,' + (y - s / 2) + 'px)';
+    if (first || Math.abs(x - c.x) > 1) c.dir = x < c.x ? -1 : 1; // face the way it is going (the flip lives in the same transform, so it never shifts the position)
+    if (first) c.el.style.transition = 'none';
+    c.el.style.transform = 'translate(' + (x - s / 2) + 'px,' + (y - s / 2) + 'px) scaleX(' + c.dir + ')';
     if (first) { void c.el.offsetWidth; c.el.style.transition = ''; }
-    c.x = x; c.next = Date.now() + 1500 + Math.random() * 2500;
+    c.x = x; c.next = Date.now() + 1200 + Math.random() * 2000;
+  }
+  // a tile of the area with the fewest critters of this kind on it (so they spread over the town instead of piling up)
+  function pickHome(list, kind) {
+    var best = [], bestN = 1e9;
+    list.forEach(function (i) {
+      var n = critters.filter(function (c) { return c.kind === kind && c.cell === i; }).length;
+      if (n < bestN) { bestN = n; best = [i]; } else if (n === bestN) best.push(i);
+    });
+    return best[Math.floor(Math.random() * best.length)];
   }
   function syncCritters() {
     if (reduceMotion) return;
     AREAS.forEach(function (area) {
-      var n = areaCells(area).length, want = Math.min(3, Math.floor(n / 2));
+      var list = areaCells(area), want = Math.min(3, Math.floor(list.length / 2));
       area.kinds.forEach(function (kind) {
         var mine = critters.filter(function (c) { return c.kind === kind; });
         while (mine.length > want) { var gone = mine.pop(); gone.el.remove(); critters.splice(critters.indexOf(gone), 1); }
+        mine.forEach(function (c) { // its tile was merged away or changed into something else: move house
+          if (area.codes.indexOf(state.grid[c.cell]) < 0) { c.cell = pickHome(list, kind); hop(c, true); }
+        });
         while (mine.length < want) {
           var el = document.createElement('span');
           el.className = 'crit'; el.textContent = kind; el.setAttribute('aria-hidden', 'true');
           critEl.appendChild(el);
-          var c = { el: el, kind: kind, area: area, x: 0, next: 0 };
+          var c = { el: el, kind: kind, area: area, cell: pickHome(list, kind), x: 0, dir: 1, next: 0 };
           critters.push(c); mine.push(c); hop(c, true);
         }
       });
@@ -1032,8 +1119,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     if (document.hidden || !state) return;
     var now = Date.now();
     critters.forEach(function (c) { if (now >= c.next) hop(c, false); });
-  }, 600);
-  window.addEventListener('resize', function () { critters.forEach(function (c) { c.next = 0; }); });
+  }, 500);
+  window.addEventListener('resize', function () { critters.forEach(function (c) { hop(c, true); }); });
 
   function showOver() {
     var newBest = state.score >= best && state.score > 0;
@@ -1047,10 +1134,10 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     var s = TT.swap(state);
     if (s) { state = s; save(); render([]); }
   });
-  document.querySelectorAll('.tool[data-tool]').forEach(function (b) { // trap and hammer (the item shop is built in buildShop)
+  document.querySelectorAll('.tool[data-tool]').forEach(function (b) { // trap, hammer and mover (the item shop is built in buildShop)
     var t = b.dataset.tool;
     b.querySelector('.tp').textContent = '🪙' + TT.PRICE[t];
-    b.addEventListener('click', function () { mode = mode === t ? null : t; sel = -1; render([]); });
+    b.addEventListener('click', function () { mode = mode === t ? null : t; sel = -1; moveFrom = -1; render([]); });
   });
   document.querySelectorAll('.land').forEach(function (b) {
     b.addEventListener('click', function () {
@@ -1095,7 +1182,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     '<h3>Bears</h3><div class="chain">' + chip(TT.BEAR, 'trap it') + '<span class="arrow">&rarr;</span>' +
     chain(TT.TOMB, null, 'treasure: tap to open, +' + TT.TREASURE_COINS + ' coins') + '</div>' +
     '<p class="gnote">👻🐈‍⬛ haunt the tombstones and churches.</p>' +
-    '<h3>Special</h3><div class="chain">' + chip(TT.CRYSTAL, 'wildcard') + chip(TT.FOX, 'warps, trap it') + '</div>' +
+    '<h3>Special</h3><div class="chain">' + chip(TT.CRYSTAL, 'wildcard') + chip(TT.FOX, 'warps, walls trap it') + '</div>' +
+    '<p class="gnote">💎 stands in for any tier, including 🏬 (making 💵 cash) and 🕌 (making a 💰 treasure). 🚚 moves one item to an empty tile for coins.</p>' +
     '<p class="gnote">Three or more connected items of the same kind merge into the next one. Bigger groups pay more points and coins.</p>';
   $('guideLink').addEventListener('click', function (e) { e.preventDefault(); $('guide').classList.remove('hidden'); });
   $('guideClose').addEventListener('click', function () { $('guide').classList.add('hidden'); });
@@ -1115,7 +1203,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   window.ttDebug = {
     state: function () { return JSON.parse(JSON.stringify(state)); },
     validate: function () { return TT.validate(state); },
-    critters: function () { return critters.map(function (c) { return c.kind; }); }
+    critters: function () { return critters.map(function (c) { return c.kind; }); },
+    critterHomes: function () { return critters.map(function (c) { return { kind: c.kind, cell: c.cell, code: state.grid[c.cell] }; }); }
   };
 
   if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
