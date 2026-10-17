@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <style>:root {
   --bg: #0f2418; --bg2: #14301f; --ink: #eaf6e6; --muted: #8fb39a; --accent: #ffd45a;
-  --g1: #86c862; --g2: #74b550; --line: #3f7a2a;
+  --g1: #84c660; --g2: #7bbd57; --line: #3f7a2a;
   /* board side: as wide as the phone allows, as tall as the screen allows after the controls underneath */
   --bs: max(280px, min(100vw - 12px, calc(100dvh - 420px), 640px));
 }
@@ -40,13 +40,17 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 
 /* the wrap stays square; the board inside grows by whole rows/columns as land is bought (--m = longest side in cells) */
 #boardWrap { position: relative; width: var(--bs); height: var(--bs); display: flex; align-items: center; justify-content: center; --m: 6; }
-/* plain checkerboard field: flat squares, no gaps, no rounded bubbles */
+/* one plain grass field: a continuous soft texture under transparent tiles, tile edges only faintly visible */
 #board { --cols: 6; --rows: 6; width: calc(100% * var(--cols) / var(--m)); height: calc(100% * var(--rows) / var(--m)); flex: none; display: grid; grid-template: repeat(var(--rows), 1fr) / repeat(var(--cols), 1fr); gap: 0; padding: 0;
-  background: var(--g1); border-radius: 4px; overflow: hidden; box-shadow: 0 8px 28px #0008, 0 0 0 3px #1d4a30; touch-action: manipulation; }
+  background:
+    radial-gradient(circle at 18% 22%, #ffffff14 0 1.5px, transparent 2.6px) 0 0 / 43px 47px,
+    radial-gradient(circle at 72% 64%, #0000000d 0 2px, transparent 3.2px) 0 0 / 59px 53px,
+    radial-gradient(ellipse at 40% 80%, #ffffff0f 0 2px, transparent 4.2px) 0 0 / 71px 61px,
+    linear-gradient(var(--g1), var(--g2));
+  border-radius: 4px; overflow: hidden; box-shadow: 0 8px 28px #0008, 0 0 0 3px #1d4a30; touch-action: manipulation; }
 .cell { position: relative; display: flex; align-items: center; justify-content: center;
-  font-size: calc(var(--bs) / var(--m) * .62); line-height: 1; cursor: pointer; background: var(--g1);
-  outline: 1px solid #0000001a; outline-offset: -1px; }
-.cell.alt { background: var(--g2); }
+  font-size: calc(var(--bs) / var(--m) * .62); line-height: 1; cursor: pointer; background: transparent;
+  outline: 1px solid #0000000a; outline-offset: -1px; }
 .cell.empty:active { filter: brightness(1.12); }
 .cell.hint::after { content: ""; position: absolute; inset: 36%; border-radius: 50%; background: var(--accent); opacity: .85; box-shadow: 0 0 10px var(--accent); }
 .cell .e { display: block; pointer-events: none; filter: drop-shadow(0 2px 1.5px #0005); }
@@ -800,7 +804,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     wrapEl.style.setProperty('--m', Math.max(w, h));
     for (var i = 0; i < w * h; i++) {
       var el = document.createElement('div');
-      el.className = 'cell empty' + (((i % w) + ((i / w) | 0)) % 2 ? ' alt' : '');
+      el.className = 'cell empty';
       el.dataset.i = i; el.dataset.c = 0; el.setAttribute('role', 'gridcell');
       var e = document.createElement('span'); e.className = 'e'; el.appendChild(e);
       boardEl.appendChild(el); cells.push(el);
