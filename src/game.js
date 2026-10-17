@@ -11,7 +11,7 @@
   var state, hints = false;
   var previewOn = store.get('tt-preview', true) !== false;
   var sel = -1, hover = -1, mode = null, moveFrom = -1, lastPointer = 'touch'; // UI-only: tile awaiting confirmation, mouse hover, armed tool ('hammer'|'trap'|'move'), tile picked up by the mover, last input type
-  var cells = [], bw = 0, bh = 0, shopKey = '';
+  var cells = [], bw = 0, bh = 0, shopKey = '', waterEl = null, waterKey = '';
   var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   function seedFromHash() {
@@ -57,6 +57,7 @@
       boardEl.appendChild(el); cells.push(el);
     }
     bw = w; bh = h; sel = -1; hover = -1; moveFrom = -1;
+    waterEl = null; waterKey = ''; // the water layer lived inside the board that was just cleared
     clearCritters();
   }
   boardEl.addEventListener('pointerdown', function (ev) { lastPointer = ev.pointerType || 'touch'; });
@@ -132,6 +133,37 @@
     cells.forEach(function (c) { c.classList.remove('drop', 'pop', 'shake', 'slide', 'warp'); });
   }
 
+  // Water is drawn as ONE soft layer under the tiles instead of blue squares: the water tiles become blurred blobs that fuse
+  // where they touch and get rounded corners, a sandy bank blends the edge into the grass, and light ripples drift across it.
+  // Water that touches the board edge is extended past it, so a river runs off the edge instead of ending in a rounded cap.
+  function drawWater() {
+    var g = state.grid, w = state.w, h = state.h, r, c;
+    var key = w + 'x' + h + ':' + g.map(function (v) { return v === TT.WATER ? 1 : 0; }).join('');
+    if (key === waterKey) return;
+    waterKey = key;
+    if (waterEl) { waterEl.remove(); waterEl = null; }
+    if (key.indexOf('1') < 0) return;
+    function isWater(rr, cc) { return g[Math.min(h - 1, Math.max(0, rr)) * w + Math.min(w - 1, Math.max(0, cc))] === TT.WATER; }
+    var rects = '';
+    for (r = -1; r <= h; r++) for (c = -1; c <= w; c++) if (isWater(r, c)) rects += '<rect x="' + (c - 0.01) + '" y="' + (r - 0.01) + '" width="1.02" height="1.02"/>';
+    var x0 = -2, y0 = -2, W = w + 4, H = h + 4, box = 'x="' + x0 + '" y="' + y0 + '" width="' + W + '" height="' + H + '"';
+    function filter(id, slope, offset) {
+      return '<filter id="' + id + '" filterUnits="userSpaceOnUse" ' + box + ' color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="0.2"/>' +
+        '<feColorMatrix values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 ' + slope + ' ' + offset + '"/></filter>';
+    }
+    function mask(id, fid) { return '<mask id="' + id + '" maskUnits="userSpaceOnUse" ' + box + '><g filter="url(#' + fid + ')" fill="#fff"><use href="#wcells"/></g></mask>'; }
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'water'); svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h); svg.setAttribute('preserveAspectRatio', 'none'); svg.setAttribute('aria-hidden', 'true');
+    svg.innerHTML = '<defs><g id="wcells">' + rects + '</g>' + filter('wbank', 6, -0.9) + filter('wbody', 14, -6.3) + mask('wmbank', 'wbank') + mask('wmbody', 'wbody') +
+      '<linearGradient id="wgrad" x1="0" y1="0" x2="0.35" y2="1"><stop offset="0" stop-color="#6cc3f4"/><stop offset="0.55" stop-color="#4aa3e4"/><stop offset="1" stop-color="#3a86cc"/></linearGradient>' +
+      '<pattern id="wrip" width="0.55" height="0.55" patternUnits="userSpaceOnUse" patternTransform="rotate(24)"><path d="M0 0.1 Q0.14 0 0.28 0.1 T0.55 0.1" fill="none" stroke="#fff" stroke-opacity="0.2" stroke-width="0.03"/></pattern></defs>' +
+      '<rect ' + box + ' fill="#e3f0b4" fill-opacity="0.85" mask="url(#wmbank)"/>' +
+      '<rect ' + box + ' fill="url(#wgrad)" mask="url(#wmbody)"/>' +
+      '<g mask="url(#wmbody)"><rect class="ripples" ' + box + ' fill="url(#wrip)"/></g>';
+    boardEl.insertBefore(svg, boardEl.firstChild);
+    waterEl = svg;
+  }
+
   // The shop row lists every unlocked building tier plus the crystal; it is rebuilt only when that list changes.
   function buildShop() {
     var items = [], k, fresh = shopKey !== '';
@@ -158,6 +190,7 @@
     if (state.w !== bw || state.h !== bh) buildBoard();
     clearAnim();
     var g = state.grid, w = state.w;
+    drawWater();
     cells.forEach(function (c, i) {
       var code = g[i];
       c.dataset.c = code;
@@ -345,11 +378,12 @@
   }
 
   // ---- ambient critters: purely decorative (never part of the game state). Rabbits and chicks live on the residential
-  // tiles (camp .. village), ghosts and black cats on the tombstone / church / cathedral tiles. Each critter belongs to ONE
+  // tiles (camp .. village), ghosts and black cats on the tombstone / church / cathedral tiles, swans and fish on the water. Each critter belongs to ONE
   // tile and only wanders inside it; if its tile goes away it is re-homed on another matching tile.
   var AREAS = [
     { codes: [4, 5, 6, 7], kinds: ['🐇', '🐤'] },
-    { codes: [TT.TOMB, TT.CHURCH, TT.CATHEDRAL], kinds: ['👻', '🐈\u200d⬛'] }
+    { codes: [TT.TOMB, TT.CHURCH, TT.CATHEDRAL], kinds: ['👻', '🐈\u200d⬛'] },
+    { codes: [TT.WATER], kinds: ['🦢', '🐟'] }
   ];
   var critters = [];
   function areaCells(area) {

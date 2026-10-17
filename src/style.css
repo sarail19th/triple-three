@@ -74,9 +74,13 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 .warn { background: #3a1616; border: 2px solid #ff5a5a; color: #ffd9d9; border-radius: 12px; padding: 10px 12px; margin: 8px 0 6px; text-align: left; font-size: 14px; font-weight: 600; }
 .btn.danger { background: #ff5a5a; border-color: #ff5a5a; color: #2b0000; }
 
-/* water: map tiles that never change (blue, with a few ripples) */
-.cell[data-c="21"] { cursor: not-allowed; background: repeating-linear-gradient(115deg, #ffffff26 0 2px, transparent 2px 10px), linear-gradient(#5ab2ea, #3a8fd1);
-  box-shadow: inset 0 0 0 1px #ffffff26, inset 0 -8px 12px #0000002e; }
+/* water: the blue is one soft SVG layer under the tiles (see drawWater): neighbouring water tiles fuse into rivers and ponds with
+   rounded banks that blend into the grass; the water tiles themselves are transparent and only refuse taps */
+#board { position: relative; }
+.water { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.water .ripples { animation: ripples 7s ease-in-out infinite alternate; }
+@keyframes ripples { from { transform: translate(-0.2px, 0); } to { transform: translate(0.2px, 0.08px); } }
+.cell[data-c="21"] { cursor: not-allowed; outline: none; }
 
 /* animations (cells are not scaled as layout; only the inner emoji is) */
 .cell.drop .e { animation: drop .22s ease-out; }
@@ -175,4 +179,4 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   .tray { width: 72px; height: 72px; }
   .tray .emoji { font-size: 38px; }
 }
-@media (prefers-reduced-motion: reduce) { .cell .e, .cell, .ghost, .pts, .cell::before, .tool { animation-duration: .01s !important; } .crit { display: none; } }
+@media (prefers-reduced-motion: reduce) { .cell .e, .cell, .ghost, .pts, .cell::before, .tool { animation-duration: .01s !important; } .crit, .water .ripples { display: none; } }
