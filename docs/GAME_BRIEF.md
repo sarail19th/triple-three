@@ -10,7 +10,7 @@ Single-file HTML game, (no framework, installable PWA, no image assets).
 - Optional "Wild bears" difficulty (chosen per game): a bear boxed in for 3 turns (2 warning turns) mauls a neighbouring grass..hut one tier down, repeating every 3 turns. Bears also breed in small pens (4-6 tiles, 2 bears, 2 free tiles).
 - Item queue: mostly grass, sometimes bush/tree/bear, and (lucky drops, by map) a free camp/hut/house once you have built a higher tier, rare "crystal" that merges with anything (three crystals together make a treasure) and rare fox that warps to a random empty cell (walls or a filled box trap it like a bear, as does the trap item). One swap/storage slot, and the next item can be swapped with the current one.
 - First-time players get a guided tour that spotlights every button and shop tool and explains it (repeatable from How to play).
-- Phone layout: controls above the map, the map low on the screen (thumb reach), the shop as a pop-up sheet from a Shop button under the map.
+- Phone layout: Shop button top-left, controls above the map, Reserve / Place / swap / Next in one row right above the map, the map low on the screen (thumb reach), the shop as a pop-up sheet.
 - Shop: items cost more once their stock is used up; higher tiers unlock once built; land can be bought. On maps with water, up to 5 bridges can be built (each dearer than the last) on a water tile that has land on both sides; bears can walk over them, nothing can be built on them.
 - Game ends when the grid is full. Score = sum of merge values; keep a local best.
 
