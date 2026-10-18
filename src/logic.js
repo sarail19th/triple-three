@@ -400,6 +400,14 @@
     return s;
   }
 
+  // Swap the current item with the next one (free action: no turn, no random numbers, so it only chooses which of the two comes first).
+  function swapNext(state) {
+    if (state.over) return null;
+    var s = clone(state), t = s.cur;
+    s.cur = s.next; s.next = t;
+    return s;
+  }
+
   // Shop: swap the current item for a bought one (cost in coins, free action). The old current item becomes `next`;
   // the old `next` is discarded. Returns a new state or null (cannot afford, locked, already current, game over).
   function buy(state, item) {
@@ -667,7 +675,7 @@
     START_COINS: START_COINS, COIN: COIN, PRICE: PRICE, BUYABLE: BUYABLE, UNDO_COST: UNDO_COST, START_STOCK: START_STOCK,
     RESTOCK: RESTOCK, MILESTONES: MILESTONES, milestoneScore: milestoneScore, canUndo: canUndo, canHammer: canHammer, migrate: migrate,
     rand: rand, drawItem: drawItem, newGame: newGame, neighbors: neighbors, group: group,
-    place: place, swap: swap, undo: undo, validate: validate, wouldMerge: wouldMerge, emptyCount: emptyCount,
+    place: place, swap: swap, swapNext: swapNext, undo: undo, validate: validate, wouldMerge: wouldMerge, emptyCount: emptyCount,
     buy: buy, hammer: hammer, trap: trap, move: move, open: open, buyLand: buyLand, buyBridge: buyBridge, bridgeSpots: bridgeSpots, bridgePrice: bridgePrice, canBridge: canBridge, freeCount: freeCount, MAX_BRIDGES: MAX_BRIDGES, BRIDGE_PRICE: BRIDGE_PRICE, preview: preview, previewMove: previewMove, isOver: isOver,
     priceOf: priceOf, isMovable: isMovable, canMove: canMove, isAvailable: isAvailable, unlockedTop: unlockedTop, landPrice: landPrice, canLand: canLand
   };
