@@ -548,7 +548,10 @@
   $('shopClose').addEventListener('click', closeShop);
   $('shopSheet').addEventListener('click', function (e) { if (e.target === this) closeShop(); }); // a tap on the dimmed background
   $('toolCancel').addEventListener('click', function () { mode = null; moveFrom = -1; sel = -1; render([]); });
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeShop(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if (!$('tour').classList.contains('hidden')) endTour(); else closeShop();
+  });
   $('newBtn').addEventListener('click', function () { closeShop(); openNewGame(); });
   $('newCancel').addEventListener('click', function () { $('newGame').classList.add('hidden'); });
   $('againBtn').addEventListener('click', function () { startNew(0, state.wild, state.map); });
@@ -581,6 +584,75 @@
   $('helpLink').addEventListener('click', function (e) { e.preventDefault(); $('help').classList.remove('hidden'); });
   $('helpClose').addEventListener('click', function () { $('help').classList.add('hidden'); store.set('tt-seen-help', 1); });
 
+  // ---- first-run guided tour: spotlights each control in turn (opening the shop sheet for its contents) with a short explanation.
+  // It starts on the very first game and from "How to play"; Skip / Done / Escape end it and remember that it was seen.
+  var TOUR = [
+    { title: '👋 Welcome to Triple Three', text: 'Put the item shown in <b>Place</b> on the map. When <b>3 or more of the same item touch</b> (up, down, left, right) they merge into ONE of the next kind, on the tile you tapped: 🌱 → 🌿 → 🌳 → 🏕️ → … → 💵.<br>This quick tour explains every button. You can skip it any time.' },
+    { target: '#boardWrap', title: '🗺️ The map', text: 'Tap a tile to <b>preview</b> what would happen, tap the same tile again to <b>place</b> the item. (With a mouse: hover to preview, click once.) 🐻 bears wander and become 🪦 tombstones when they get boxed in; three 🪦 merge into ⛪.' },
+    { target: '.panel', title: '🌱 Place and Next', text: '<b>Place</b> is the item you will put down now, <b>Next</b> is the one after it. <b>Tap Next to swap them</b>: free, as often as you like.' },
+    { target: '#holdBtn', title: '📦 Reserve', text: 'Store the current item here for later. Tap it again to swap with what is stored. Also free.' },
+    { target: '.hud .stat', title: '⭐ Score and coins', text: 'Every merge adds to your <b>score</b> and pays 🪙 <b>coins</b> (bigger groups pay more). Coins buy things in the shop. <b>Best</b> is your top score on this map.' },
+    { target: '#undoBtn', title: '↶ Undo', text: 'Takes back your last move. It costs a few coins, and only one move can be undone.' },
+    { target: '#previewBtn', title: '👁 Preview', text: 'Shows what a tap would do before you place. Turn it off to place with a single tap.' },
+    { target: '#hintBtn', title: '💡 Hints', text: 'Marks the tiles where placing the current item would make a merge.' },
+    { target: '#newBtn', title: '⟳ New game', text: 'Starts a new game: choose the <b>map</b> (Easy, Standard, Medium, Hard) and the <b>bear mode</b> (Classic or Wild). It erases the game you are playing, and warns you first.' },
+    { target: '#shopBtn', title: '🛒 Shop', text: 'Opens the shop. Everything you can spend coins on is in there.', when: function () { return $('shopBtn').offsetParent !== null; } },
+    { target: '#shop', sheet: true, title: '🏠 Buy an item', text: 'Buy a building and it becomes your item to place right away. The little number is the stock left; after that the price <b>doubles</b> each time. Higher kinds unlock once you have built them.' },
+    { target: '#trapBtn', sheet: true, title: '🪤 Trap', text: 'Kills a bear or fox on the spot: it turns into a 🪦 right away. Tap the tool, then the animal.' },
+    { target: '#hammerBtn', sheet: true, title: '🔨 Hammer', text: 'Smashes any item you have placed, to make room. Tap the tool, then the item.' },
+    { target: '#moveBtn', sheet: true, title: '🚚 Mover', text: 'Picks up one item and drops it on another empty tile, where it merges like a placed item. Bears and foxes cannot be moved.' },
+    { target: '#bridgeBtn', sheet: true, title: '🌉 Bridge', text: 'On maps with water: turns a water tile that has land on both sides into a road bears can cross. Glowing tiles show where it can go. Up to 5, dearer each time.', when: function () { return !$('bridgeBtn').hidden; } },
+    { target: '.tool.land', sheet: true, title: '⬆️⬇️⬅️➡️ Land', text: 'Adds one more row or column on that side of the map (each side once, dearer every time). Handy when the map is nearly full.' },
+    { title: '🎉 You are ready', text: 'The <b>Item guide</b> in the footer lists every item and what it merges into, and <b>How to play</b> repeats the rules and this tour. Your game is saved automatically. Have fun!' }
+  ];
+  var tourSteps = [], tourAt = 0, tourDir = 1;
+  function tourRect(sel) {
+    var l = 1e9, t = 1e9, r = -1, b = -1;
+    document.querySelectorAll(sel).forEach(function (el) {
+      var q = el.getBoundingClientRect();
+      if (q.width > 0 && q.height > 0) { l = Math.min(l, q.left); t = Math.min(t, q.top); r = Math.max(r, q.right); b = Math.max(b, q.bottom); }
+    });
+    return r > 0 ? { l: l, t: t, r: r, b: b } : null;
+  }
+  function placeTour() {
+    var st = tourSteps[tourAt], tour = $('tour'), hole = $('tourHole'), card = $('tourCard'), vw = window.innerWidth, vh = window.innerHeight;
+    var rc = st.target ? tourRect(st.target) : null, pad = 6;
+    tour.classList.toggle('nohole', !rc);
+    var cw = card.offsetWidth, ch = card.offsetHeight, left, top;
+    if (!rc) { left = (vw - cw) / 2; top = Math.max(8, (vh - ch) / 2); }
+    else {
+      hole.style.left = rc.l - pad + 'px'; hole.style.top = rc.t - pad + 'px';
+      hole.style.width = rc.r - rc.l + pad * 2 + 'px'; hole.style.height = rc.b - rc.t + pad * 2 + 'px';
+      var below = vh - (rc.b + pad), above = rc.t - pad;
+      top = below >= ch + 14 ? rc.b + pad + 10 : above >= ch + 14 ? rc.t - pad - ch - 10 : (above > below ? 8 : vh - ch - 8);
+      left = Math.min(Math.max(8, (rc.l + rc.r) / 2 - cw / 2), vw - cw - 8);
+    }
+    card.style.left = left + 'px'; card.style.top = top + 'px';
+  }
+  function showTour() {
+    var st = tourSteps[tourAt], last = tourAt === tourSteps.length - 1;
+    if (st.sheet) openShop(); else closeShop();
+    $('tourStep').textContent = 'Step ' + (tourAt + 1) + ' of ' + tourSteps.length;
+    $('tourTitle').innerHTML = st.title; $('tourText').innerHTML = st.text;
+    $('tourBack').hidden = tourAt === 0; $('tourSkip').hidden = last;
+    $('tourNext').textContent = tourAt === 0 ? 'Start the tour' : last ? 'Done' : 'Next';
+    $('tourHole').style.transition = 'none'; placeTour(); void $('tourHole').offsetWidth; $('tourHole').style.transition = '';
+    setTimeout(function () { if (!$('tour').classList.contains('hidden')) placeTour(); }, st.sheet ? 320 : 30); // once the shop sheet has finished sliding up
+  }
+  function startTour() {
+    closeShop(); sel = -1; mode = null; moveFrom = -1;
+    tourSteps = TOUR.filter(function (st) { return !st.when || st.when(); });
+    tourAt = 0; tourDir = 1;
+    $('tour').classList.remove('hidden'); $('help').classList.add('hidden');
+    showTour();
+  }
+  function endTour() { $('tour').classList.add('hidden'); closeShop(); store.set('tt-seen-help', 1); render([]); }
+  $('tourNext').addEventListener('click', function () { if (tourAt >= tourSteps.length - 1) endTour(); else { tourAt++; showTour(); } });
+  $('tourBack').addEventListener('click', function () { if (tourAt > 0) { tourAt--; showTour(); } });
+  $('tourSkip').addEventListener('click', endTour);
+  window.addEventListener('resize', function () { if (!$('tour').classList.contains('hidden')) placeTour(); });
+  $('helpTour').addEventListener('click', startTour);
+
   // ---- start: ?#seed=N forces a reproducible game, otherwise resume the saved one
   var forced = seedFromHash();
   if (forced) startNew(forced);
@@ -588,7 +660,7 @@
     state = loadSaved();
     if (state) render([]); else startNew();
   }
-  if (!store.get('tt-seen-help', 0) && state.turn === 0) $('help').classList.remove('hidden');
+  if (!store.get('tt-seen-help', 0) && state.turn === 0) startTour(); // first launch: the guided tour (How to play keeps the written rules)
 
   // test / debugging hooks (read-only view of the game)
   window.ttDebug = {
