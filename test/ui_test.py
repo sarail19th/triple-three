@@ -151,17 +151,17 @@ with sync_playwright() as p:
     assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), 'horizontal scroll on mobile'
     st = check_consistent(page, 'initial')
     assert st['turn'] == 0 and st['seed'] == 12345 and st['grid'] == [0] * 36 and st['coins'] == 10
-    # board is large on a phone and the reserve tray sits at the top-left, above the board
-    box = page.evaluate("""() => { const b = document.getElementById('board').getBoundingClientRect(), t = document.getElementById('holdBtn').getBoundingClientRect();
-        return { w: b.width, bt: b.top, tl: t.left, tt: t.top, tb: t.bottom } }""")
+    # board is large on a phone; the Shop button sits at the top-left, and the Reserve slot is in the same row as Place and Next
+    box = page.evaluate("""() => { const r = s => document.querySelector(s).getBoundingClientRect(), b = r('#board'), sh = r('#shopBtn'), h = r('#holdBtn'), p = r('.slot.current'), n = r('#nextBtn');
+        return { w: b.width, bt: b.top, shl: sh.left, shb: sh.bottom, holdTop: h.top, holdRight: h.right, placeTop: p.top, placeLeft: p.left, nextTop: n.top } }""")
     assert box['w'] >= 380, f"board too small: {box['w']}"
-    assert box['tl'] < 20 and box['tb'] <= box['bt'] + 1 and box['tt'] < box['bt'], f'reserve tray should be top-left: {box}'
-    # phone layout: buttons and Place / Next above the map, the map in the lower half (thumb reach), the Shop button under it, the shop closed
+    assert box['shl'] < 20 and box['shb'] <= box['bt'] + 1, f'the Shop button should be top-left: {box}'
+    assert abs(box['holdTop'] - box['placeTop']) < 3 and abs(box['holdTop'] - box['nextTop']) < 3 and box['holdRight'] <= box['placeLeft'] + 1, f'Reserve shares the Place / Next row: {box}'
+    # phone layout: buttons and Place / Next above the map, the map in the lower half (thumb reach), the shop closed
     lay = page.evaluate("""() => { const r = id => document.getElementById(id).getBoundingClientRect(), b = r('board');
         return { boardTop: b.top, boardBottom: b.bottom, undoBottom: r('undoBtn').bottom, placeBottom: document.querySelector('.panel').getBoundingClientRect().bottom,
-                 shopTop: r('shopBtn').top, vh: innerHeight, sheetHidden: document.getElementById('shopSheet').classList.contains('hidden') } }""")
+                 vh: innerHeight, sheetHidden: document.getElementById('shopSheet').classList.contains('hidden') } }""")
     assert lay['undoBottom'] <= lay['boardTop'] and lay['placeBottom'] <= lay['boardTop'] + 1, f'controls above the map: {lay}'
-    assert lay['shopTop'] >= lay['boardBottom'], f'Shop button under the map: {lay}'
     assert (lay['boardTop'] + lay['boardBottom']) / 2 >= lay['vh'] * 0.55, f'the map sits in the lower half of the screen: {lay}'
     assert lay['sheetHidden'] and page.locator('#shopSheet').is_hidden(), 'the shop starts closed'
     # the shop pops up, shows coins, closes with its X, with a tap outside and with Escape
@@ -400,9 +400,11 @@ with sync_playwright() as p:
     g[14] = 5
     load(g, coins=100)
     assert page.locator('#toolCancel').is_hidden()
+    top_before = page.evaluate("document.getElementById('board').getBoundingClientRect().top")
     shop_tap(page, '#hammerBtn')
     assert page.locator('#shopSheet').is_hidden(), 'arming a tool closes the shop'
     assert page.locator('#toolCancel').is_visible() and 'Hammer' in page.inner_text('#toolCancel')
+    assert page.evaluate("document.getElementById('board').getBoundingClientRect().top") == top_before, 'arming a tool must not move the map'
     page.tap('#toolCancel')
     assert page.locator('#toolCancel').is_hidden() and page.get_attribute('#hammerBtn', 'aria-pressed') == 'false'
 
