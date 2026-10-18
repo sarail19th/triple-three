@@ -113,9 +113,29 @@ with sync_playwright() as p:
     page.wait_for_selector('#board .cell')
     assert page.title() == 'Triple Three'
     assert page.locator('#board .cell').count() == 36
-    assert page.locator('#help').is_visible(), 'help shows on first launch'
-    page.click('#helpClose')
-    assert page.locator('#help').is_hidden()
+    # ---- first launch: the guided tour. Walk through all of it: every step has a card inside the screen, spotlights its control, opens the shop
+    # sheet for the shop steps, Back works, and finishing remembers that it was seen.
+    assert page.locator('#tour').is_visible() and page.locator('#help').is_hidden(), 'the guided tour shows on first launch'
+    assert page.evaluate("localStorage.getItem('tt-seen-help')") is None
+    steps = []
+    sheet_steps = {'🏠 Buy an item', '🪤 Trap', '🔨 Hammer', '🚚 Mover', '⬆️⬇️⬅️➡️ Land'}
+    while page.locator('#tour').is_visible():
+        page.wait_for_timeout(380)
+        title = page.inner_text('#tourTitle'); steps.append(title)
+        geo = page.evaluate("""() => { const c = document.getElementById('tourCard').getBoundingClientRect(), h = document.getElementById('tourHole').getBoundingClientRect(),
+            noHole = document.getElementById('tour').classList.contains('nohole');
+            return { card: c.left >= 0 && c.right <= innerWidth && c.top >= 0 && c.bottom <= innerHeight, noHole, hole: h.width > 0 && h.height > 0 && h.right > 0 && h.bottom > 0 && h.left < innerWidth && h.top < innerHeight } }""")
+        assert geo['card'], f'tour card off screen at {title}'
+        assert geo['noHole'] or geo['hole'], f'no spotlight at {title}'
+        assert page.locator('#shopSheet').is_visible() == (title in sheet_steps), f'the shop sheet is open exactly for the shop steps ({title})'
+        if len(steps) == 3:   # Back and forth
+            page.tap('#tourBack'); page.wait_for_timeout(100); assert page.inner_text('#tourStep').lower().startswith('step 2 of')
+            page.tap('#tourNext'); page.wait_for_timeout(100); assert page.inner_text('#tourStep').lower().startswith('step 3 of')
+        page.tap('#tourNext')
+    assert len(steps) >= 15, steps
+    for need in ['🗺️ The map', '🌱 Place and Next', '📦 Reserve', '↶ Undo', '👁 Preview', '💡 Hints', '⟳ New game', '🛒 Shop', '🪤 Trap', '🔨 Hammer', '🚚 Mover', '⬆️⬇️⬅️➡️ Land']:
+        assert need in steps, f'the tour misses {need}: {steps}'
+    assert page.locator('#shopSheet').is_hidden() and page.evaluate("localStorage.getItem('tt-seen-help')") == '1', 'the tour ends with the shop closed and remembered'
     page.evaluate('navigator.serviceWorker.ready')
     page.reload()
     page.wait_for_selector('#board .cell')
@@ -586,6 +606,12 @@ with sync_playwright() as p:
 
 
     # ---- item guide lists both merge chains
+    # the tour can be replayed from How to play, and skipped or escaped at any time
+    page.tap('#helpLink'); assert page.locator('#help').is_visible()
+    page.tap('#helpTour'); assert page.locator('#tour').is_visible() and page.locator('#help').is_hidden()
+    page.tap('#tourNext'); page.tap('#tourSkip'); assert page.locator('#tour').is_hidden()
+    page.tap('#helpLink'); page.tap('#helpTour'); page.keyboard.press('Escape'); assert page.locator('#tour').is_hidden()
+    page.tap('#helpLink'); page.tap('#helpClose'); assert page.locator('#help').is_hidden()
     page.tap('#guideLink')
     assert page.locator('#guide').is_visible()
     guide = page.inner_text('#guideBody')
