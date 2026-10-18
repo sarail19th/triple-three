@@ -204,12 +204,20 @@
   }
 
   // Item kinds a crystal can stand in for, best first: the bear chain (cathedral -> treasure, church, tombstone), then buildings.
+  // The order only breaks ties; see crystalTier.
   var CRYSTAL_AS = [CATHEDRAL, CHURCH, TOMB, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
-  // Best kind the crystal at `at` could stand in for to form a 3+ group; 0 if none (grid is left unchanged).
+  // Best kind the crystal at `at` could stand in for to form a 3+ group; 0 if none (grid is left unchanged). Every kind that works is
+  // played out including the merges that follow (a camp trio makes a hut that may join two huts into a house...), and the kind that
+  // earns the most points wins (then the most coins, then the order above), so a crystal can pull a whole chain reaction together.
   function crystalTier(grid, at) {
-    var keep = grid[at], found = 0;
-    for (var k = 0; k < CRYSTAL_AS.length && !found; k++) { var t = CRYSTAL_AS[k]; grid[at] = t; if (group(grid, at, t).length >= 3) found = t; }
-    grid[at] = keep;
+    var found = 0, bestPts = -1, bestCoins = -1;
+    for (var k = 0; k < CRYSTAL_AS.length; k++) {
+      var t = CRYSTAL_AS[k], sim = { grid: grid.slice(), score: 0, coins: 0 };
+      sim.grid[at] = t;
+      if (group(sim.grid, at, t).length < 3) continue;
+      resolveAt(sim, at, []);
+      if (sim.score > bestPts || (sim.score === bestPts && sim.coins > bestCoins)) { found = t; bestPts = sim.score; bestCoins = sim.coins; }
+    }
     return found;
   }
 

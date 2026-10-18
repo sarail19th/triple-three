@@ -150,6 +150,22 @@ t('crystal picks the best merge available, else waits as an inert wildcard', () 
   assert.strictEqual(r.state.grid[I(5, 5)], TT.CRYSTAL);
 });
 
+t('crystal plays every option out and keeps the best chain reaction: camp trio -> hut that joins two huts -> house', () => {
+  // crystal (2,2): two camps on its left (2,1),(3,1), two huts below it (3,2),(3,3). As a hut it would only make a house from the huts;
+  // as a camp it makes a hut that then forms a hut trio with the two huts -> a house AND the camps are cleared too
+  const s = withGrid({ [I(2, 1)]: 4, [I(3, 1)]: 4, [I(3, 2)]: 5, [I(3, 3)]: 5 }, { cur: TT.CRYSTAL });
+  const r = TT.place(s, I(2, 2));
+  assert.strictEqual(r.state.grid[I(2, 2)], 6, 'one house on the crystal tile');
+  [I(2, 1), I(3, 1), I(3, 2), I(3, 3)].forEach((i) => assert.strictEqual(r.state.grid[i], 0, 'tile ' + i + ' is cleared'));
+  assert(r.events.some((e) => e.type === 'crystal' && e.at === I(2, 2) && e.as === 4), 'the crystal acted as a camp');
+  assert.strictEqual(r.events.filter((e) => e.type === 'merge').length, 2, 'two merges in a row');
+  assert.strictEqual(TT.preview(s, I(2, 2)).eaten.length, 4, 'the preview shows the whole chain');
+  assert.deepStrictEqual(TT.validate(r.state), []);
+  // when the huts are the only option the crystal is a hut as before; and a lone higher merge still beats nothing
+  const h = withGrid({ [I(3, 2)]: 5, [I(3, 3)]: 5 }, { cur: TT.CRYSTAL });
+  assert.strictEqual(TT.place(h, I(2, 2)).state.grid[I(2, 2)], 6);
+});
+
 t('crystal also stands in for cathedral / church / tombstone (bear chain)', () => {
   let s = withGrid({ [I(2, 1)]: TT.CATHEDRAL, [I(2, 3)]: TT.CATHEDRAL }, { cur: TT.CRYSTAL });
   let r = TT.place(s, I(2, 2));
