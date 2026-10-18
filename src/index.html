@@ -100,11 +100,18 @@
     </div>
     <p id="mapNote" class="gnote"></p>
     <h3>Bears</h3>
-    <div class="opts two">
+    <div class="opts three">
       <button class="opt" data-bears="classic" aria-pressed="true">Classic</button>
       <button class="opt" data-bears="wild" aria-pressed="false">🐻 Wild bears</button>
+      <button class="opt" data-bears="off" aria-pressed="false">No bears</button>
     </div>
     <p id="bearNote" class="gnote"></p>
+    <h3>Foxes</h3>
+    <div class="opts two">
+      <button class="opt" data-foxes="on" aria-pressed="true">🦊 Foxes</button>
+      <button class="opt" data-foxes="off" aria-pressed="false">No foxes</button>
+    </div>
+    <p id="foxNote" class="gnote"></p>
     <div id="newWarn" class="warn hidden" role="alert"></div>
     <button id="newStart" class="btn primary">Start</button>
     <button id="newCancel" class="btn">Cancel</button>
@@ -140,6 +147,7 @@
       <li>On a computer, hover a tile to preview the move (the result shows faintly, merged items are outlined) and click to place the item shown in <b>Place</b>. On a touch screen, tap to preview and tap again to place. Turn <b>Preview</b> off to place with one tap.</li>
       <li>Connect <b>3 or more</b> identical items (up, down, left, right) and <i>all</i> of them merge into one of the next tier on the tile you tapped (4 or 5 pay more points and coins, nothing is left over):<br>🌱 → 🌿 → 🌳 → 🏕️ → 🛖 → 🏠 → 🏘️ → 🏫 → 🏥 → 🏬 → 💵 <b>cash</b>: tap it to collect coins.</li>
       <li>🐻 <b>Bears</b> wander one step each turn. Box one in so it cannot move and it becomes a 🪦 (bears sharing a pocket that still has room are safe). Three connected 🪦 merge into ⛪, three ⛪ into 🕌, three 🕌 into a 💰 <b>treasure</b>: tap it to open it for coins.</li>
+      <li>🌿 <b>Calm mode</b> (pick <b>No bears</b> and/or <b>No foxes</b> in <b>New</b>): the switched-off animals never appear. With both off there is nothing to interrupt you, and no trap tool. These games keep their own best score.</li>
       <li>🐻💢 <b>Wild bears</b> (pick it in <b>New</b>): a bear that cannot step but is not sealed in gets angry (💢, then 💢💢) and on the third turn <b>mauls</b> a 🌱🌿🌳🏕️🛖 next to it one tier down (a 🌱 is destroyed, which opens an escape hole), then starts over. Houses and everything above are safe. In a small pen (4 to 6 tiles) holding 2 bears and 2 free tiles, a cub is sometimes born 🍼.</li>
       <li>🍀 <b>Lucky drops</b>: once you have built a higher tier, the next item is sometimes a free 🏕️ 🛖 or 🏠 (a tier below your best, never above a house). Most often on Easy, less on Standard and Medium, never on Hard.</li>
       <li>🗺️ <b>Maps</b> (also in <b>New</b>): Easy is a plain field, Standard starts with a few plants, Medium has a river across the field, Hard has random ponds. Blue tiles are <b>water</b>: nothing can be placed, merged, moved or smashed there, and animals cannot enter it. Use the 🌉 <b>bridge</b> tool (up to 5, dearer each time) on a water tile that has land on both sides, up/down or left/right (never a corner or the middle of wide water): it becomes a road that bears can walk over, but nothing can be built on it.</li>
