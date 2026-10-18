@@ -8,7 +8,7 @@
   };
 
   var boardEl = $('board'), fxEl = $('fx'), wrapEl = $('boardWrap'), shopEl = $('shop'), critEl = $('critters');
-  var state, hints = false;
+  var state;
   var previewOn = store.get('tt-preview', true) !== false;
   var sel = -1, hover = -1, mode = null, moveFrom = -1, lastPointer = 'touch'; // UI-only: tile awaiting confirmation, mouse hover, armed tool ('hammer'|'trap'|'move'), tile picked up by the mover, last input type
   var cells = [], bw = 0, bh = 0, shopKey = '', waterEl = null, waterKey = '';
@@ -76,7 +76,7 @@
     if (ev.pointerType === 'mouse' && hover !== -1) { hover = -1; updatePreview(); }
   });
 
-  // Haptic feedback (a short buzz on placing, merging and buying): on by default, switched off with the 📳 link under the map.
+  // Haptic feedback (a short buzz on placing, merging and buying): on by default, switched off with the 📳 link at the top.
   var haptics = store.get('tt-haptics', true) !== false;
   function vibrate(ms) { if (haptics && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } }
   function showHaptics() {
@@ -215,7 +215,6 @@
       c.classList.toggle('bridge', isB);
       c.classList.toggle('bh', isB && col > 0 && col < w - 1 && g[i - 1] !== TT.WATER && g[i + 1] !== TT.WATER);
       c.classList.toggle('bv', isB && !c.classList.contains('bh'));
-      c.classList.toggle('hint', hints && !state.over && TT.wouldMerge(state, i));
       c.setAttribute('aria-label', 'row ' + (((i / w) | 0) + 1) + ' column ' + ((i % w) + 1) + ' ' + (state.bridges.indexOf(i) >= 0 ? 'bridge ' : '') + TT.NAME[code]);
     });
     if (mode === 'bridge') { if (!TT.canBridge(state)) mode = null; }
@@ -525,9 +524,6 @@
     var s = TT.undo(state);
     if (s) { state = s; save(); render([]); }
   });
-  $('hintBtn').addEventListener('click', function () {
-    hints = !hints; this.setAttribute('aria-pressed', hints); render([]);
-  });
   // New game: pick the map and the bear mode in a small dialog (the last picks are remembered); Play again repeats both
   var dlg = { map: 'easy', wild: false };
   function showDialog() {
@@ -609,10 +605,10 @@
     { target: '.panel', title: '🌱 Place and Next', text: '<b>Place</b> is the item you will put down now, <b>Next</b> is the one after it. <b>Tap the ⇄ button between them to swap them</b> (tapping the Next item works too): free, as often as you like.' },
     { target: '#holdBtn', title: '📦 Reserve', text: 'Store the current item here for later. Tap it again to swap with what is stored. Also free.' },
     { target: '.hud .stat', title: '⭐ Score and coins', text: 'Every merge adds to your <b>score</b> and pays 🪙 <b>coins</b> (bigger groups pay more). Coins buy things in the shop. <b>Best</b> is your top score on this map.' },
+    { target: '#newBtn', title: '⟳ New game', text: 'Starts a new game: choose the <b>map</b> (Easy, Standard, Medium, Hard) and the <b>bear mode</b> (Classic or Wild). It erases the game you are playing, and warns you first.' },
+    { target: '.topinfo', title: '📋 Turn, rules and settings', text: 'The turn counter and game seed, <b>How to play</b> (the rules and this tour), the <b>Item guide</b> (every item and what it merges into) and, on phones with vibration, the <b>📳 Haptics</b> switch.' },
     { target: '#undoBtn', title: '↶ Undo', text: 'Takes back your last move. It costs a few coins, and only one move can be undone.' },
     { target: '#previewBtn', title: '👁 Preview', text: 'Shows what a tap would do before you place. Turn it off to place with a single tap.' },
-    { target: '#hintBtn', title: '💡 Hints', text: 'Marks the tiles where placing the current item would make a merge.' },
-    { target: '#newBtn', title: '⟳ New game', text: 'Starts a new game: choose the <b>map</b> (Easy, Standard, Medium, Hard) and the <b>bear mode</b> (Classic or Wild). It erases the game you are playing, and warns you first.' },
     { target: '#shopBtn', title: '🛒 Shop', text: 'Opens the shop. Everything you can spend coins on is in there.', when: function () { return $('shopBtn').offsetParent !== null; } },
     { target: '#shop', sheet: true, title: '🏠 Buy an item', text: 'Buy a building and it becomes your item to place right away. The little number is the stock left; after that the price <b>doubles</b> each time. Higher kinds unlock once you have built them.' },
     { target: '#trapBtn', sheet: true, title: '🪤 Trap', text: 'Kills a bear or fox on the spot: it turns into a 🪦 right away. Tap the tool, then the animal.' },
@@ -620,7 +616,7 @@
     { target: '#moveBtn', sheet: true, title: '🚚 Mover', text: 'Picks up one item and drops it on another empty tile, where it merges like a placed item. Bears and foxes cannot be moved.' },
     { target: '#bridgeBtn', sheet: true, title: '🌉 Bridge', text: 'On maps with water: turns a water tile that has land on both sides into a road bears can cross. Glowing tiles show where it can go. Up to 5, dearer each time.', when: function () { return !$('bridgeBtn').hidden; } },
     { target: '.tool.land', sheet: true, title: '⬆️⬇️⬅️➡️ Land', text: 'Adds one more row or column on that side of the map (each side once, dearer every time). Handy when the map is nearly full.' },
-    { title: '🎉 You are ready', text: 'The <b>Item guide</b> in the footer lists every item and what it merges into, and <b>How to play</b> repeats the rules and this tour. Your game is saved automatically. On phones with vibration, the <b>📳 Haptics</b> link under the map turns the buzzing off. Have fun!' }
+    { title: '🎉 You are ready', text: 'The <b>Item guide</b> at the top lists every item and what it merges into, and <b>How to play</b> repeats the rules and this tour. Your game is saved automatically. Have fun!' }
   ];
   var tourSteps = [], tourAt = 0, tourDir = 1;
   function tourRect(sel) {

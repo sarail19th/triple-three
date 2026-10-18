@@ -14,14 +14,19 @@
 <body>
 <main id="app">
   <header class="hud">
-    <button id="shopBtn" class="tray shoptray" aria-label="Open the shop">
-      <small>Shop</small><span class="emoji">🛒</span>
+    <button id="newBtn" class="tray newtray" aria-label="New game">
+      <small>New</small><span class="emoji">⟳</span>
     </button>
     <div class="brand">Triple <span>Three</span></div>
     <div class="stat"><small>Score</small><b id="score">0</b></div>
     <div class="stat"><small>Best</small><b id="best">0</b></div>
     <div class="stat coins"><small>Coins</small><b id="coins">0</b></div>
   </header>
+
+  <div class="topinfo">
+    <div><span id="turn">Turn 0</span> · <span id="seed">seed</span></div>
+    <div><a href="#" id="helpLink">How to play</a> · <a href="#" id="guideLink">Item guide</a><span class="foot-settings"> · <a href="#" id="hapticLink" role="switch" aria-label="Haptic feedback (vibration)">📳 Haptics: on</a></span></div>
+  </div>
 
   <div id="boardWrap">
     <div id="board" role="grid" aria-label="Game board"></div>
@@ -69,14 +74,9 @@
     <div class="actions">
       <button id="undoBtn" class="btn" aria-label="Undo last move">↶ Undo</button>
       <button id="previewBtn" class="btn" aria-pressed="true" aria-label="Toggle move preview">👁 Preview</button>
-      <button id="hintBtn" class="btn" aria-pressed="false" aria-label="Toggle merge hints">💡 Hints</button>
-      <button id="newBtn" class="btn" aria-label="New game">⟳ New</button>
+      <button id="shopBtn" class="btn shopbtn" aria-label="Open the shop">🛒 Shop</button>
     </div>
 
-    <footer class="foot">
-      <div><span id="turn">Turn 0</span> · <span id="seed">seed</span></div>
-      <div><a href="#" id="helpLink">How to play</a> · <a href="#" id="guideLink">Item guide</a><span class="foot-settings"> · <a href="#" id="hapticLink" role="switch" aria-label="Haptic feedback (vibration)">📳 Haptics: on</a></span></div>
-    </footer>
   </div>
 </main>
 
