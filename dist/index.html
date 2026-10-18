@@ -942,12 +942,20 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       for (var r = 0; r < h; r++) { var row = g.slice(r * w, (r + 1) * w); out = out.concat(side === 'left' ? [EMPTY].concat(row) : row.concat([EMPTY])); }
       g = out; s.w++;
     }
+    // water that touches the edge carries on into the new row / column (a river keeps running off the map); everything else is new land
+    var isW = function (i) { return state.grid[i] === WATER || state.bridges.indexOf(i) >= 0; };
+    for (var k = 0; k < (side === 'top' || side === 'bottom' ? w : h); k++) {
+      var src = side === 'top' ? k : side === 'bottom' ? (h - 1) * w + k : side === 'left' ? k * w : k * w + w - 1;
+      var dst = side === 'top' ? k : side === 'bottom' ? h * w + k : side === 'left' ? k * (w + 1) : k * (w + 1) + w;
+      if (isW(src)) g[dst] = WATER;
+    }
     s.grid = g;
     s.bridges = state.bridges.map(function (i) { // the new row / column moves every index
       var r = (i / w) | 0, c = i % w;
       return side === 'top' ? i + w : side === 'bottom' ? i : side === 'left' ? r * (w + 1) + c + 1 : r * (w + 1) + c;
     });
-    s.over = false;
+    dim(s);
+    s.over = isOver(s); // a strip that is all water adds no free tile
     return { state: s, events: [{ type: 'land', side: side, w: s.w, h: s.h }] };
   }
 
@@ -1745,7 +1753,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     { target: '#hammerBtn', sheet: true, title: '🔨 Hammer', text: 'Smashes any item you have placed, to make room. Tap the tool, then the item.' },
     { target: '#moveBtn', sheet: true, title: '🚚 Mover', text: 'Picks up one item and drops it on another empty tile, where it merges like a placed item. Bears and foxes cannot be moved.' },
     { target: '#bridgeBtn', sheet: true, title: '🌉 Bridge', text: 'On maps with water: turns a water tile that has land on both sides into a road bears can cross. Glowing tiles show where it can go. Up to 5, dearer each time.', when: function () { return !$('bridgeBtn').hidden; } },
-    { target: '.tool.land', sheet: true, title: '⬆️⬇️⬅️➡️ Land', text: 'Adds one more row or column on that side of the map (each side once, dearer every time). Handy when the map is nearly full.' },
+    { target: '.tool.land', sheet: true, title: '⬆️⬇️⬅️➡️ Land', text: 'Adds one more row or column on that side of the map (each side once, dearer every time). Water that touches that edge carries on into it. Handy when the map is nearly full.' },
     { title: '🎉 You are ready', text: 'The <b>Item guide</b> at the top lists every item and what it merges into, and <b>How to play</b> repeats the rules and this tour. Your game is saved automatically. Have fun!' }
   ];
   var tourSteps = [], tourAt = 0, tourDir = 1;
