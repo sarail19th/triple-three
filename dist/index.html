@@ -131,7 +131,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 @keyframes rise { to { transform: translate(-50%, -190%); opacity: 0; } }
 
 /* phone layout: New game, score / best / coins and the turn / rules / guide / haptics line sit at the TOP; Place / Next (with Reserve) right
-   above the map, which is pushed down into thumb reach; under it the hint line and the Undo / Preview / Shop buttons. `.side` dissolves so
+   above the map, which is pushed down into thumb reach; under it the hint line and the Shop / Preview / Undo buttons. `.side` dissolves so
    its children can be ordered. */
 .side { display: contents; }
 .side > * { width: var(--bs); }
@@ -238,6 +238,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   .side > * { width: auto; }
   .panel, .actions, .noterow, .topinfo { order: 0; margin-top: 0; }
   #boardWrap { order: 0; }
+  #undoBtn { order: -1; } /* on wide screens Undo stays first (the Shop button is hidden) */
   /* wide screens keep the shop inline in the side column: no pop-up, no Shop button */
   #shopSheet, #shopSheet.hidden { position: static !important; display: block !important; background: none; }
   .sheet-card { width: auto; max-height: none; overflow: visible; background: none; border: 0; border-radius: 0; padding: 0; animation: none; }
@@ -323,9 +324,9 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     </div>
 
     <div class="actions">
-      <button id="undoBtn" class="btn" aria-label="Undo last move">↶ Undo</button>
-      <button id="previewBtn" class="btn" aria-pressed="true" aria-label="Toggle move preview">👁 Preview</button>
       <button id="shopBtn" class="btn shopbtn" aria-label="Open the shop">🛒 Shop</button>
+      <button id="previewBtn" class="btn" aria-pressed="true" aria-label="Toggle move preview">👁 Preview</button>
+      <button id="undoBtn" class="btn" aria-label="Undo last move">↶ Undo</button>
     </div>
 
   </div>

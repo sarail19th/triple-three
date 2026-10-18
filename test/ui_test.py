@@ -157,7 +157,7 @@ with sync_playwright() as p:
     assert box['w'] >= 380, f"board too small: {box['w']}"
     assert box['shl'] < 20 and box['shb'] <= box['bt'] + 1, f'the New game button should be top-left: {box}'
     assert abs(box['holdTop'] - box['placeTop']) < 3 and abs(box['holdTop'] - box['nextTop']) < 3 and box['holdRight'] <= box['placeLeft'] + 1, f'Reserve shares the Place / Next row: {box}'
-    # phone layout: turn / rules line at the top, Place / Next above the map, Undo / Preview / Shop below it, the map in the lower half (thumb reach), the shop closed
+    # phone layout: turn / rules line at the top, Place / Next above the map, Shop / Preview / Undo below it, the map in the lower half (thumb reach), the shop closed
     lay = page.evaluate("""() => { const r = id => document.getElementById(id).getBoundingClientRect(), b = r('board');
         return { boardTop: b.top, boardBottom: b.bottom, undoTop: r('undoBtn').top, previewTop: r('previewBtn').top, shopTop: r('shopBtn').top, turnBottom: r('turn').bottom, helpBottom: r('helpLink').bottom, hapticBottom: r('hapticLink').bottom, placeBottom: document.querySelector('.panel').getBoundingClientRect().bottom,
                  vh: innerHeight, sheetHidden: document.getElementById('shopSheet').classList.contains('hidden') } }""")
