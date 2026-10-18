@@ -524,12 +524,20 @@
       for (var r = 0; r < h; r++) { var row = g.slice(r * w, (r + 1) * w); out = out.concat(side === 'left' ? [EMPTY].concat(row) : row.concat([EMPTY])); }
       g = out; s.w++;
     }
+    // water that touches the edge carries on into the new row / column (a river keeps running off the map); everything else is new land
+    var isW = function (i) { return state.grid[i] === WATER || state.bridges.indexOf(i) >= 0; };
+    for (var k = 0; k < (side === 'top' || side === 'bottom' ? w : h); k++) {
+      var src = side === 'top' ? k : side === 'bottom' ? (h - 1) * w + k : side === 'left' ? k * w : k * w + w - 1;
+      var dst = side === 'top' ? k : side === 'bottom' ? h * w + k : side === 'left' ? k * (w + 1) : k * (w + 1) + w;
+      if (isW(src)) g[dst] = WATER;
+    }
     s.grid = g;
     s.bridges = state.bridges.map(function (i) { // the new row / column moves every index
       var r = (i / w) | 0, c = i % w;
       return side === 'top' ? i + w : side === 'bottom' ? i : side === 'left' ? r * (w + 1) + c + 1 : r * (w + 1) + c;
     });
-    s.over = false;
+    dim(s);
+    s.over = isOver(s); // a strip that is all water adds no free tile
     return { state: s, events: [{ type: 'land', side: side, w: s.w, h: s.h }] };
   }
 

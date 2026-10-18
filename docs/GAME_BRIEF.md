@@ -12,7 +12,7 @@ Single-file HTML game, (no framework, installable PWA, no image assets).
 - Item queue: mostly grass, sometimes bush/tree/bear, and (lucky drops, by map) a free camp/hut/house once you have built a higher tier, rare "crystal" that merges with anything (three crystals together make a treasure) and rare fox that warps to a random empty cell (walls or a filled box trap it like a bear, as does the trap item). One swap/storage slot, and the next item can be swapped with the current one.
 - First-time players get a guided tour that spotlights every button and shop tool and explains it (repeatable from How to play).
 - Phone layout: New game top-left, turn / rules / guide / haptics line at the top, Reserve / Place / swap / Next in one row right above the map, the map low on the screen, Shop / Preview / Undo in a row under it (thumb reach), the shop as a pop-up sheet.
-- Shop: items cost more once their stock is used up; higher tiers unlock once built; land can be bought. On maps with water, up to 5 bridges can be built (each dearer than the last) on a water tile that has land on both sides; bears can walk over them, nothing can be built on them.
+- Shop: items cost more once their stock is used up; higher tiers unlock once built; land can be bought (water on the edge carries on into the new row or column). On maps with water, up to 5 bridges can be built (each dearer than the last) on a water tile that has land on both sides; bears can walk over them, nothing can be built on them.
 - Game ends when the grid is full. Score = sum of merge values; keep a local best.
 
 ## Graphics (emoji, no files)

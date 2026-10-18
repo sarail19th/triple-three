@@ -945,9 +945,23 @@ t('water: the board is full when every non-water tile is used; land adds plain t
   assert.deepStrictEqual(TT.validate(r.state), []);
   const rich = Object.assign(TT.newGame(4, { map: 'medium' }), { coins: 1000 });
   const l = TT.buyLand(rich, 'top').state;
-  assert.strictEqual(waterCells(l).length, TT.MEDIUM_WATER.length);
-  assert.deepStrictEqual(waterCells(l), TT.MEDIUM_WATER.map((i) => i + 6), 'the river moved down one row with the new top row');
+  assert.deepStrictEqual(waterCells(l), [2].concat(TT.MEDIUM_WATER.map((i) => i + 6)), 'the river moved down one row and runs on into the new top row');
   assert.deepStrictEqual(TT.validate(l), []);
+});
+
+t('land: water on the edge carries on into the new row / column, everything else is plain land', () => {
+  const rich = (opts) => Object.assign(TT.newGame(4, opts), { coins: 5000 });
+  const m = rich({ map: 'medium' }); // river tiles 2 (top edge) and 33 (bottom edge)
+  assert.deepStrictEqual(waterCells(TT.buyLand(m, 'bottom').state), TT.MEDIUM_WATER.concat([39]), 'bottom: only under the river end (col 3)');
+  assert.deepStrictEqual(waterCells(TT.buyLand(m, 'left').state), TT.MEDIUM_WATER.map((i) => i + 1 + ((i / 6) | 0)), 'left / right: the river does not touch those edges, so no new water');
+  assert.deepStrictEqual(waterCells(TT.buyLand(m, 'right').state), TT.MEDIUM_WATER.map((i) => i + ((i / 6) | 0)));
+  // a pond on the left edge grows into the new left column; a bridged edge tile continues as water too
+  const e = rich({}); e.grid[I(2, 0)] = TT.WATER; e.grid[I(3, 0)] = TT.WATER; e.bridges = [];
+  const l = TT.buyLand(e, 'left').state;
+  assert.deepStrictEqual(waterCells(l), [2 * 7, 2 * 7 + 1, 3 * 7, 3 * 7 + 1]);
+  assert.deepStrictEqual(TT.validate(l), []);
+  const eb = rich({ map: 'medium' }); eb.bridges = [2]; eb.grid[2] = 0;
+  assert.strictEqual(TT.buyLand(eb, 'top').state.grid[2], TT.WATER, 'a bridged edge tile carries the river on');
 });
 
 t('maps: migrate gives old saves the plain field; validate rejects an unknown map', () => {
@@ -1073,7 +1087,8 @@ t('bridges keep their tiles when land is bought, and undo takes a bridge back wi
   assert.deepStrictEqual(left.bridges, [1 * 7 + 3]); assert.deepStrictEqual(TT.validate(left), []);
   const right = TT.buyLand(b, 'right').state, bottom = TT.buyLand(b, 'bottom').state;
   assert.deepStrictEqual(right.bridges, [1 * 7 + 2]); assert.deepStrictEqual(bottom.bridges, [8]);
-  [top, left, right, bottom].forEach((x) => assert.strictEqual(TT.bridgeSpots(x).length, 5, 'the same five spots on the grown board (one bridged, the double-wide part opened up)'));
+  [left, right].forEach((x) => assert.strictEqual(TT.bridgeSpots(x).length, 5, 'the same five spots on the grown board (one bridged, the double-wide part opened up)'));
+  [top, bottom].forEach((x) => assert.strictEqual(TT.bridgeSpots(x).length, 6, 'the river runs on into the new row: one more spot, at the new edge'));
   // undo: place something, build a bridge, undo -> the bridge and its cost are gone (undo charges only its own fee)
   const base = medium({ coins: 5000 });
   const placed = TT.place(base, I(5, 0)).state;
