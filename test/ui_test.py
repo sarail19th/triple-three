@@ -102,6 +102,7 @@ def shop_tap(page, selector):
 with sync_playwright() as p:
     browser = p.chromium.launch(**({'executable_path': os.environ['TT_CHROMIUM']} if os.environ.get('TT_CHROMIUM') else {}))
     ctx = browser.new_context(viewport={'width': 412, 'height': 860}, device_scale_factor=2, has_touch=True, is_mobile=True)
+    ctx.add_init_script("window.__vib = []; Object.defineProperty(navigator, 'vibrate', { configurable: true, value: (ms) => { window.__vib.push(ms); return true; } });")
     page = ctx.new_page()
     errors = []
     page.on('pageerror', lambda e: errors.append(str(e)))
@@ -354,6 +355,26 @@ with sync_playwright() as p:
     tap_cell(page, 20, True)
     after = check_consistent(page, 'trap fox')
     assert after['grid'][20] == TOMB and after['turn'] == 3 and after['coins'] == 30 - 12, 'trapped fox becomes a tombstone'
+
+    # ---- haptic feedback can be switched off (and back on), and the choice is remembered
+    g = [0] * 36
+    load(g, cur=1, next=1)
+    assert page.locator('#hapticLink').is_visible() and 'on' in page.inner_text('#hapticLink')
+    page.evaluate('window.__vib.length = 0')
+    tap_cell(page, 3, True)
+    assert page.evaluate('window.__vib.length') >= 1, 'placing buzzes while haptics are on'
+    page.tap('#hapticLink')
+    assert 'off' in page.inner_text('#hapticLink') and page.evaluate("JSON.parse(localStorage.getItem('tt-haptics'))") is False
+    page.evaluate('window.__vib.length = 0')
+    tap_cell(page, 5, True)
+    assert page.evaluate('window.__vib.length') == 0, 'no buzzing once haptics are off'
+    page.reload(); page.wait_for_selector('#board .cell')
+    assert 'off' in page.inner_text('#hapticLink'), 'the choice survives a reload'
+    page.tap('#hapticLink')
+    assert 'on' in page.inner_text('#hapticLink') and page.evaluate('window.__vib.length') >= 1, 'switching it on gives a sample buzz'
+    page.evaluate('window.__vib.length = 0')
+    tap_cell(page, 7, True)
+    assert page.evaluate('window.__vib.length') >= 1
 
     # ---- tapping Next swaps it with Place: free, as often as you like
     g = [0] * 36

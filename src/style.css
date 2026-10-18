@@ -190,6 +190,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 
 .foot { color: var(--muted); font-size: 12px; text-align: center; }
 .foot a { color: var(--muted); }
+.foot-settings { display: block; margin-top: 2px; }
+.foot-settings:has(a[hidden]) { display: none; }
 
 .overlay { position: fixed; inset: 0; background: #000b; display: flex; align-items: center; justify-content: center; z-index: 10; padding: 16px; }
 .card { background: #14301f; border: 2px solid var(--accent); border-radius: 18px; padding: 20px; max-width: 380px; width: 100%; text-align: center; max-height: 100%; overflow: auto; }
