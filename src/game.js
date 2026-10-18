@@ -76,7 +76,15 @@
     if (ev.pointerType === 'mouse' && hover !== -1) { hover = -1; updatePreview(); }
   });
 
-  function vibrate(ms) { if (navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } }
+  // Haptic feedback (a short buzz on placing, merging and buying): on by default, switched off with the 📳 link under the map.
+  var haptics = store.get('tt-haptics', true) !== false;
+  function vibrate(ms) { if (haptics && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } }
+  function showHaptics() {
+    var link = $('hapticLink');
+    link.hidden = !navigator.vibrate; // phones without vibration support (iPhones) have nothing to switch off
+    link.textContent = haptics ? '📳 Haptics: on' : '📴 Haptics: off';
+    link.setAttribute('aria-pressed', haptics);
+  }
 
   function isCollectible(v) { return v === TT.TREASURE || v === TT.CASH; }
   function isAnimal(v) { return TT.isBear(v) || v === TT.FOX; }
@@ -581,6 +589,12 @@
     '<p class="gnote">🍀 <b>Lucky drops</b>: once you have built a higher tier, the next item is sometimes a free 🏕️ 🛖 or 🏠 (a tier below your best, never above a house). Most often on Easy, rarer on Standard and Medium, never on Hard.</p>';
   $('guideLink').addEventListener('click', function (e) { e.preventDefault(); $('guide').classList.remove('hidden'); });
   $('guideClose').addEventListener('click', function () { $('guide').classList.add('hidden'); });
+  $('hapticLink').addEventListener('click', function (e) {
+    e.preventDefault();
+    haptics = !haptics; store.set('tt-haptics', haptics); showHaptics();
+    vibrate(20); // switching it on gives a sample buzz
+  });
+  showHaptics();
   $('helpLink').addEventListener('click', function (e) { e.preventDefault(); $('help').classList.remove('hidden'); });
   $('helpClose').addEventListener('click', function () { $('help').classList.add('hidden'); store.set('tt-seen-help', 1); });
 
@@ -603,7 +617,7 @@
     { target: '#moveBtn', sheet: true, title: '🚚 Mover', text: 'Picks up one item and drops it on another empty tile, where it merges like a placed item. Bears and foxes cannot be moved.' },
     { target: '#bridgeBtn', sheet: true, title: '🌉 Bridge', text: 'On maps with water: turns a water tile that has land on both sides into a road bears can cross. Glowing tiles show where it can go. Up to 5, dearer each time.', when: function () { return !$('bridgeBtn').hidden; } },
     { target: '.tool.land', sheet: true, title: '⬆️⬇️⬅️➡️ Land', text: 'Adds one more row or column on that side of the map (each side once, dearer every time). Handy when the map is nearly full.' },
-    { title: '🎉 You are ready', text: 'The <b>Item guide</b> in the footer lists every item and what it merges into, and <b>How to play</b> repeats the rules and this tour. Your game is saved automatically. Have fun!' }
+    { title: '🎉 You are ready', text: 'The <b>Item guide</b> in the footer lists every item and what it merges into, and <b>How to play</b> repeats the rules and this tour. Your game is saved automatically. On phones with vibration, the <b>📳 Haptics</b> link under the map turns the buzzing off. Have fun!' }
   ];
   var tourSteps = [], tourAt = 0, tourDir = 1;
   function tourRect(sel) {
