@@ -1106,6 +1106,24 @@ t('swap stores the item, then exchanges', () => {
   assert.strictEqual(s.turn, 0, 'swap is free');
 });
 
+t('swapNext: exchanges the current and the next item, free (no turn, no rng, no coins), twice is a no-op, refused when the game is over', () => {
+  const s = withGrid({ [I(0, 0)]: 5 }, { cur: 2, next: 3, hold: TT.BEAR });
+  const a = TT.swapNext(s);
+  assert.strictEqual(a.cur, 3); assert.strictEqual(a.next, 2);
+  ['hold', 'turn', 'rng', 'coins', 'score', 'seed'].forEach((k) => assert.strictEqual(a[k], s[k], k + ' untouched'));
+  assert.deepStrictEqual(a.grid, s.grid);
+  assert.deepStrictEqual(TT.validate(a), []);
+  assert.strictEqual(JSON.stringify(TT.swapNext(a)), JSON.stringify(s), 'swapping back restores the state exactly');
+  assert.strictEqual(JSON.stringify(s), JSON.stringify(withGrid({ [I(0, 0)]: 5 }, { cur: 2, next: 3, hold: TT.BEAR })), 'the input is not mutated');
+  assert.strictEqual(TT.swapNext(Object.assign({}, s, { over: true })), null);
+  // the swapped-in item is what gets placed
+  const r = TT.place(a, I(3, 3));
+  assert.strictEqual(r.state.grid[I(3, 3)], 3); assert.strictEqual(r.events[0].item, 3);
+  // equal items: harmless
+  const same = withGrid({}, { cur: 1, next: 1 });
+  assert.strictEqual(TT.swapNext(same).cur, 1);
+});
+
 t('undo restores the exact previous state (incl. rng) and replay is identical', () => {
   let s = TT.newGame(11);
   for (let k = 0; k < 6; k++) s = TT.place(s, s.grid.indexOf(0)).state;
@@ -1155,6 +1173,7 @@ t('fuzz: 400 random games keep state valid and always terminate', () => {
     while (!s.over) {
       assert(++guard < 4000, 'game must terminate (seed ' + seed + ')');
       if (TT.rand(pick) < 0.05) { s = TT.swap(s); assert.deepStrictEqual(TT.validate(s), []); continue; }
+      if (TT.rand(pick) < 0.05) { const w = TT.swapNext(s); assert(w.cur === s.next && w.next === s.cur && w.turn === s.turn && w.rng === s.rng); s = w; assert.deepStrictEqual(TT.validate(s), []); continue; }
       if (TT.rand(pick) < 0.04) {
         const b = TT.buy(s, TT.BUYABLE[Math.floor(TT.rand(pick) * TT.BUYABLE.length)]);
         if (b) { s = b; assert.deepStrictEqual(TT.validate(s), []); continue; }

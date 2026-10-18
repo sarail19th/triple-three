@@ -335,6 +335,19 @@ with sync_playwright() as p:
     after = check_consistent(page, 'trap fox')
     assert after['grid'][20] == TOMB and after['turn'] == 3 and after['coins'] == 30 - 12, 'trapped fox becomes a tombstone'
 
+    # ---- tapping Next swaps it with Place: free, as often as you like
+    g = [0] * 36
+    load(g, cur=2, next=3, hold=0)
+    page.tap('#nextBtn')
+    after = check_consistent(page, 'swap next')
+    assert after['cur'] == 3 and after['next'] == 2 and after['turn'] == 3 and after['rng'] == 77, 'Place and Next are swapped, no turn passes'
+    assert page.inner_text('#curItem') == EMOJI[3] and page.inner_text('#nextItem') == EMOJI[2]
+    page.tap('#nextBtn')
+    assert check_consistent(page, 'swap next back')['cur'] == 2, 'swapping again puts them back'
+    page.tap('#nextBtn'); tap_cell(page, 14, True)   # the item that was swapped into Place is the one that gets placed
+    after = check_consistent(page, 'place swapped item')
+    assert after['grid'][14] == 3 and after['turn'] == 4
+
     # ---- an armed tool is shown next to the Shop button and can be put away without reopening the shop
     g = [0] * 36
     g[14] = 5

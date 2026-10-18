@@ -481,6 +481,14 @@
   }
 
   // ---- controls
+  // Next <-> Place: a free swap of the two upcoming items (no turn passes)
+  $('nextBtn').addEventListener('click', function () {
+    var s = TT.swapNext(state);
+    if (!s) return;
+    state = s; save(); render([]);
+    var panel = document.querySelector('.panel');
+    panel.classList.remove('swapped'); void panel.offsetWidth; panel.classList.add('swapped');
+  });
   $('holdBtn').addEventListener('click', function () {
     var s = TT.swap(state);
     if (s) { state = s; save(); render([]); }
