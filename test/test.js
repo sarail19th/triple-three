@@ -657,7 +657,6 @@ t('three connected gems merge into a treasure on the tile where the last one lan
   const pv = TT.preview(s, I(2, 2));
   assert(pv.merged && pv.final === TT.TREASURE && pv.points === 0 && pv.coins === 0, 'preview shows the merge');
   assert.deepStrictEqual(pv.eaten.sort(), [I(2, 1), I(2, 3)].sort());
-  assert(TT.wouldMerge(s, I(2, 2)), 'the merge hint lights up');
   const r = TT.place(s, I(2, 2));
   assert.strictEqual(r.state.grid[I(2, 2)], TT.TREASURE);
   assert.strictEqual(r.state.grid[I(2, 1)], 0); assert.strictEqual(r.state.grid[I(2, 3)], 0);
@@ -1155,12 +1154,6 @@ t('game ends when the grid fills', () => {
   assert(r.state.over);
   assert(r.events.some((e) => e.type === 'over'));
   assert.deepStrictEqual(TT.validate(r.state), []);
-});
-
-t('wouldMerge agrees with place', () => {
-  const s = withGrid({ [I(2, 2)]: 1, [I(2, 4)]: 1 });
-  assert(TT.wouldMerge(s, I(2, 3)));
-  assert(!TT.wouldMerge(s, I(5, 5)));
 });
 
 t('fuzz: 400 random games keep state valid and always terminate', () => {

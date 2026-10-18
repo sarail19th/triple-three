@@ -134,7 +134,7 @@ with sync_playwright() as p:
             page.tap('#tourNext'); page.wait_for_timeout(100); assert page.inner_text('#tourStep').lower().startswith('step 3 of')
         page.tap('#tourNext')
     assert len(steps) >= 15, steps
-    for need in ['🗺️ The map', '🌱 Place and Next', '📦 Reserve', '↶ Undo', '👁 Preview', '💡 Hints', '⟳ New game', '🛒 Shop', '🪤 Trap', '🔨 Hammer', '🚚 Mover', '⬆️⬇️⬅️➡️ Land']:
+    for need in ['🗺️ The map', '🌱 Place and Next', '📦 Reserve', '↶ Undo', '👁 Preview', '⟳ New game', '📋 Turn, rules and settings', '🛒 Shop', '🪤 Trap', '🔨 Hammer', '🚚 Mover', '⬆️⬇️⬅️➡️ Land']:
         assert need in steps, f'the tour misses {need}: {steps}'
     assert page.locator('#shopSheet').is_hidden() and page.evaluate("localStorage.getItem('tt-seen-help')") == '1', 'the tour ends with the shop closed and remembered'
     page.evaluate('navigator.serviceWorker.ready')
@@ -151,17 +151,19 @@ with sync_playwright() as p:
     assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), 'horizontal scroll on mobile'
     st = check_consistent(page, 'initial')
     assert st['turn'] == 0 and st['seed'] == 12345 and st['grid'] == [0] * 36 and st['coins'] == 10
-    # board is large on a phone; the Shop button sits at the top-left, and the Reserve slot is in the same row as Place and Next
-    box = page.evaluate("""() => { const r = s => document.querySelector(s).getBoundingClientRect(), b = r('#board'), sh = r('#shopBtn'), h = r('#holdBtn'), p = r('.slot.current'), n = r('#nextBtn');
+    # board is large on a phone; the New game button sits at the top-left, and the Reserve slot is in the same row as Place and Next
+    box = page.evaluate("""() => { const r = s => document.querySelector(s).getBoundingClientRect(), b = r('#board'), sh = r('#newBtn'), h = r('#holdBtn'), p = r('.slot.current'), n = r('#nextBtn');
         return { w: b.width, bt: b.top, shl: sh.left, shb: sh.bottom, holdTop: h.top, holdRight: h.right, placeTop: p.top, placeLeft: p.left, nextTop: n.top } }""")
     assert box['w'] >= 380, f"board too small: {box['w']}"
-    assert box['shl'] < 20 and box['shb'] <= box['bt'] + 1, f'the Shop button should be top-left: {box}'
+    assert box['shl'] < 20 and box['shb'] <= box['bt'] + 1, f'the New game button should be top-left: {box}'
     assert abs(box['holdTop'] - box['placeTop']) < 3 and abs(box['holdTop'] - box['nextTop']) < 3 and box['holdRight'] <= box['placeLeft'] + 1, f'Reserve shares the Place / Next row: {box}'
-    # phone layout: buttons and Place / Next above the map, the map in the lower half (thumb reach), the shop closed
+    # phone layout: turn / rules line at the top, Place / Next above the map, Undo / Preview / Shop below it, the map in the lower half (thumb reach), the shop closed
     lay = page.evaluate("""() => { const r = id => document.getElementById(id).getBoundingClientRect(), b = r('board');
-        return { boardTop: b.top, boardBottom: b.bottom, undoBottom: r('undoBtn').bottom, placeBottom: document.querySelector('.panel').getBoundingClientRect().bottom,
+        return { boardTop: b.top, boardBottom: b.bottom, undoTop: r('undoBtn').top, previewTop: r('previewBtn').top, shopTop: r('shopBtn').top, turnBottom: r('turn').bottom, helpBottom: r('helpLink').bottom, hapticBottom: r('hapticLink').bottom, placeBottom: document.querySelector('.panel').getBoundingClientRect().bottom,
                  vh: innerHeight, sheetHidden: document.getElementById('shopSheet').classList.contains('hidden') } }""")
-    assert lay['undoBottom'] <= lay['boardTop'] and lay['placeBottom'] <= lay['boardTop'] + 1, f'controls above the map: {lay}'
+    assert lay['placeBottom'] <= lay['boardTop'] + 1, f'Place / Next above the map: {lay}'
+    assert min(lay['undoTop'], lay['previewTop'], lay['shopTop']) >= lay['boardBottom'], f'Undo, Preview and Shop below the map: {lay}'
+    assert max(lay['turnBottom'], lay['helpBottom']) <= lay['placeBottom'] and lay['hapticBottom'] <= lay['placeBottom'], f'turn and rules links at the top: {lay}'
     assert (lay['boardTop'] + lay['boardBottom']) / 2 >= lay['vh'] * 0.55, f'the map sits in the lower half of the screen: {lay}'
     assert lay['sheetHidden'] and page.locator('#shopSheet').is_hidden(), 'the shop starts closed'
     # the shop pops up, shows coins, closes with its X, with a tap outside and with Escape
