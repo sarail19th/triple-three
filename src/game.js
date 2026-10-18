@@ -233,6 +233,7 @@
     $('nextItem').textContent = TT.EMOJI[state.next];
     $('holdItem').textContent = state.hold ? TT.EMOJI[state.hold] : '·';
     $('undoBtn').disabled = !TT.canUndo(state);
+    $('swapBtn').disabled = state.over;
     buildShop();
     document.querySelectorAll('.tool[data-tool]').forEach(function (b) {
       var t = b.dataset.tool;
@@ -490,13 +491,15 @@
 
   // ---- controls
   // Next <-> Place: a free swap of the two upcoming items (no turn passes)
-  $('nextBtn').addEventListener('click', function () {
+  function swapNextItems() {
     var s = TT.swapNext(state);
     if (!s) return;
     state = s; save(); render([]);
     var panel = document.querySelector('.panel');
     panel.classList.remove('swapped'); void panel.offsetWidth; panel.classList.add('swapped');
-  });
+  }
+  $('nextBtn').addEventListener('click', swapNextItems);
+  $('swapBtn').addEventListener('click', swapNextItems);
   $('holdBtn').addEventListener('click', function () {
     var s = TT.swap(state);
     if (s) { state = s; save(); render([]); }
@@ -603,7 +606,7 @@
   var TOUR = [
     { title: '👋 Welcome to Triple Three', text: 'Put the item shown in <b>Place</b> on the map. When <b>3 or more of the same item touch</b> (up, down, left, right) they merge into ONE of the next kind, on the tile you tapped: 🌱 → 🌿 → 🌳 → 🏕️ → … → 💵.<br>This quick tour explains every button. You can skip it any time.' },
     { target: '#boardWrap', title: '🗺️ The map', text: 'Tap a tile to <b>preview</b> what would happen, tap the same tile again to <b>place</b> the item. (With a mouse: hover to preview, click once.) 🐻 bears wander and become 🪦 tombstones when they get boxed in; three 🪦 merge into ⛪.' },
-    { target: '.panel', title: '🌱 Place and Next', text: '<b>Place</b> is the item you will put down now, <b>Next</b> is the one after it. <b>Tap Next to swap them</b>: free, as often as you like.' },
+    { target: '.panel', title: '🌱 Place and Next', text: '<b>Place</b> is the item you will put down now, <b>Next</b> is the one after it. <b>Tap the ⇄ button between them to swap them</b> (tapping the Next item works too): free, as often as you like.' },
     { target: '#holdBtn', title: '📦 Reserve', text: 'Store the current item here for later. Tap it again to swap with what is stored. Also free.' },
     { target: '.hud .stat', title: '⭐ Score and coins', text: 'Every merge adds to your <b>score</b> and pays 🪙 <b>coins</b> (bigger groups pay more). Coins buy things in the shop. <b>Best</b> is your top score on this map.' },
     { target: '#undoBtn', title: '↶ Undo', text: 'Takes back your last move. It costs a few coins, and only one move can be undone.' },

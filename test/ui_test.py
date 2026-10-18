@@ -385,7 +385,13 @@ with sync_playwright() as p:
     assert page.inner_text('#curItem') == EMOJI[3] and page.inner_text('#nextItem') == EMOJI[2]
     page.tap('#nextBtn')
     assert check_consistent(page, 'swap next back')['cur'] == 2, 'swapping again puts them back'
-    page.tap('#nextBtn'); tap_cell(page, 14, True)   # the item that was swapped into Place is the one that gets placed
+    page.tap('#swapBtn')                              # the ⇄ button between the two items does the same
+    after = check_consistent(page, 'swap button')
+    assert after['cur'] == 3 and after['next'] == 2 and after['turn'] == 3
+    bar = page.evaluate("""() => { const r = id => document.getElementById(id).getBoundingClientRect(), a = document.querySelector('.slot.current').getBoundingClientRect(), s = r('swapBtn'), n = r('nextBtn');
+        return a.right <= s.left + 1 && s.right <= n.left + 1 && s.width >= 40 && s.height >= 40 }""")
+    assert bar, 'the swap button sits between Place and Next and is big enough to tap'
+    page.tap('#swapBtn'); page.tap('#nextBtn'); tap_cell(page, 14, True)   # (swapped twice, then via Next) the item in Place is the one that gets placed
     after = check_consistent(page, 'place swapped item')
     assert after['grid'][14] == 3 and after['turn'] == 4
 
