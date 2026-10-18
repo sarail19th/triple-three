@@ -483,6 +483,25 @@ with sync_playwright() as p:
     classic = check_consistent(page, 'new classic game')
     assert classic['wild'] is False and 'wild' not in page.inner_text('#seed')
 
+    # ---- calm mode: No bears + No foxes. No animals ever show up, no trap tool, own best score, the picks are remembered
+    page.tap('#newBtn'); page.tap('.opt[data-bears="off"]'); page.tap('.opt[data-foxes="off"]'); page.tap('#newStart')
+    calm = check_consistent(page, 'new calm game')
+    assert calm['bears'] is False and calm['foxes'] is False and 'calm' in page.inner_text('#seed')
+    assert page.evaluate("JSON.parse(localStorage.getItem('tt-bears'))") is False and page.evaluate("JSON.parse(localStorage.getItem('tt-foxes'))") is False
+    open_shop(page); assert page.locator('#trapBtn').is_hidden(), 'nothing to trap in a calm game'
+    page.tap('#shopClose')
+    for _ in range(40):
+        st = state(page)
+        if st['over']: break
+        e = [i for i, v in enumerate(st['grid']) if v == 0]
+        tap_cell(page, e[0], True)
+        st = check_consistent(page, 'calm turn')
+        assert not any(v in (12, 13, 14, 15, 18, 19, 20) for v in st['grid']) and st['cur'] not in (12, 18) and st['next'] not in (12, 18), 'no animals in a calm game'
+    page.tap('#newBtn'); assert page.get_attribute('.opt[data-bears="off"]', 'aria-pressed') == 'true' and page.get_attribute('.opt[data-foxes="off"]', 'aria-pressed') == 'true', 'the dialog remembers the calm picks'
+    page.tap('.opt[data-bears="classic"]'); page.tap('.opt[data-foxes="on"]'); page.tap('#newStart')
+    back = check_consistent(page, 'bears and foxes back on')
+    assert back['bears'] is True and back['foxes'] is True
+
     # ---- Maps: picked in the New game dialog; water tiles are blue, fixed and unusable
     page.tap('#newBtn')
     assert state(page)['turn'] == 0 and page.locator('#newWarn').is_hidden(), 'nothing to lose on a fresh game: no warning'

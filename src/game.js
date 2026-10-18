@@ -22,13 +22,23 @@
   function fmt(n) { return n >= 10000 ? Math.round(n / 1000) + 'k' : n >= 1000 ? (Math.round(n / 100) / 10) + 'k' : String(n); }
 
   // best scores are kept per map and bear mode: harder games get their own board (easy + classic keeps the original key)
-  function bestKey() { return (state && state.map && state.map !== 'easy' ? 'tt-best-' + state.map : 'tt-best') + (state && state.wild ? '-wild' : ''); }
+  function bestKey() {
+    return (state && state.map && state.map !== 'easy' ? 'tt-best-' + state.map : 'tt-best') + (state && state.wild ? '-wild' : '') +
+      (state && state.bears === false ? '-nobears' : '') + (state && state.foxes === false ? '-nofox' : '');
+  }
   function wildPref() { return store.get('tt-wild', false) === true; } // the mode picked last in the New game dialog
+  function bearsPref() { return store.get('tt-bears', true) !== false; }
+  function foxesPref() { return store.get('tt-foxes', true) !== false; }
   function mapPref() { var m = store.get('tt-map', 'easy'); return TT.MAPS.indexOf(m) >= 0 ? m : 'easy'; }
-  function startNew(seed, wild, map) {
-    if (wild === undefined) wild = wildPref();
-    if (map === undefined) map = mapPref();
-    state = TT.newGame(seed || randomSeed(), { wild: !!wild, map: map });
+  // ' · wild bears', ' · calm' ... for the seed line and the erase warning
+  function modeLabel(st) {
+    return (st.wild ? ' · wild bears' : '') + (st.bears === false && st.foxes === false ? ' · calm' : (st.bears === false ? ' · no bears' : '') + (st.foxes === false ? ' · no foxes' : ''));
+  }
+  function startNew(seed, o) {
+    o = o || {};
+    state = TT.newGame(seed || randomSeed(), {
+      wild: o.wild === undefined ? wildPref() : o.wild, map: o.map === undefined ? mapPref() : o.map,
+      bears: o.bears === undefined ? bearsPref() : o.bears, foxes: o.foxes === undefined ? foxesPref() : o.foxes });
     sel = -1; hover = -1; mode = null; moveFrom = -1;
     $('overlay').classList.add('hidden');
     save();
@@ -250,6 +260,7 @@
         b.querySelector('.tb').textContent = '×' + (TT.MAX_BRIDGES - state.bridges.length);
         return;
       } else if (t === 'trap') {
+        b.hidden = !state.bears && !state.foxes; // a calm game has no animals to trap
         b.disabled = state.over || state.coins < TT.PRICE.trap || !(state.stock.trap > 0) || !g.some(isAnimal);
         b.setAttribute('aria-pressed', mode === 'trap');
       } else {
@@ -263,7 +274,7 @@
     $('toolCancel').hidden = !mode; // a tool is armed: the Shop sheet is closed, so offer a way to put it away
     if (mode) $('toolCancelName').textContent = TOOL_NAMES[mode];
     var util = document.querySelector('.tools.util');
-    util.style.setProperty('--tools', $('bridgeBtn').hidden ? 7 : 8);
+    util.style.setProperty('--tools', 7 + ($('bridgeBtn').hidden ? 0 : 1) - ($('trapBtn').hidden ? 1 : 0));
     var lp = TT.landPrice(state);
     document.querySelectorAll('.land').forEach(function (b) {
       var owned = state.land.indexOf(b.dataset.land) >= 0;
@@ -277,7 +288,7 @@
       (TT.unlockedTop(state) > 3 ? ' +1 each higher tier' : '') + ' +1🪤 +1🔨';
     $('undoBtn').textContent = '↶ Undo 🪙' + TT.UNDO_COST;
     $('turn').textContent = 'Turn ' + state.turn;
-    $('seed').textContent = 'seed ' + state.seed + (state.map !== 'easy' ? ' · ' + state.map + ' map' : '') + (state.wild ? ' · wild bears' : '');
+    $('seed').textContent = 'seed ' + state.seed + (state.map !== 'easy' ? ' · ' + state.map + ' map' : '') + modeLabel(state);
     animate(events);
     updatePreview();
     syncCritters();
@@ -525,31 +536,34 @@
     if (s) { state = s; save(); render([]); }
   });
   // New game: pick the map and the bear mode in a small dialog (the last picks are remembered); Play again repeats both
-  var dlg = { map: 'easy', wild: false };
+  var dlg = { map: 'easy', bears: 'classic', foxes: true };
   function showDialog() {
     document.querySelectorAll('#newGame .opt[data-map]').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.map === dlg.map); });
-    document.querySelectorAll('#newGame .opt[data-bears]').forEach(function (b) { b.setAttribute('aria-pressed', (b.dataset.bears === 'wild') === dlg.wild); });
+    document.querySelectorAll('#newGame .opt[data-bears]').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.bears === dlg.bears); });
+    document.querySelectorAll('#newGame .opt[data-foxes]').forEach(function (b) { b.setAttribute('aria-pressed', (b.dataset.foxes === 'on') === dlg.foxes); });
     $('mapNote').textContent = MAP_NOTES[dlg.map];
-    $('bearNote').textContent = dlg.wild ? 'Boxed-in bears growl, get angry, then maul a 🌱🌿🌳🏕️🛖 next to them (one tier down). Bears breed in small pens. Own best scores.' : 'Bears wander and get trapped into tombstones.';
+    $('foxNote').textContent = dlg.foxes ? 'Foxes warp around the board; walls or a full box trap them.' : 'No foxes in the item queue.';
+    $('bearNote').textContent = dlg.bears === 'off' ? 'No bears in the item queue' + (dlg.foxes ? '.' : ' (calm mode: no animals at all, nothing to interrupt you).') : dlg.bears === 'wild' ? 'Boxed-in bears growl, get angry, then maul a 🌱🌿🌳🏕️🛖 next to them (one tier down). Bears breed in small pens. Own best scores.' : 'Bears wander and get trapped into tombstones.';
   }
   var MAP_NOTES = { easy: 'A plain grass field.', standard: 'A plain field with a few grass, bushes and trees already growing.', medium: 'A river runs across the field and splits it in two.', hard: 'Random ponds eat into the field (different every game).' };
   function openNewGame() {
-    dlg.map = mapPref(); dlg.wild = wildPref();
+    dlg.map = mapPref(); dlg.bears = !bearsPref() ? 'off' : wildPref() ? 'wild' : 'classic'; dlg.foxes = foxesPref();
     // a game in progress would be erased: say so loudly, with what is at stake, and make the button say it too
     var inProgress = !state.over && state.turn > 0, warn = $('newWarn');
     warn.classList.toggle('hidden', !inProgress);
-    if (inProgress) warn.textContent = '⚠️ Your current game will be lost: score ' + state.score + ' · turn ' + state.turn + (state.map !== 'easy' ? ' · ' + state.map + ' map' : '') + (state.wild ? ' · wild bears' : '') + '. This cannot be undone.';
+    if (inProgress) warn.textContent = '⚠️ Your current game will be lost: score ' + state.score + ' · turn ' + state.turn + (state.map !== 'easy' ? ' · ' + state.map + ' map' : '') + modeLabel(state) + '. This cannot be undone.';
     $('newStart').textContent = inProgress ? 'Erase game & start' : 'Start';
     $('newStart').classList.toggle('danger', inProgress); $('newStart').classList.toggle('primary', !inProgress);
     showDialog();
     $('newGame').classList.remove('hidden');
   }
   document.querySelectorAll('#newGame .opt[data-map]').forEach(function (b) { b.addEventListener('click', function () { dlg.map = b.dataset.map; showDialog(); }); });
-  document.querySelectorAll('#newGame .opt[data-bears]').forEach(function (b) { b.addEventListener('click', function () { dlg.wild = b.dataset.bears === 'wild'; showDialog(); }); });
+  document.querySelectorAll('#newGame .opt[data-bears]').forEach(function (b) { b.addEventListener('click', function () { dlg.bears = b.dataset.bears; showDialog(); }); });
+  document.querySelectorAll('#newGame .opt[data-foxes]').forEach(function (b) { b.addEventListener('click', function () { dlg.foxes = b.dataset.foxes === 'on'; showDialog(); }); });
   $('newStart').addEventListener('click', function () {
-    store.set('tt-map', dlg.map); store.set('tt-wild', dlg.wild);
+    store.set('tt-map', dlg.map); store.set('tt-wild', dlg.bears === 'wild'); store.set('tt-bears', dlg.bears !== 'off'); store.set('tt-foxes', dlg.foxes);
     $('newGame').classList.add('hidden');
-    startNew(0, dlg.wild, dlg.map);
+    startNew(0, { wild: dlg.bears === 'wild', map: dlg.map, bears: dlg.bears !== 'off', foxes: dlg.foxes });
   });
   $('shopBtn').addEventListener('click', openShop);
   $('shopClose').addEventListener('click', closeShop);
@@ -561,7 +575,7 @@
   });
   $('newBtn').addEventListener('click', function () { closeShop(); openNewGame(); });
   $('newCancel').addEventListener('click', function () { $('newGame').classList.add('hidden'); });
-  $('againBtn').addEventListener('click', function () { startNew(0, state.wild, state.map); });
+  $('againBtn').addEventListener('click', function () { startNew(0, { wild: state.wild, map: state.map, bears: state.bears, foxes: state.foxes }); });
   // item guide: built from the logic tables so it can never drift from the real merge chains
   function chip(code, label) {
     return '<div class="chip"><span class="ce">' + TT.EMOJI[code] + '</span><small>' + (label || TT.NAME[code]) + '</small></div>';
@@ -605,13 +619,13 @@
     { target: '.panel', title: '🌱 Place and Next', text: '<b>Place</b> is the item you will put down now, <b>Next</b> is the one after it. <b>Tap the ⇄ button between them to swap them</b> (tapping the Next item works too): free, as often as you like.' },
     { target: '#holdBtn', title: '📦 Reserve', text: 'Store the current item here for later. Tap it again to swap with what is stored. Also free.' },
     { target: '.hud .stat', title: '⭐ Score and coins', text: 'Every merge adds to your <b>score</b> and pays 🪙 <b>coins</b> (bigger groups pay more). Coins buy things in the shop. <b>Best</b> is your top score on this map.' },
-    { target: '#newBtn', title: '⟳ New game', text: 'Starts a new game: choose the <b>map</b> (Easy, Standard, Medium, Hard) and the <b>bear mode</b> (Classic or Wild). It erases the game you are playing, and warns you first.' },
+    { target: '#newBtn', title: '⟳ New game', text: 'Starts a new game: choose the <b>map</b> (Easy, Standard, Medium, Hard) the <b>bear mode</b> (Classic, Wild or No bears) and whether <b>foxes</b> appear. Switch both animals off for a calm game. It erases the game you are playing, and warns you first.' },
     { target: '.topinfo', title: '📋 Turn, rules and settings', text: 'The turn counter and game seed, <b>How to play</b> (the rules and this tour), the <b>Item guide</b> (every item and what it merges into) and, on phones with vibration, the <b>📳 Haptics</b> switch.' },
     { target: '#undoBtn', title: '↶ Undo', text: 'Takes back your last move. It costs a few coins, and only one move can be undone.' },
     { target: '#previewBtn', title: '👁 Preview', text: 'Shows what a tap would do before you place. Turn it off to place with a single tap.' },
     { target: '#shopBtn', title: '🛒 Shop', text: 'Opens the shop. Everything you can spend coins on is in there.', when: function () { return $('shopBtn').offsetParent !== null; } },
     { target: '#shop', sheet: true, title: '🏠 Buy an item', text: 'Buy a building and it becomes your item to place right away. The little number is the stock left; after that the price <b>doubles</b> each time. Higher kinds unlock once you have built them.' },
-    { target: '#trapBtn', sheet: true, title: '🪤 Trap', text: 'Kills a bear or fox on the spot: it turns into a 🪦 right away. Tap the tool, then the animal.' },
+    { target: '#trapBtn', sheet: true, title: '🪤 Trap', text: 'Kills a bear or fox on the spot: it turns into a 🪦 right away. Tap the tool, then the animal.', when: function () { return !$('trapBtn').hidden; } },
     { target: '#hammerBtn', sheet: true, title: '🔨 Hammer', text: 'Smashes any item you have placed, to make room. Tap the tool, then the item.' },
     { target: '#moveBtn', sheet: true, title: '🚚 Mover', text: 'Picks up one item and drops it on another empty tile, where it merges like a placed item. Bears and foxes cannot be moved.' },
     { target: '#bridgeBtn', sheet: true, title: '🌉 Bridge', text: 'On maps with water: turns a water tile that has land on both sides into a road bears can cross. Glowing tiles show where it can go. Up to 5, dearer each time.', when: function () { return !$('bridgeBtn').hidden; } },

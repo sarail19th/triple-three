@@ -1156,6 +1156,32 @@ t('game ends when the grid fills', () => {
   assert.deepStrictEqual(TT.validate(r.state), []);
 });
 
+t('animals can be switched off per game: no bears, no foxes, or calm (neither)', () => {
+  for (const [bears, foxes] of [[false, true], [true, false], [false, false]]) {
+    for (let seed = 1; seed <= 40; seed++) {
+      let s = TT.newGame(seed, { bears, foxes, wild: true });
+      assert.strictEqual(s.bears, bears); assert.strictEqual(s.foxes, foxes); assert.strictEqual(s.wild, bears, 'wild needs bears');
+      const pick = TT.newGame(seed * 31 + 7);
+      let guard = 0;
+      while (!s.over && guard++ < 400) {
+        assert.deepStrictEqual(TT.validate(s), [], `bears ${bears} foxes ${foxes} seed ${seed}`);
+        for (const v of [s.cur, s.next]) { assert(bears || v !== TT.BEAR); assert(foxes || v !== TT.FOX); }
+        s.grid.forEach((v) => { assert(bears || !TT.isBear(v)); assert(foxes || v !== TT.FOX); if (!bears && !foxes) assert(v !== TT.TOMB && v !== TT.CHURCH); });
+        const e = []; s.grid.forEach((v, i) => { if (v === 0 && !s.bridges.includes(i)) e.push(i); });
+        if (!e.length) break;
+        const r = TT.place(s, e[Math.floor(TT.rand(pick) * e.length)]);
+        if (r) s = r.state;
+      }
+    }
+  }
+  // both on is the old game: the same seed deals the same queue as before the switches existed
+  const a = TT.newGame(5, {}), b = TT.newGame(5, { bears: true, foxes: true });
+  assert.deepStrictEqual(a, b);
+  // old saves have both animals
+  const legacy = JSON.parse(JSON.stringify(a)); delete legacy.bears; delete legacy.foxes;
+  const m = TT.migrate(legacy); assert(m.bears === true && m.foxes === true); assert.deepStrictEqual(TT.validate(m), []);
+});
+
 t('fuzz: 400 random games keep state valid and always terminate', () => {
   let maxTurns = 0, merges = 0, trapped = 0, churches = 0, hammers = 0, lands = 0, foxMoves = 0, maxTier = 0, moves = 0, growls = 0, mauls = 0, cubs = 0, bridges = 0;
   for (let seed = 1; seed <= 400; seed++) {

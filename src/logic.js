@@ -89,18 +89,26 @@
     var lucky = luckyTier(s);
     if (lucky) return lucky;
     var r = randInt(s, 100), acc = 0;
-    for (var i = 0; i < WEIGHTS.length; i++) { acc += WEIGHTS[i][1]; if (r < acc) return WEIGHTS[i][0]; }
+    for (var i = 0; i < WEIGHTS.length; i++) {
+      acc += WEIGHTS[i][1];
+      if (r < acc) {
+        var it = WEIGHTS[i][0];
+        // a switched-off animal turns into plain grass (the draw is the same, so games with both animals on replay exactly as ever)
+        return (it === BEAR && s.bears === false) || (it === FOX && s.foxes === false) ? 1 : it;
+      }
+    }
     return 1;
   }
 
   function clone(s) {
-    return { ver: s.ver, wild: s.wild, map: s.map, bridges: s.bridges.slice(), w: s.w, h: s.h, land: s.land.slice(), top: s.top, grid: s.grid.slice(), cur: s.cur, next: s.next, hold: s.hold, score: s.score, coins: s.coins,
+    return { ver: s.ver, wild: s.wild, bears: s.bears, foxes: s.foxes, map: s.map, bridges: s.bridges.slice(), w: s.w, h: s.h, land: s.land.slice(), top: s.top, grid: s.grid.slice(), cur: s.cur, next: s.next, hold: s.hold, score: s.score, coins: s.coins,
       stock: Object.assign({}, s.stock), milestone: s.milestone, turn: s.turn, over: s.over, rng: s.rng, seed: s.seed, undo: s.undo };
   }
 
   function newGame(seed, opts) {
     seed = (seed >>> 0) || 1;
-    var s = { ver: VERSION, wild: !!(opts && opts.wild), map: opts && MAPS.indexOf(opts.map) >= 0 ? opts.map : 'easy', bridges: [], w: DEFAULT_W, h: DEFAULT_H, land: [], top: 1, grid: new Array(DEFAULT_W * DEFAULT_H).fill(EMPTY), cur: 1, next: 1, hold: 0, score: 0, coins: START_COINS,
+    var bears = !(opts && opts.bears === false), foxes = !(opts && opts.foxes === false);
+    var s = { ver: VERSION, wild: bears && !!(opts && opts.wild), bears: bears, foxes: foxes, map: opts && MAPS.indexOf(opts.map) >= 0 ? opts.map : 'easy', bridges: [], w: DEFAULT_W, h: DEFAULT_H, land: [], top: 1, grid: new Array(DEFAULT_W * DEFAULT_H).fill(EMPTY), cur: 1, next: 1, hold: 0, score: 0, coins: START_COINS,
       stock: Object.assign({}, START_STOCK), milestone: 0, turn: 0, over: false, rng: seed, seed: seed, undo: null };
     dim(s);
     genMap(s);
@@ -590,6 +598,8 @@
       for (var sk in START_STOCK) if (typeof x.stock[sk] !== 'number') x.stock[sk] = START_STOCK[sk]; // items added since the save was made
       if (!Array.isArray(x.bridges)) x.bridges = [];
       if (MAPS.indexOf(x.map) < 0) x.map = 'easy'; // every older game was played on the plain field
+      if (typeof x.bears !== 'boolean') x.bears = true; // bears and foxes can be switched off per game; every older game has both
+      if (typeof x.foxes !== 'boolean') x.foxes = true;
       if (typeof x.wild !== 'boolean') x.wild = false; // Wild bears is chosen per game; every older game is a classic one
       if (typeof x.milestone !== 'number') { x.milestone = 0; while (x.score >= milestoneScore(x.milestone)) x.milestone++; }
       if (Array.isArray(x.grid) && x.grid.length === (x.w || DEFAULT_W) * (x.h || DEFAULT_H)) {
@@ -611,6 +621,8 @@
     var ok = function (v) { return v === (v | 0) && v >= DEFAULT_W && v <= DEFAULT_W + 2; };
     if (!ok(s.w) || !ok(s.h) || !Array.isArray(s.land)) return ['bad board size'];
     if (typeof s.wild !== 'boolean') return ['bad wild flag'];
+    if (typeof s.bears !== 'boolean' || typeof s.foxes !== 'boolean') return ['bad animal flags'];
+    if (s.wild && !s.bears) return ['wild bears without bears'];
     if (MAPS.indexOf(s.map) < 0) return ['bad map'];
     dim(s);
     if (!Array.isArray(s.grid) || s.grid.length !== N) return ['bad grid'];
@@ -630,12 +642,18 @@
     for (i = 0; i < N; i++) {
       var v = s.grid[i];
       if (v !== (v | 0) || v < 0 || v > WATER) p.push('bad code at ' + i + ': ' + v);
+      else if (!s.bears && !s.foxes && (v === TOMB || v === CHURCH || v === CATHEDRAL)) p.push('graves in a calm game at ' + i);
+      else if (!s.bears && isBear(v)) p.push('bear in a no-bears game at ' + i);
+      else if (!s.foxes && v === FOX) p.push('fox in a no-foxes game at ' + i);
       else if (!s.wild && (v === BEAR_GROWL || v === BEAR_ANGRY)) p.push('angry bear in a classic game at ' + i);
     }
     if (p.length) return p;
     if (QUEUE_ITEMS.indexOf(s.cur) < 0) p.push('bad current item ' + s.cur);
     if (QUEUE_ITEMS.indexOf(s.next) < 0) p.push('bad next item ' + s.next);
     if (s.hold && QUEUE_ITEMS.indexOf(s.hold) < 0) p.push('bad hold ' + s.hold);
+    [s.cur, s.next, s.hold].forEach(function (it) {
+      if ((it === BEAR && !s.bears) || (it === FOX && !s.foxes)) p.push('switched-off animal in the queue');
+    });
     if (typeof s.score !== 'number' || s.score < 0 || s.score !== (s.score | 0)) p.push('bad score ' + s.score);
     if (typeof s.coins !== 'number' || s.coins < 0 || s.coins !== (s.coins | 0)) p.push('bad coins ' + s.coins);
     if (!(s.top >= 1 && s.top <= LAST_BUILDING) || s.top !== (s.top | 0)) p.push('bad top tier ' + s.top);
