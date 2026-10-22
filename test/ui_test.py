@@ -588,6 +588,7 @@ with sync_playwright() as p:
     assert page.locator('#loanLine').is_visible() and '1 loan' in page.inner_text('#loanLine') and 'owe 🪙200' in page.inner_text('#loanLine')
     page.tap('#bankClose')
     shop_tap(page, '#hammerBtn'); page.tap('#board .cell[data-i="13"]')   # the hammer does not take a locked building
+    assert 'Locked by a loan' in page.inner_text('#fx'), 'tapping a locked tile says why'
     assert state(page)['grid'][13] == 6, state(page)['grid']
     assert page.locator('#board .cell.target').count() == 0, page.inner_text('#note')
     page.tap('#shopBtn') if False else None
