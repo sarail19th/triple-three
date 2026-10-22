@@ -40,7 +40,8 @@
   var COIN = { 1: 2, 2: 4, 3: 8, 4: 16, 5: 30, 6: 60, 7: 120, 8: 240, 9: 480, 10: 960, 13: 20, 14: 100, 15: 500 };
   (function () { var b = 10; for (var k = 1; k <= LAST_BUILDING; k++) { BASE[k] = b; b *= 3; } })();
   // item queue draw weights (sum 100): mostly grass, sometimes bush/tree/bear, rare crystal and fox
-  var WEIGHTS = [[1, 59], [2, 16], [3, 6], [BEAR, 12], [CRYSTAL, 4], [FOX, 3]];
+  var WEIGHTS = [[1, 62], [2, 16], [3, 6], [BEAR, 12], [CRYSTAL, 2], [FOX, 2]];
+  var TRAP_DROP = 0.03; // chance per turn that the queue brings a free trap (+1 trap in stock): a way to deal with the foxes
   // Lucky drops: once you have built a tier, the next item is now and then a camp / hut / house (never above a house, and only tiers
   // below the best one you have built), more often on the easier maps. The extra random numbers are drawn only when a drop is
   // possible, so early games (and the whole Hard map) draw exactly the sequence they always did.
@@ -51,7 +52,7 @@
   var START_COINS = 10;
   var TREASURE_COINS = 250; // paid when a treasure is opened
   var CASH_COINS = 5000;    // paid when cash (the last building tier) is collected
-  var PRICE = { 1: 6, 2: 15, 3: 35, 4: 80, 5: 180, 6: 400, 7: 900, 8: 2000, 9: 4500, 10: 10000, 16: 50, hammer: 20, trap: 12, move: 60 };
+  var PRICE = { 1: 6, 2: 15, 3: 35, 4: 80, 5: 180, 6: 400, 7: 900, 8: 2000, 9: 4500, 10: 10000, 16: 750, hammer: 20, trap: 12, move: 60 };
   var BUYABLE = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, CRYSTAL];
   var UNDO_COST = 5; // coins per undo
   // Shop stock per game. An item bought with no stock left still sells, at double the price for every purchase past zero
@@ -85,7 +86,9 @@
     for (k = LUCKY_MIN_TIER; k <= hi; k++) { r -= hi - k + 1; if (r < 0) return k; }
     return LUCKY_MIN_TIER;
   }
-  function drawItem(s) {
+  function drawItem(s, events) {
+    // a free trap now and then (only when `events` is given, i.e. on a real turn; needs animals in the game)
+    if (events && s.stock && (s.bears !== false || s.foxes !== false) && rand(s) < TRAP_DROP) { s.stock.trap++; events.push({ type: 'bonus', item: 'trap' }); }
     var lucky = luckyTier(s);
     if (lucky) return lucky;
     var r = randInt(s, 100), acc = 0;
@@ -402,7 +405,7 @@
     settleCrystals(s, events); // new tombstones / churches may complete a group for a waiting crystal
     noteTop(s, events);
     grantMilestones(s, events);
-    s.cur = s.next; s.next = drawItem(s); s.turn++;
+    s.cur = s.next; s.next = drawItem(s, events); s.turn++;
     if (isOver(s)) { s.over = true; events.push({ type: 'over', score: s.score }); }
     return { state: s, events: events };
   }
@@ -702,7 +705,7 @@
     EMPTY: EMPTY, CASH: CASH, BEAR: BEAR, BEAR_GROWL: BEAR_GROWL, BEAR_ANGRY: BEAR_ANGRY, WATER: WATER, MAUL_MAX: MAUL_MAX, isBear: isBear, MAPS: MAPS, LUCKY_RATE: LUCKY_RATE, LUCKY_MIN_TIER: LUCKY_MIN_TIER, LUCKY_MAX_TIER: LUCKY_MAX_TIER, MEDIUM_WATER: MEDIUM_WATER, STANDARD_ITEMS: STANDARD_ITEMS,
     BREED_MAX_POCKET: BREED_MAX_POCKET, BREED_MAX_BEARS: BREED_MAX_BEARS, BREED_CHANCE: BREED_CHANCE, TOMB: TOMB, CHURCH: CHURCH, CATHEDRAL: CATHEDRAL, CRYSTAL: CRYSTAL, TREASURE: TREASURE, FOX: FOX,
     TREASURE_COINS: TREASURE_COINS, CASH_COINS: CASH_COINS,
-    EMOJI: EMOJI, NAME: NAME, NEXT: NEXT, BASE: BASE, WEIGHTS: WEIGHTS,
+    EMOJI: EMOJI, NAME: NAME, NEXT: NEXT, BASE: BASE, WEIGHTS: WEIGHTS, TRAP_DROP: TRAP_DROP,
     START_COINS: START_COINS, COIN: COIN, PRICE: PRICE, BUYABLE: BUYABLE, UNDO_COST: UNDO_COST, START_STOCK: START_STOCK,
     RESTOCK: RESTOCK, MILESTONES: MILESTONES, milestoneScore: milestoneScore, canUndo: canUndo, canHammer: canHammer, migrate: migrate,
     rand: rand, drawItem: drawItem, newGame: newGame, neighbors: neighbors, group: group,

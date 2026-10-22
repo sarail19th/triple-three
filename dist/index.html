@@ -404,6 +404,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       <li>🐻💢 <b>Wild bears</b> (pick it in <b>New</b>): a bear that cannot step but is not sealed in gets angry (💢, then 💢💢) and on the third turn <b>mauls</b> a 🌱🌿🌳🏕️🛖 next to it one tier down (a 🌱 is destroyed, which opens an escape hole), then starts over. Houses and everything above are safe. In a small pen (4 to 6 tiles) holding 2 bears and 2 free tiles, a cub is sometimes born 🍼.</li>
       <li>🍀 <b>Lucky drops</b>: once you have built a higher tier, the next item is sometimes a free 🏕️ 🛖 or 🏠 (a tier below your best, never above a house). Most often on Easy, less on Standard and Medium, never on Hard.</li>
       <li>🗺️ <b>Maps</b> (also in <b>New</b>): Easy is a plain field, Standard starts with a few plants, Medium has a river across the field, Hard has random ponds. Blue tiles are <b>water</b>: nothing can be placed, merged, moved or smashed there, and animals cannot enter it. Use the 🌉 <b>bridge</b> tool (up to 5, dearer each time) on a water tile that has land on both sides, up/down or left/right (never a corner or the middle of wide water): it becomes a road that bears can walk over, but nothing can be built on it.</li>
+      <li>🪤 <b>Free traps</b>: now and then (about 1 turn in 30) the queue brings a free 🪤 trap for your stock, so foxes never pile up for good. 💎 gems and 🦊 foxes are rare, and a gem is expensive in the shop.</li>
       <li>🦊 The <b>fox</b> never walks: every turn it <b>warps</b> to a random empty tile (never into a hole it could not get out of). Corner it, though: when walls and items close it in on every side (or you fill the last free tile of its box) it becomes a 🪦, and so does a fox on a full board. The 🪤 trap kills it anywhere.</li>
       <li>💎 The <b>crystal</b> is a wildcard: it turns into whatever earns the most (it plays out every kind including the merges that follow, so it can pull a whole chain together) (any building tier up to 🏬 which makes 💵 cash, 🪦, ⛪ or 🕌 which makes a 💰 treasure). If no tier fits it waits as a wildcard, and <b>three 💎 touching each other merge into a 💰 treasure</b> on the tile you tapped.</li>
       <li>🪙 <b>Coins</b> come from merges. Spend them in the shop: buy an item as your current one (the old one moves to Next). You can buy 🌱 🌿 🌳, and any higher tier once you have built one. Stock is limited (the ×N badge): after it runs out the price <b>doubles</b> with every purchase, and score milestones restock it.</li>
@@ -458,7 +459,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   var COIN = { 1: 2, 2: 4, 3: 8, 4: 16, 5: 30, 6: 60, 7: 120, 8: 240, 9: 480, 10: 960, 13: 20, 14: 100, 15: 500 };
   (function () { var b = 10; for (var k = 1; k <= LAST_BUILDING; k++) { BASE[k] = b; b *= 3; } })();
   // item queue draw weights (sum 100): mostly grass, sometimes bush/tree/bear, rare crystal and fox
-  var WEIGHTS = [[1, 59], [2, 16], [3, 6], [BEAR, 12], [CRYSTAL, 4], [FOX, 3]];
+  var WEIGHTS = [[1, 62], [2, 16], [3, 6], [BEAR, 12], [CRYSTAL, 2], [FOX, 2]];
+  var TRAP_DROP = 0.03; // chance per turn that the queue brings a free trap (+1 trap in stock): a way to deal with the foxes
   // Lucky drops: once you have built a tier, the next item is now and then a camp / hut / house (never above a house, and only tiers
   // below the best one you have built), more often on the easier maps. The extra random numbers are drawn only when a drop is
   // possible, so early games (and the whole Hard map) draw exactly the sequence they always did.
@@ -469,7 +471,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   var START_COINS = 10;
   var TREASURE_COINS = 250; // paid when a treasure is opened
   var CASH_COINS = 5000;    // paid when cash (the last building tier) is collected
-  var PRICE = { 1: 6, 2: 15, 3: 35, 4: 80, 5: 180, 6: 400, 7: 900, 8: 2000, 9: 4500, 10: 10000, 16: 50, hammer: 20, trap: 12, move: 60 };
+  var PRICE = { 1: 6, 2: 15, 3: 35, 4: 80, 5: 180, 6: 400, 7: 900, 8: 2000, 9: 4500, 10: 10000, 16: 750, hammer: 20, trap: 12, move: 60 };
   var BUYABLE = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, CRYSTAL];
   var UNDO_COST = 5; // coins per undo
   // Shop stock per game. An item bought with no stock left still sells, at double the price for every purchase past zero
@@ -503,7 +505,9 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     for (k = LUCKY_MIN_TIER; k <= hi; k++) { r -= hi - k + 1; if (r < 0) return k; }
     return LUCKY_MIN_TIER;
   }
-  function drawItem(s) {
+  function drawItem(s, events) {
+    // a free trap now and then (only when `events` is given, i.e. on a real turn; needs animals in the game)
+    if (events && s.stock && (s.bears !== false || s.foxes !== false) && rand(s) < TRAP_DROP) { s.stock.trap++; events.push({ type: 'bonus', item: 'trap' }); }
     var lucky = luckyTier(s);
     if (lucky) return lucky;
     var r = randInt(s, 100), acc = 0;
@@ -820,7 +824,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     settleCrystals(s, events); // new tombstones / churches may complete a group for a waiting crystal
     noteTop(s, events);
     grantMilestones(s, events);
-    s.cur = s.next; s.next = drawItem(s); s.turn++;
+    s.cur = s.next; s.next = drawItem(s, events); s.turn++;
     if (isOver(s)) { s.over = true; events.push({ type: 'over', score: s.score }); }
     return { state: s, events: events };
   }
@@ -1120,7 +1124,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     EMPTY: EMPTY, CASH: CASH, BEAR: BEAR, BEAR_GROWL: BEAR_GROWL, BEAR_ANGRY: BEAR_ANGRY, WATER: WATER, MAUL_MAX: MAUL_MAX, isBear: isBear, MAPS: MAPS, LUCKY_RATE: LUCKY_RATE, LUCKY_MIN_TIER: LUCKY_MIN_TIER, LUCKY_MAX_TIER: LUCKY_MAX_TIER, MEDIUM_WATER: MEDIUM_WATER, STANDARD_ITEMS: STANDARD_ITEMS,
     BREED_MAX_POCKET: BREED_MAX_POCKET, BREED_MAX_BEARS: BREED_MAX_BEARS, BREED_CHANCE: BREED_CHANCE, TOMB: TOMB, CHURCH: CHURCH, CATHEDRAL: CATHEDRAL, CRYSTAL: CRYSTAL, TREASURE: TREASURE, FOX: FOX,
     TREASURE_COINS: TREASURE_COINS, CASH_COINS: CASH_COINS,
-    EMOJI: EMOJI, NAME: NAME, NEXT: NEXT, BASE: BASE, WEIGHTS: WEIGHTS,
+    EMOJI: EMOJI, NAME: NAME, NEXT: NEXT, BASE: BASE, WEIGHTS: WEIGHTS, TRAP_DROP: TRAP_DROP,
     START_COINS: START_COINS, COIN: COIN, PRICE: PRICE, BUYABLE: BUYABLE, UNDO_COST: UNDO_COST, START_STOCK: START_STOCK,
     RESTOCK: RESTOCK, MILESTONES: MILESTONES, milestoneScore: milestoneScore, canUndo: canUndo, canHammer: canHammer, migrate: migrate,
     rand: rand, drawItem: drawItem, newGame: newGame, neighbors: neighbors, group: group,
@@ -1546,6 +1550,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       } else if (ev.type === 'maul') { // it takes it out on the building next to it
         cells[ev.at].classList.add('shake'); cells[ev.bear].classList.add('shake');
         floatAt(ev.at, '🐻💢 ' + TT.EMOJI[ev.from] + '→' + (ev.to ? TT.EMOJI[ev.to] : '💨'));
+      } else if (ev.type === 'bonus') {
+        toast('🪤 A free trap!', 0.2);
       } else if (ev.type === 'unlock') {
         toast('🛒 Shop restocked!');
       } else if (ev.type === 'tierunlock') {

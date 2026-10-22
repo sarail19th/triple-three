@@ -274,8 +274,8 @@ t('score milestones restock the shop (crystal unlocks) and the state stays valid
   assert.strictEqual(r.state.stock[1], TT.START_STOCK[1] + TT.RESTOCK[1]);
   assert.strictEqual(r.state.stock[4], TT.START_STOCK[4], 'locked tiers are not restocked');
   assert.deepStrictEqual(TT.validate(r.state), []);
-  const bought = TT.buy(Object.assign(r.state, { cur: 1, coins: 100 }), TT.CRYSTAL);
-  assert.strictEqual(bought.cur, TT.CRYSTAL); assert.strictEqual(bought.coins, 100 - TT.PRICE[TT.CRYSTAL]);
+  const bought = TT.buy(Object.assign(r.state, { cur: 1, coins: 1000 }), TT.CRYSTAL);
+  assert.strictEqual(bought.cur, TT.CRYSTAL); assert.strictEqual(bought.coins, 1000 - TT.PRICE[TT.CRYSTAL]);
   assert.deepStrictEqual(TT.validate(bought), []);
 });
 
@@ -1185,6 +1185,30 @@ t('game ends when the grid fills', () => {
   assert(r.state.over);
   assert(r.events.some((e) => e.type === 'over'));
   assert.deepStrictEqual(TT.validate(r.state), []);
+});
+
+t('the queue sometimes brings a free trap (+1 trap stock, event), never in a calm game, and gems / foxes are rarer', () => {
+  const count = (opts) => {
+    let s = TT.newGame(11, opts), bonus = 0, turns = 0;
+    const pick = TT.newGame(99);
+    while (!s.over && turns < 3000) {
+      const e = []; s.grid.forEach((v, i) => { if (v === 0 && !s.bridges.includes(i)) e.push(i); });
+      if (!e.length) break;
+      const before = s.stock.trap, r = TT.place(s, e[Math.floor(TT.rand(pick) * e.length)]);
+      if (!r) break;
+      const ev = r.events.filter((x) => x.type === 'bonus').length;
+      const restocks = r.events.filter((x) => x.type === 'unlock').length * TT.RESTOCK.trap;
+      assert.strictEqual(r.state.stock.trap - before - restocks, ev, 'each bonus event is exactly one trap');
+      bonus += ev; turns++; s = r.state;
+      s.stock.hammer = 5; s.coins = Math.max(s.coins, 100); // keep the game going
+      s.over = false;
+    }
+    return { bonus, turns };
+  };
+  const a = count({}); assert(a.bonus > 0 && a.bonus / a.turns > 0.01 && a.bonus / a.turns < 0.06, 'about ' + TT.TRAP_DROP * 100 + '% of turns: ' + a.bonus + '/' + a.turns);
+  assert.strictEqual(count({ bears: false, foxes: false }).bonus, 0, 'no animals, no traps');
+  assert(TT.WEIGHTS.find((w) => w[0] === TT.CRYSTAL)[1] <= 2 && TT.WEIGHTS.find((w) => w[0] === TT.FOX)[1] <= 2);
+  assert(TT.PRICE[TT.CRYSTAL] >= 500, 'a gem is no longer cheap');
 });
 
 t('animals can be switched off per game: no bears, no foxes, or calm (neither)', () => {

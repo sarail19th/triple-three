@@ -414,6 +414,8 @@
       } else if (ev.type === 'maul') { // it takes it out on the building next to it
         cells[ev.at].classList.add('shake'); cells[ev.bear].classList.add('shake');
         floatAt(ev.at, '🐻💢 ' + TT.EMOJI[ev.from] + '→' + (ev.to ? TT.EMOJI[ev.to] : '💨'));
+      } else if (ev.type === 'bonus') {
+        toast('🪤 A free trap!', 0.2);
       } else if (ev.type === 'unlock') {
         toast('🛒 Shop restocked!');
       } else if (ev.type === 'tierunlock') {
