@@ -1207,8 +1207,8 @@ t('the queue sometimes brings a free trap (+1 trap stock, event), never in a cal
   };
   const a = count({}); assert(a.bonus > 0 && a.bonus / a.turns > 0.01 && a.bonus / a.turns < 0.06, 'about ' + TT.TRAP_DROP * 100 + '% of turns: ' + a.bonus + '/' + a.turns);
   assert.strictEqual(count({ bears: false, foxes: false }).bonus, 0, 'no animals, no traps');
-  assert(TT.WEIGHTS.find((w) => w[0] === TT.CRYSTAL)[1] <= 2 && TT.WEIGHTS.find((w) => w[0] === TT.FOX)[1] <= 2);
-  assert(TT.PRICE[TT.CRYSTAL] >= 500, 'a gem is no longer cheap');
+  assert(TT.WEIGHTS.find((w) => w[0] === TT.CRYSTAL)[1] < 4 && TT.WEIGHTS.find((w) => w[0] === TT.FOX)[1] <= 2, 'gems rarer than the original 4%, foxes rarer than 3%');
+  assert(TT.PRICE[TT.CRYSTAL] >= 200 && TT.PRICE[TT.CRYSTAL] <= 500, 'a gem costs about a house, not the 50 it started at');
 });
 
 t('ponds: dug on an empty tile, dearer each time, pay points every turn, never take the last free tile', () => {

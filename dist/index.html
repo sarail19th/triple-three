@@ -447,7 +447,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       <li>🗺️ <b>Maps</b> (also in <b>New</b>): Easy is a plain field, Standard starts with a few plants, Medium has a river across the field, Hard has random ponds. Blue tiles are <b>water</b>: nothing can be placed, merged, moved or smashed there, and animals cannot enter it. Use the 🌉 <b>bridge</b> tool (up to 5, dearer each time) on a water tile that has land on both sides, up/down or left/right (never a corner or the middle of wide water): it becomes a road that bears can walk over, but nothing can be built on it.</li>
       <li>💧 <b>Ponds</b> (shop): dig a pond on an empty tile. It stays for the whole game, takes a tile away, and pays <b>points every turn</b> (about 5% of your best building's value each, more with every pond). <b>Lake quests</b>: the pond that completes a 2×2, then a 3×3, then a 4×4 block of water pays a one-off bonus of <b>coins and points</b>. The first pond costs only 60 coins, then each one is dearer (up to 16). Animals cannot cross water, and a bear or fox shut in by ponds is trapped like anywhere else.</li>
       <li>🐺 <b>Animals follow the season</b>: the bear is a 🐗 boar and the fox a 🦝 raccoon in autumn, a 🐺 wolf and a 🐇 rabbit in winter (🐻 and 🦊 in spring and summer). Only the looks change, the rules do not.</li>
-      <li>🪤 <b>Free traps</b>: now and then (about 1 turn in 30) the queue brings a free 🪤 trap for your stock, so foxes never pile up for good. 💎 gems and 🦊 foxes are rare, and a gem is expensive in the shop.</li>
+      <li>🪤 <b>Free traps</b>: now and then (about 1 turn in 30) the queue brings a free 🪤 trap for your stock, so foxes never pile up for good. 🦊 foxes are rare, and 💎 gems turn up now and then (the shop sells them for about the price of a house).</li>
       <li>🦊 The <b>fox</b> never walks: every turn it <b>warps</b> to a random empty tile (never into a hole it could not get out of). Corner it, though: when walls and items close it in on every side (or you fill the last free tile of its box) it becomes a 🪦, and so does a fox on a full board. The 🪤 trap kills it anywhere.</li>
       <li>💎 The <b>crystal</b> is a wildcard: it turns into whatever earns the most (it plays out every kind including the merges that follow, so it can pull a whole chain together) (any building tier up to 🏬 which makes 💵 cash, 🪦, ⛪ or 🕌 which makes a 💰 treasure). If no tier fits it waits as a wildcard, and <b>three 💎 touching each other merge into a 💰 treasure</b> on the tile you tapped.</li>
       <li>🪙 <b>Coins</b> come from merges. Spend them in the shop: buy an item as your current one (the old one moves to Next). You can buy 🌱 🌿 🌳, and any higher tier once you have built one. Stock is limited (the ×N badge): after it runs out the price <b>doubles</b> with every purchase, and score milestones restock it.</li>
@@ -507,7 +507,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   var COIN = { 1: 2, 2: 4, 3: 8, 4: 16, 5: 30, 6: 60, 7: 120, 8: 240, 9: 480, 10: 960, 13: 20, 14: 100, 15: 500 };
   (function () { var b = 10; for (var k = 1; k <= LAST_BUILDING; k++) { BASE[k] = b; b *= 3; } })();
   // item queue draw weights (sum 100): mostly grass, sometimes bush/tree/bear, rare crystal and fox
-  var WEIGHTS = [[1, 62], [2, 16], [3, 6], [BEAR, 12], [CRYSTAL, 2], [FOX, 2]];
+  var WEIGHTS = [[1, 61], [2, 16], [3, 6], [BEAR, 12], [CRYSTAL, 3], [FOX, 2]];
   var TRAP_DROP = 0.03; // chance per turn that the queue brings a free trap (+1 trap in stock): a way to deal with the foxes
   // Lucky drops: once you have built a tier, the next item is now and then a camp / hut / house (never above a house, and only tiers
   // below the best one you have built), more often on the easier maps. The extra random numbers are drawn only when a drop is
@@ -519,7 +519,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   var START_COINS = 10;
   var TREASURE_COINS = 250; // paid when a treasure is opened
   var CASH_COINS = 5000;    // paid when cash (the last building tier) is collected
-  var PRICE = { 1: 6, 2: 15, 3: 35, 4: 80, 5: 180, 6: 400, 7: 900, 8: 2000, 9: 4500, 10: 10000, 16: 750, hammer: 20, trap: 12, move: 60 };
+  var PRICE = { 1: 6, 2: 15, 3: 35, 4: 80, 5: 180, 6: 400, 7: 900, 8: 2000, 9: 4500, 10: 10000, 16: 300, hammer: 20, trap: 12, move: 60 };
   var BUYABLE = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, CRYSTAL];
   var UNDO_COST = 5; // coins per undo
   // Shop stock per game. An item bought with no stock left still sells, at double the price for every purchase past zero

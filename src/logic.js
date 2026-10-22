@@ -45,7 +45,7 @@
   var COIN = { 1: 2, 2: 4, 3: 8, 4: 16, 5: 30, 6: 60, 7: 120, 8: 240, 9: 480, 10: 960, 13: 20, 14: 100, 15: 500 };
   (function () { var b = 10; for (var k = 1; k <= LAST_BUILDING; k++) { BASE[k] = b; b *= 3; } })();
   // item queue draw weights (sum 100): mostly grass, sometimes bush/tree/bear, rare crystal and fox
-  var WEIGHTS = [[1, 62], [2, 16], [3, 6], [BEAR, 12], [CRYSTAL, 2], [FOX, 2]];
+  var WEIGHTS = [[1, 61], [2, 16], [3, 6], [BEAR, 12], [CRYSTAL, 3], [FOX, 2]];
   var TRAP_DROP = 0.03; // chance per turn that the queue brings a free trap (+1 trap in stock): a way to deal with the foxes
   // Lucky drops: once you have built a tier, the next item is now and then a camp / hut / house (never above a house, and only tiers
   // below the best one you have built), more often on the easier maps. The extra random numbers are drawn only when a drop is
@@ -57,7 +57,7 @@
   var START_COINS = 10;
   var TREASURE_COINS = 250; // paid when a treasure is opened
   var CASH_COINS = 5000;    // paid when cash (the last building tier) is collected
-  var PRICE = { 1: 6, 2: 15, 3: 35, 4: 80, 5: 180, 6: 400, 7: 900, 8: 2000, 9: 4500, 10: 10000, 16: 750, hammer: 20, trap: 12, move: 60 };
+  var PRICE = { 1: 6, 2: 15, 3: 35, 4: 80, 5: 180, 6: 400, 7: 900, 8: 2000, 9: 4500, 10: 10000, 16: 300, hammer: 20, trap: 12, move: 60 };
   var BUYABLE = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, CRYSTAL];
   var UNDO_COST = 5; // coins per undo
   // Shop stock per game. An item bought with no stock left still sells, at double the price for every purchase past zero
