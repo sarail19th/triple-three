@@ -284,6 +284,16 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 
 /* a dug pond carries a lily pad (income marker); the water itself is the shared SVG layer */
 .cell.pond::after { content: "🪷"; position: absolute; right: 6%; bottom: 4%; font-size: calc(var(--bs) / var(--m) * .3); opacity: .8; pointer-events: none; }
+
+/* New game: each map card shows a small sample map, and the selected category lists a few more examples */
+.opt.mapcard { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 7px 2px 8px; }
+.mini { display: grid; grid-template: repeat(6, 1fr) / repeat(6, 1fr); width: 52px; height: 52px; border-radius: 5px; overflow: hidden; flex: none;
+  background: linear-gradient(var(--g1), var(--g2)); box-shadow: 0 0 0 1.5px var(--edge); }
+.mini span { display: flex; align-items: center; justify-content: center; font-size: 6px; line-height: 1; box-shadow: inset 0 0 0 .5px #0000001c; }
+.mini span.w { background: linear-gradient(var(--w1), var(--w3)); box-shadow: none; }
+.samples { display: flex; justify-content: center; gap: 12px; margin: 8px 0 2px; }
+.samples .mini { width: 68px; height: 68px; border-radius: 7px; }
+.samples .mini span { font-size: 9px; }
 </style>
 </head>
 <body>
@@ -371,11 +381,12 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     <h2>New game</h2>
     <h3>Map</h3>
     <div class="opts">
-      <button class="opt" data-map="easy" aria-pressed="true">Easy</button>
-      <button class="opt" data-map="standard" aria-pressed="false">Standard</button>
-      <button class="opt" data-map="medium" aria-pressed="false">Medium</button>
-      <button class="opt" data-map="hard" aria-pressed="false">Hard</button>
+      <button class="opt mapcard" data-map="easy" aria-pressed="true"><span class="mini" aria-hidden="true"></span><span>Easy</span></button>
+      <button class="opt mapcard" data-map="standard" aria-pressed="false"><span class="mini" aria-hidden="true"></span><span>Standard</span></button>
+      <button class="opt mapcard" data-map="medium" aria-pressed="false"><span class="mini" aria-hidden="true"></span><span>Medium</span></button>
+      <button class="opt mapcard" data-map="hard" aria-pressed="false"><span class="mini" aria-hidden="true"></span><span>Hard</span></button>
     </div>
+    <div id="mapSamples" class="samples" aria-label="Sample maps"></div>
     <p id="mapNote" class="gnote"></p>
     <h3>Bears</h3>
     <div class="opts three">
@@ -1805,15 +1816,34 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   });
   // New game: pick the map and the bear mode in a small dialog (the last picks are remembered); Play again repeats both
   var dlg = { map: 'easy', bears: 'classic', foxes: true };
+  // sample maps: the real generator with fixed seeds, drawn as tiny boards (water blue, plants as emoji). Easy and Medium are the same every game.
+  var SAMPLE_SEEDS = { easy: [1], standard: [3, 8, 21], medium: [1], hard: [4, 9, 17] }, CARD_SEED = { easy: 1, standard: 3, medium: 1, hard: 4 };
+  function miniMap(map, seed, into) {
+    var g = TT.newGame(seed, { map: map }).grid;
+    into.textContent = '';
+    g.forEach(function (v) {
+      var c = document.createElement('span');
+      if (v === TT.WATER) c.className = 'w'; else if (v) c.textContent = TT.EMOJI[v];
+      into.appendChild(c);
+    });
+    return into;
+  }
+  document.querySelectorAll('#newGame .mapcard').forEach(function (b) { miniMap(b.dataset.map, CARD_SEED[b.dataset.map], b.querySelector('.mini')); });
+  function showSamples() {
+    var box = $('mapSamples');
+    box.textContent = '';
+    SAMPLE_SEEDS[dlg.map].forEach(function (seed) { var m = document.createElement('div'); m.className = 'mini'; box.appendChild(miniMap(dlg.map, seed, m)); });
+  }
   function showDialog() {
     document.querySelectorAll('#newGame .opt[data-map]').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.map === dlg.map); });
     document.querySelectorAll('#newGame .opt[data-bears]').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.bears === dlg.bears); });
     document.querySelectorAll('#newGame .opt[data-foxes]').forEach(function (b) { b.setAttribute('aria-pressed', (b.dataset.foxes === 'on') === dlg.foxes); });
     $('mapNote').textContent = MAP_NOTES[dlg.map];
+    showSamples();
     $('foxNote').textContent = dlg.foxes ? 'Foxes warp around the board; walls or a full box trap them.' : 'No foxes in the item queue.';
     $('bearNote').textContent = dlg.bears === 'off' ? 'No bears in the item queue' + (dlg.foxes ? '.' : ' (calm mode: no animals at all, nothing to interrupt you).') : dlg.bears === 'wild' ? 'Boxed-in bears growl, get angry, then maul a 🌱🌿🌳🏕️🛖 next to them (one tier down). Bears breed in small pens. Own best scores.' : 'Bears wander and get trapped into tombstones.';
   }
-  var MAP_NOTES = { easy: 'A plain grass field.', standard: 'A plain field with a few grass, bushes and trees already growing.', medium: 'A river runs across the field and splits it in two.', hard: 'Random ponds eat into the field (different every game).' };
+  var MAP_NOTES = { easy: 'A plain grass field.', standard: 'A plain field with a few grass, bushes and trees already growing (different every game, e.g. these).', medium: 'A river runs across the field and splits it in two (the same map every game).', hard: 'Random ponds eat into the field (different every game, e.g. these).' };
   function openNewGame() {
     dlg.map = mapPref(); dlg.bears = !bearsPref() ? 'off' : wildPref() ? 'wild' : 'classic'; dlg.foxes = foxesPref();
     // a game in progress would be erased: say so loudly, with what is at stake, and make the button say it too

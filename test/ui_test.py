@@ -523,6 +523,17 @@ with sync_playwright() as p:
     for m in ['easy', 'standard', 'medium', 'hard']:
         page.tap(f'.opt[data-map="{m}"]')
         assert page.get_attribute(f'.opt[data-map="{m}"]', 'aria-pressed') == 'true' and page.inner_text('#mapNote') != ''
+    # sample maps: every card has a 6x6 thumbnail; the selected category lists examples (3 for the random maps, 1 for the fixed ones)
+    cnt = lambda sel: page.evaluate("s => [...document.querySelectorAll(s)].map(e => e.children.length)", sel)
+    assert cnt('#newGame .mapcard .mini') == [36] * 4, 'a 6x6 sample on each map card'
+    assert page.evaluate("[...document.querySelectorAll('#newGame .mapcard')].map(c => c.querySelectorAll('.mini span.w').length)") == [0, 0, 7, page.evaluate("document.querySelectorAll('#newGame .mapcard[data-map=hard] .mini span.w').length")]
+    waters = {}
+    for m, n in [('easy', 1), ('standard', 3), ('medium', 1), ('hard', 3)]:
+        page.tap(f'.opt[data-map="{m}"]')
+        assert cnt('#mapSamples .mini') == [36] * n, (m, cnt('#mapSamples .mini'))
+        waters[m] = page.evaluate("[...document.querySelectorAll('#mapSamples .mini')].map(e => e.querySelectorAll('span.w').length)")
+    assert waters['easy'] == [0] and waters['standard'] == [0, 0, 0] and waters['medium'] == [7] and all(6 <= w <= 9 for w in waters['hard']), waters
+    assert page.evaluate("new Set([...document.querySelectorAll('#mapSamples .mini')].map(e => e.textContent + [...e.children].map(c => c.className).join())).size") == 3, 'the hard samples differ'
     page.tap('.opt[data-map="standard"]'); page.tap('#newStart')
     std = check_consistent(page, 'standard map')
     assert std['map'] == 'standard' and sum(1 for v in std['grid'] if v) == 5 and 21 not in std['grid'] and 'standard map' in page.inner_text('#seed')
