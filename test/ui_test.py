@@ -13,7 +13,7 @@ from playwright.sync_api import sync_playwright
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 DIST = os.path.join(ROOT, 'dist')
-EMOJI = ['', '🌱', '🌿', '🌳', '🏕️', '🛖', '🏠', '🏘️', '🏫', '🏥', '🏬', '💵', '🐻', '🪦', '⛪', '🕌', '💎', '💰', '🦊', '🐻', '🐻', '']
+EMOJI = ['', '🌱', '🌿', '🌳', '🏕️', '🛖', '🏠', '🏘️', '🏫', '🏥', '🏬', '💵', '🐻', '🪦', '⛪', '🕌', '💎', '💰', '🦊', '🐻', '🐻', '', '🏦']
 BEAR, TOMB, CHURCH, CRYSTAL, TREASURE, FOX = 12, 13, 14, 16, 17, 18
 LAND_PRICE = [150, 400, 1000, 2500]
 MIN_TURNS = 50   # random turns that must be played
@@ -66,10 +66,12 @@ def check_consistent(page, where):
     assert dom['hold'] == (EMOJI[st['hold']] if st['hold'] else '·'), f'{where}: hold display'
     assert dom['undoDisabled'] == (st['undo'] is None or st['undo']['coins'] < 5), f'{where}: undo button state'
     tools = page.evaluate("[...document.querySelectorAll('.tool[data-tool]')].map(b => b.dataset.tool)")
-    assert tools[:3] == ['1', '2', '3'] and tools[-6:] == ['16', 'trap', 'hammer', 'move', 'bridge', 'pond'], f'{where}: shop items {tools}'
-    assert len(tools) == max(3, st['top']) + 6, f'{where}: one button per unlocked tier + crystal + trap + hammer + mover + bridge + pond, got {tools}'
+    bank = ['22'] if st['top'] >= 7 else []   # the bank is sold once a village has stood on the board
+    assert tools[:3] == ['1', '2', '3'] and tools[-(6 + len(bank)):] == ['16'] + bank + ['trap', 'hammer', 'move', 'bridge', 'pond'], f'{where}: shop items {tools}'
+    assert len(tools) == max(3, st['top']) + 6 + len(bank), f'{where}: one button per unlocked tier + crystal (+ bank) + trap + hammer + mover + bridge + pond, got {tools}'
     for tool in tools:
-        want = f"×{5 - len(st['bridges'])}" if tool == 'bridge' else f"×{16 - len(st['ponds'])}" if tool == 'pond' else f"×{max(0, st['stock'][tool])}"
+        slots = st['grid'].count(22) + [st['cur'], st['next'], st['hold']].count(22)
+        want = f"×{5 - len(st['bridges'])}" if tool == 'bridge' else f"×{16 - len(st['ponds'])}" if tool == 'pond' else f"×{3 - slots}" if tool == '22' else f"×{max(0, st['stock'][tool])}"
         assert page.inner_text(f'.tool[data-tool="{tool}"] .tb') == want, f'{where}: badge {tool}'
     return st
 
@@ -525,6 +527,25 @@ with sync_playwright() as p:
     assert page.evaluate("document.getElementById('guideBody').textContent.includes('🐇')"), 'the item guide follows the season too'
     assert 'Summer' in page.inner_text('#seasonLink') and sea() == 'summer'
     check_consistent(page, 'after the season tour')
+
+    # ---- banks and the calendar: the bank is sold once a village has stood on the board, goes in as the current item, never in the reserve,
+    # pays coins at the end of a month (10 turns) and the date is shown at the top
+    g = [0] * 36; g[35] = 7
+    load(g, coins=5000, top=7, tick=9, banksBought=0)
+    assert 'Y1 M1' in page.inner_text('#turn'), page.inner_text('#turn')
+    open_shop(page)
+    bb = page.locator('.tool[data-tool="22"]'); assert bb.is_visible() and bb.is_enabled() and page.inner_text('.tool[data-tool="22"] .tp') == '🪙1.5k' and page.inner_text('.tool[data-tool="22"] .tb') == '×3'
+    bb.tap()
+    after = check_consistent(page, 'bank bought')
+    assert after['cur'] == 22 and after['coins'] == 3500 and after['banksBought'] == 1 and page.inner_text('#curItem') == '🏦'
+    page.tap('#holdBtn'); assert state(page)['hold'] == 0 and state(page)['cur'] == 22, 'a bank cannot go in the reserve'
+    tap_cell(page, 3, True)
+    after = check_consistent(page, 'bank placed')
+    assert after['grid'][3] == 22 and after['turn'] == 4 and 'Y1 M2' in page.inner_text('#turn'), page.inner_text('#turn')
+    income = round(900 * 0.1)
+    assert after['coins'] == 3500 + income, f"one month ends: {after['coins']}"
+    assert page.locator('#board .cell[data-i="3"]').get_attribute('data-c') == '22'
+    page.tap('#board .cell[data-i="3"]'); assert state(page)['turn'] == 4, 'a bank is a dead tile'
 
     # ---- calm mode: No bears + No foxes. No animals ever show up, no trap tool, own best score, the picks are remembered
     page.tap('#newBtn'); page.tap('.opt[data-bears="off"]'); page.tap('.opt[data-foxes="off"]'); page.tap('#newStart')

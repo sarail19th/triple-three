@@ -1264,6 +1264,65 @@ t('lake quests: the pond that completes a 2x2, 3x3, 4x4 block of water pays a on
   assert.deepStrictEqual(TT.validate(s), []);
 });
 
+t('calendar: each turn advances the clock by `speed` ticks, 10 ticks a month, 12 months a year', () => {
+  let s = withGrid({}, { cur: 1, next: 1 });
+  assert.strictEqual(s.tick, 0); assert.strictEqual(s.speed, 1); assert.deepStrictEqual(TT.calendar(s), { year: 1, month: 1 });
+  for (let i = 0; i < 10; i++) s = TT.place(s, i).state;
+  assert.strictEqual(s.tick, 10); assert.deepStrictEqual(TT.calendar(s), { year: 1, month: 2 }, '10 turns = one month');
+  const fast = withGrid({}, { speed: 3, cur: 1, next: 1 }), r = TT.place(fast, 0).state;
+  assert.strictEqual(r.tick, 3, 'x3: three ticks a turn');
+  const paused = TT.place(withGrid({}, { speed: 0, cur: 1, next: 1 }), 0).state; assert.strictEqual(paused.tick, 0, 'paused: time stands still');
+  assert.deepStrictEqual(TT.calendar({ tick: 120 }), { year: 2, month: 1 }); assert.deepStrictEqual(TT.calendar({ tick: 119 }), { year: 1, month: 12 });
+  const rich = withGrid({}, { coins: 99999, top: 7, cur: 1, next: 1 });
+  assert.deepStrictEqual(TT.validate(TT.place(rich, 0).state), []);
+});
+
+t('bank: bought with coins once a village stands, placed like an item, never in the reserve, at most 3, dearer each time', () => {
+  const base = (o = {}) => withGrid({ [I(5, 5)]: 7 }, Object.assign({ coins: 100000, top: 7, cur: 1, next: 2 }, o));
+  assert(TT.isBankAvailable(base())); assert(!TT.isBankAvailable(withGrid({}, { coins: 100000 })), 'locked until a village has stood on the board');
+  assert.strictEqual(TT.buyBank(withGrid({}, { coins: 100000 })), null);
+  assert.strictEqual(TT.buyBank(base({ coins: TT.BANK_PRICE[0] - 1 })), null, 'too poor');
+  let s = TT.buyBank(base());
+  assert.strictEqual(s.cur, TT.BANK); assert.strictEqual(s.next, 1, 'the old current item moves to next'); assert.strictEqual(s.coins, 100000 - TT.BANK_PRICE[0]); assert.strictEqual(s.banksBought, 1);
+  assert.deepStrictEqual(TT.validate(s), []);
+  assert.strictEqual(TT.swap(s), null, 'a bank cannot go into the reserve');
+  assert.strictEqual(TT.swapNext(s).next, TT.BANK, 'but the next / current swap is allowed'); assert.strictEqual(TT.buyBank(s), null, 'already holding one');
+  const r = TT.place(s, I(2, 2));
+  assert.strictEqual(r.state.grid[I(2, 2)], TT.BANK); assert.strictEqual(TT.bankCount(r.state), 1); assert.strictEqual(r.state.cur, 1);
+  // a dead tile: movers cannot carry it, animals cannot walk through it, the hammer can break it
+  assert(!TT.isMovable(TT.BANK)); assert.strictEqual(TT.move(r.state, I(2, 2), I(0, 0)), null);
+  const hm = TT.hammer(Object.assign(r.state, { coins: 1000 }), I(2, 2)); assert.strictEqual(hm.state.grid[I(2, 2)], 0, 'the hammer destroys a bank');
+  assert.strictEqual(hm.state.banksBought, 1, 'rebuying costs the next price');
+  assert(TT.bankPrice(hm.state) > TT.BANK_PRICE[0]);
+  // at most 3 on the board (placed + in the queue)
+  let t = base({ coins: 10 ** 7 });
+  for (let k = 0; k < 3; k++) { t = TT.buyBank(t); assert(t, 'bank ' + (k + 1)); t = TT.place(t, I(0, k * 2)).state; }
+  assert.strictEqual(TT.bankCount(t), 3);
+  assert.strictEqual(TT.buyBank(t), null, 'a fourth bank is refused');
+  assert.strictEqual(TT.bankPrice(base({ banksBought: 1 })), TT.BANK_PRICE[1]); assert.strictEqual(TT.bankPrice(base({ banksBought: 2 })), TT.BANK_PRICE[2]);
+});
+
+t('bank: pays coins at the end of every month; three connected banks merge into cash', () => {
+  const income = TT.bankIncome(withGrid({}, { top: 7 })); assert.strictEqual(income, Math.round(TT.PRICE[7] * 0.1));
+  // two banks, month ends on the 10th turn
+  let s = withGrid({ [I(0, 0)]: TT.BANK, [I(0, 5)]: TT.BANK, [I(5, 5)]: 7 }, { coins: 0, top: 7, cur: 1, next: 1, tick: 9, banksBought: 2 });
+  assert.deepStrictEqual(TT.validate(s), []);
+  const r = TT.place(s, I(3, 3)), ev = r.events.find((e) => e.type === 'bankpay');
+  assert(ev && ev.coins === 2 * income && ev.months === 1 && ev.banks === 2, JSON.stringify(ev)); assert.strictEqual(r.state.coins, 2 * income);
+  assert(!TT.place(Object.assign({}, s, { tick: 3 }), I(3, 3)).events.some((e) => e.type === 'bankpay'), 'only on a month boundary');
+  assert(!TT.place(Object.assign({}, s, { speed: 0 }), I(3, 3)).events.some((e) => e.type === 'bankpay'), 'paused clock, no pay');
+  // trio -> cash on the tapped tile
+  const trio = withGrid({ [I(2, 1)]: TT.BANK, [I(2, 3)]: TT.BANK }, { cur: TT.BANK, next: 1, banksBought: 3, top: 7, coins: 0 });
+  assert.deepStrictEqual(TT.validate(trio), []);
+  const m = TT.place(trio, I(2, 2));
+  assert.strictEqual(m.state.grid[I(2, 2)], TT.CASH, 'three banks become cash where the last one landed');
+  assert.strictEqual(m.state.grid[I(2, 1)], 0); assert.strictEqual(m.state.grid[I(2, 3)], 0); assert.strictEqual(m.state.score, trio.score, 'the cash is the prize: no points');
+  assert.deepStrictEqual(TT.validate(m.state), []);
+  // old saves
+  const legacy = JSON.parse(JSON.stringify(withGrid({}))); delete legacy.tick; delete legacy.speed; delete legacy.banksBought;
+  const mg = TT.migrate(legacy); assert.strictEqual(mg.tick, 0); assert.strictEqual(mg.speed, 1); assert.strictEqual(mg.banksBought, 0); assert.deepStrictEqual(TT.validate(mg), []);
+});
+
 t('animals can be switched off per game: no bears, no foxes, or calm (neither)', () => {
   for (const [bears, foxes] of [[false, true], [true, false], [false, false]]) {
     for (let seed = 1; seed <= 40; seed++) {
@@ -1291,15 +1350,16 @@ t('animals can be switched off per game: no bears, no foxes, or calm (neither)',
 });
 
 t('fuzz: 400 random games keep state valid and always terminate', () => {
-  let maxTurns = 0, merges = 0, trapped = 0, churches = 0, hammers = 0, lands = 0, foxMoves = 0, maxTier = 0, moves = 0, growls = 0, mauls = 0, cubs = 0, bridges = 0;
+  let banksBought = 0, maxTurns = 0, merges = 0, trapped = 0, churches = 0, hammers = 0, lands = 0, foxMoves = 0, maxTier = 0, moves = 0, growls = 0, mauls = 0, cubs = 0, bridges = 0;
   for (let seed = 1; seed <= 400; seed++) {
     let s = TT.newGame(seed, { wild: seed % 2 === 0, map: TT.MAPS[((seed / 2) | 0) % 4] });
+    if (seed % 5 === 0) { s.top = 7; s.coins = 60000; } // banks need a village in the past and the money
     if (s.map === 'medium' || s.map === 'hard') s.coins = 30000; // well off, so bridges and land get bought in these games too
     const pick = TT.newGame(seed * 7919 + 1); // independent chooser rng
     let guard = 0;
     while (!s.over) {
       assert(++guard < 4000, 'game must terminate (seed ' + seed + ')');
-      if (TT.rand(pick) < 0.05) { s = TT.swap(s); assert.deepStrictEqual(TT.validate(s), []); continue; }
+      if (TT.rand(pick) < 0.05) { const sw = TT.swap(s); if (sw) s = sw; else assert.strictEqual(s.cur, TT.BANK, 'only a bank refuses the reserve'); assert.deepStrictEqual(TT.validate(s), []); continue; }
       if (TT.rand(pick) < 0.05) { const w = TT.swapNext(s); assert(w.cur === s.next && w.next === s.cur && w.turn === s.turn && w.rng === s.rng); s = w; assert.deepStrictEqual(TT.validate(s), []); continue; }
       if (TT.rand(pick) < 0.04) {
         const b = TT.buy(s, TT.BUYABLE[Math.floor(TT.rand(pick) * TT.BUYABLE.length)]);
@@ -1311,6 +1371,7 @@ t('fuzz: 400 random games keep state valid and always terminate', () => {
         const mv = TT.move(s, occupied[Math.floor(TT.rand(pick) * occupied.length)], empties[Math.floor(TT.rand(pick) * empties.length)]);
         if (mv) { moves++; s = mv.state; assert.deepStrictEqual(TT.validate(s), []); continue; }
       }
+      if (TT.rand(pick) < 0.03) { const bk = TT.buyBank(s); if (bk) { banksBought++; s = bk; assert.deepStrictEqual(TT.validate(s), []); continue; } } // a bank now and then (needs a village on the board and the coins)
       if (TT.rand(pick) < 0.01 && empties.length) { // dig a pond now and then
         const pd = TT.buyPond(s, empties[Math.floor(TT.rand(pick) * empties.length)]);
         if (pd) { s = pd.state; assert.deepStrictEqual(TT.validate(s), []); continue; }
@@ -1349,6 +1410,7 @@ t('fuzz: 400 random games keep state valid and always terminate', () => {
     }
     maxTurns = Math.max(maxTurns, s.turn);
   }
+  assert(banksBought > 0, 'the fuzz bought banks');
   assert(merges > 0 && trapped > 0 && foxMoves > 0, 'fuzz exercised merges, trapped bears and fox warps');
   console.log(`  fuzz: max ${maxTurns} turns, ${merges} merges, ${trapped} trapped bears, ${churches} churches, ${hammers} hammers, ${lands} land purchases, ${moves} moves, ${foxMoves} fox warps, ${growls} growls, ${mauls} mauls, ${cubs} cubs, ${bridges} bridges, best tier ${maxTier}`);
 });
