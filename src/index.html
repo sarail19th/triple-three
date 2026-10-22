@@ -12,6 +12,7 @@
 <style>/*INLINE_CSS*/</style>
 </head>
 <body>
+<div id="seasonFx" class="season-fx" aria-hidden="true"></div>
 <main id="app">
   <header class="hud">
     <button id="newBtn" class="tray newtray" aria-label="New game">
@@ -25,7 +26,7 @@
 
   <div class="topinfo">
     <div><span id="turn">Turn 0</span> · <span id="seed">seed</span></div>
-    <div><a href="#" id="helpLink">How to play</a> · <a href="#" id="guideLink">Item guide</a><span class="foot-settings"> · <a href="#" id="hapticLink" role="switch" aria-label="Haptic feedback (vibration)">📳 Haptics: on</a></span></div>
+    <div><a href="#" id="helpLink">How to play</a> · <a href="#" id="guideLink">Item guide</a> · <a href="#" id="seasonLink" aria-label="Season theme">🎨 Season: auto</a><span class="foot-settings"> · <a href="#" id="hapticLink" role="switch" aria-label="Haptic feedback (vibration)">📳 Haptics: on</a></span></div>
   </div>
 
   <div id="boardWrap">

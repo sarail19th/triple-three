@@ -96,6 +96,31 @@
     link.setAttribute('aria-pressed', haptics);
   }
 
+  // Seasons: a colour theme (`data-season` on <html>, CSS tokens) plus a few petals / leaves / snowflakes drifting over the page. 'auto' follows
+  // the calendar month. Purely cosmetic (never in the game state); the falling bits use Math.random, which is fine outside the logic.
+  var SEASONS = ['auto', 'spring', 'summer', 'autumn', 'winter'];
+  var SEASON_LABEL = { auto: '🎨 Season: auto', spring: '🌸 Spring', summer: '☀️ Summer', autumn: '🍂 Autumn', winter: '❄️ Winter' };
+  var SEASON_BITS = { spring: ['🌸', '🌼', '🌸'], autumn: ['🍂', '🍁', '🍂'], winter: ['❄️', '❄', '❄️'] };
+  var season = store.get('tt-season', 'auto');
+  if (SEASONS.indexOf(season) < 0) season = 'auto';
+  function seasonNow() { var m = new Date().getMonth(); return m >= 2 && m <= 4 ? 'spring' : m >= 5 && m <= 7 ? 'summer' : m >= 8 && m <= 10 ? 'autumn' : 'winter'; }
+  function applySeason() {
+    var cur = season === 'auto' ? seasonNow() : season, fx = $('seasonFx'), bits = SEASON_BITS[cur] || [];
+    document.documentElement.dataset.season = cur;
+    $('seasonLink').textContent = SEASON_LABEL[season];
+    fx.innerHTML = '';
+    if (!bits.length) return;
+    for (var i = 0; i < 16; i++) {
+      var b = document.createElement('i');
+      b.textContent = bits[i % bits.length];
+      b.style.left = (Math.random() * 100) + '%';
+      b.style.fontSize = (9 + Math.random() * 9) + 'px';
+      b.style.animationDuration = (9 + Math.random() * 9) + 's';
+      b.style.animationDelay = (-Math.random() * 18) + 's';
+      b.style.setProperty('--sway', (Math.random() * 60 - 30) + 'px');
+      fx.appendChild(b);
+    }
+  }
   function isCollectible(v) { return v === TT.TREASURE || v === TT.CASH; }
   function isAnimal(v) { return TT.isBear(v) || v === TT.FOX; }
   // Is idx a legal target for the armed tool (or for placement when none is armed)?
@@ -176,9 +201,9 @@
     var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('class', 'water'); svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h); svg.setAttribute('preserveAspectRatio', 'none'); svg.setAttribute('aria-hidden', 'true');
     svg.innerHTML = '<defs><g id="wcells">' + rects + '</g>' + filter('wbank', 6, -0.9) + filter('wbody', 14, -6.3) + mask('wmbank', 'wbank') + mask('wmbody', 'wbody') +
-      '<linearGradient id="wgrad" x1="0" y1="0" x2="0.35" y2="1"><stop offset="0" stop-color="#6cc3f4"/><stop offset="0.55" stop-color="#4aa3e4"/><stop offset="1" stop-color="#3a86cc"/></linearGradient>' +
+      '<linearGradient id="wgrad" x1="0" y1="0" x2="0.35" y2="1"><stop offset="0" style="stop-color:var(--w1)"/><stop offset="0.55" style="stop-color:var(--w2)"/><stop offset="1" style="stop-color:var(--w3)"/></linearGradient>' +
       '<pattern id="wrip" width="0.55" height="0.55" patternUnits="userSpaceOnUse" patternTransform="rotate(24)"><path d="M0 0.1 Q0.14 0 0.28 0.1 T0.55 0.1" fill="none" stroke="#fff" stroke-opacity="0.2" stroke-width="0.03"/></pattern></defs>' +
-      '<rect ' + box + ' fill="#e3f0b4" fill-opacity="0.85" mask="url(#wmbank)"/>' +
+      '<rect ' + box + ' style="fill:var(--bank)" fill-opacity="0.85" mask="url(#wmbank)"/>' +
       '<rect ' + box + ' fill="url(#wgrad)" mask="url(#wmbody)"/>' +
       '<g mask="url(#wmbody)"><rect class="ripples" ' + box + ' fill="url(#wrip)"/></g>';
     boardEl.insertBefore(svg, boardEl.firstChild);
@@ -610,6 +635,11 @@
     vibrate(20); // switching it on gives a sample buzz
   });
   showHaptics();
+  $('seasonLink').addEventListener('click', function (e) {
+    e.preventDefault();
+    season = SEASONS[(SEASONS.indexOf(season) + 1) % SEASONS.length]; store.set('tt-season', season); applySeason();
+  });
+  applySeason();
   $('helpLink').addEventListener('click', function (e) { e.preventDefault(); $('help').classList.remove('hidden'); });
   $('helpClose').addEventListener('click', function () { $('help').classList.add('hidden'); store.set('tt-seen-help', 1); });
 
@@ -622,7 +652,7 @@
     { target: '#holdBtn', title: '📦 Reserve', text: 'Store the current item here for later. Tap it again to swap with what is stored. Also free.' },
     { target: '.hud .stat', title: '⭐ Score and coins', text: 'Every merge adds to your <b>score</b> and pays 🪙 <b>coins</b> (bigger groups pay more). Coins buy things in the shop. <b>Best</b> is your top score on this map.' },
     { target: '#newBtn', title: '⟳ New game', text: 'Starts a new game: choose the <b>map</b> (Easy, Standard, Medium, Hard) the <b>bear mode</b> (Classic, Wild or No bears) and whether <b>foxes</b> appear. Switch both animals off for a calm game. It erases the game you are playing, and warns you first.' },
-    { target: '.topinfo', title: '📋 Turn, rules and settings', text: 'The turn counter and game seed, <b>How to play</b> (the rules and this tour), the <b>Item guide</b> (every item and what it merges into) and, on phones with vibration, the <b>📳 Haptics</b> switch.' },
+    { target: '.topinfo', title: '📋 Turn, rules and settings', text: 'The turn counter and game seed, <b>How to play</b> (the rules and this tour), the <b>Item guide</b> (every item and what it merges into), the <b>🎨 Season</b> theme (Auto follows the calendar; tap to cycle spring, summer, autumn, winter) and, on phones with vibration, the <b>📳 Haptics</b> switch.' },
     { target: '#undoBtn', title: '↶ Undo', text: 'Takes back your last move. It costs a few coins, and only one move can be undone.' },
     { target: '#previewBtn', title: '👁 Preview', text: 'Shows what a tap would do before you place. Turn it off to place with a single tap.' },
     { target: '#shopBtn', title: '🛒 Shop', text: 'Opens the shop. Everything you can spend coins on is in there.', when: function () { return $('shopBtn').offsetParent !== null; } },
