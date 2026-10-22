@@ -256,6 +256,7 @@
     var items = [], k, fresh = shopKey !== '';
     for (k = 1; k <= TT.unlockedTop(state); k++) items.push(k);
     items.push(TT.CRYSTAL);
+    if (TT.isBankAvailable(state)) items.push(TT.BANK); // a bank is sold once a village has stood on the board
     var key = items.join(',');
     if (key === shopKey) return;
     var known = shopKey ? shopKey.split(',') : [];
@@ -266,7 +267,7 @@
       b.dataset.tool = t; b.setAttribute('aria-label', 'Buy ' + nm(t));
       b.innerHTML = '<span class="te">' + em(t) + '</span><span class="tp"></span><span class="tb"></span>';
       b.addEventListener('click', function () {
-        var s = TT.buy(state, t);
+        var s = t === TT.BANK ? TT.buyBank(state) : TT.buy(state, t);
         if (s) { state = s; save(); render([]); closeShop(); }
       });
       shopEl.appendChild(b);
@@ -333,6 +334,11 @@
         b.hidden = !state.bears && !state.foxes; // a calm game has no animals to trap
         b.disabled = state.over || state.coins < TT.PRICE.trap || !(state.stock.trap > 0) || !g.some(isAnimal);
         b.setAttribute('aria-pressed', mode === 'trap');
+      } else if (+t === TT.BANK) {
+        b.disabled = !TT.canBuyBank(state);
+        b.querySelector('.tp').textContent = '🪙' + fmt(TT.bankPrice(state));
+        b.querySelector('.tb').textContent = '×' + Math.max(0, TT.MAX_BANKS - TT.bankSlots(state));
+        return;
       } else {
         b.disabled = !TT.buy(state, +t);
         b.querySelector('.tp').textContent = '🪙' + fmt(TT.priceOf(state, +t));
@@ -362,7 +368,8 @@
     $('unlock').textContent = 'Shop restocks at score ' + nextAt + ' (' + (nextAt - state.score) + ' to go): ' + gifts.join(' ') +
       (TT.unlockedTop(state) > 3 ? ' +1 each higher tier' : '') + ' +1🪤 +1🔨';
     $('undoBtn').textContent = '↶ Undo 🪙' + TT.UNDO_COST;
-    $('turn').textContent = 'Turn ' + state.turn;
+    var cal = TT.calendar(state);
+    $('turn').textContent = 'Turn ' + state.turn + ' · 📅 Y' + cal.year + ' M' + cal.month;
     $('seed').textContent = 'seed ' + state.seed + (state.map !== 'easy' ? ' · ' + state.map + ' map' : '') + modeLabel(state);
     animate(events);
     updatePreview();
@@ -502,6 +509,9 @@
       } else if (ev.type === 'maul') { // it takes it out on the building next to it
         cells[ev.at].classList.add('shake'); cells[ev.bear].classList.add('shake');
         floatAt(ev.at, em(TT.BEAR) + '💢 ' + em(ev.from) + '→' + (ev.to ? em(ev.to) : '💨'));
+      } else if (ev.type === 'bankpay') {
+        var bk = state.grid.indexOf(TT.BANK);
+        if (bk >= 0) { floatAt(bk, '🏦 +' + fmt(ev.coins) + '🪙'); cells[bk].classList.add('drop'); }
       } else if (ev.type === 'bonus') {
         toast('🪤 A free trap!', 0.2);
       } else if (ev.type === 'unlock') {
@@ -604,6 +614,7 @@
   $('holdBtn').addEventListener('click', function () {
     var s = TT.swap(state);
     if (s) { state = s; save(); render([]); }
+    else if (state.cur === TT.BANK) toast('🏦 A bank cannot go in the reserve');
   });
   document.querySelectorAll('.tool[data-tool]').forEach(function (b) { // trap, hammer and mover (the item shop is built in buildShop)
     var t = b.dataset.tool;
@@ -714,6 +725,8 @@
     chain(TT.TOMB, null, 'treasure: tap to open, +' + TT.TREASURE_COINS + ' coins') + '</div>' +
     '<p class="gnote">👻🐈‍⬛ haunt the tombstones and churches. <b>Wild bears</b> mode: a bear that cannot step but is not sealed in gets angry (💢, then 💢💢) and on the third turn mauls a 🌱🌿🌳🏕️🛖 next to it, one tier down (a 🌱 is destroyed), then starts over. In a small pen (4 to 6 tiles) with 2 bears and 2 free tiles, a cub is sometimes born (🍼). Blue tiles are <b>water</b>: nothing can be placed, merged, moved or smashed there, and animals cannot cross it. A 🌉 <b>bridge</b> (up to 5, dearer each time) turns a water tile that has land on both sides into a road bears can walk over; nothing can be built on it.</p>' +
     '<h3>Special</h3><div class="chain">' + chip(TT.CRYSTAL, 'wildcard') + chip(TT.FOX, 'warps, walls trap it') + '</div>' +
+    '<h3>Bank</h3><div class="chain">' + chip(TT.BANK, 'pays monthly') + '<span class="arrow">&rarr;<small>x3</small></span>' + chip(TT.CASH, 'cash') + '</div>' +
+    '<p class="gnote">🏦 A <b>bank</b> is sold in the shop once you have built a village. It is a dead tile (animals and the mover cannot touch it, only the hammer breaks it), cannot go in the reserve, and pays you coins at the end of every month (a month is 10 turns; the date is at the top). At most 3; each is dearer. Three connected banks merge into 💵 cash.</p>' +
     '<p class="gnote">💎 stands in for any tier, including 🏬 (making 💵 cash) and 🕌 (making a 💰 treasure). Three or more 💎 touching each other merge into a 💰 treasure. 🚚 moves one item to an empty tile for coins.</p>' +
     '<p class="gnote">🍂 The animals follow the season: bear and fox are ' + SKINS.autumn.bear[0] + ' ' + SKINS.autumn.fox[0] + ' in autumn and ' + SKINS.winter.bear[0] + ' ' + SKINS.winter.fox[0] + ' in winter (now: ' + em(TT.BEAR) + ' ' + em(TT.FOX) + '). Only the looks change.</p>' +
     '<p class="gnote">Three or more connected items of the same kind merge into the next one. Bigger groups pay more points and coins.</p>' +
@@ -749,7 +762,7 @@
     { target: '#holdBtn', title: '📦 Reserve', text: 'Store the current item here for later. Tap it again to swap with what is stored. Also free.' },
     { target: '.hud .stat', title: '⭐ Score and coins', text: 'Every merge adds to your <b>score</b> and pays 🪙 <b>coins</b> (bigger groups pay more). Coins buy things in the shop. <b>Best</b> is your top score on this map.' },
     { target: '#newBtn', title: '⟳ New game', text: 'Starts a new game: choose the <b>map</b> (Easy, Standard, Medium, Hard) the <b>bear mode</b> (Classic, Wild or No bears) and whether <b>foxes</b> appear. Switch both animals off for a calm game. It erases the game you are playing, and warns you first.' },
-    { target: '.topinfo', title: '📋 Turn, rules and settings', text: 'The turn counter and game seed, <b>How to play</b> (the rules and this tour), the <b>Item guide</b> (every item and what it merges into), the <b>🎨 Season</b> theme (Auto follows the calendar; tap to cycle spring, summer, autumn, winter), the 🏞️ <b>lake quest</b> line (tap it to open the shop) and, on phones with vibration, the <b>📳 Haptics</b> switch.' },
+    { target: '.topinfo', title: '📋 Turn, rules and settings', text: 'The turn counter with the 📅 calendar (10 turns = a month, 12 months = a year) and game seed, <b>How to play</b> (the rules and this tour), the <b>Item guide</b> (every item and what it merges into), the <b>🎨 Season</b> theme (Auto follows the calendar; tap to cycle spring, summer, autumn, winter), the 🏞️ <b>lake quest</b> line (tap it to open the shop) and, on phones with vibration, the <b>📳 Haptics</b> switch.' },
     { target: '#undoBtn', title: '↶ Undo', text: 'Takes back your last move. It costs a few coins, and only one move can be undone.' },
     { target: '#previewBtn', title: '👁 Preview', text: 'Shows what a tap would do before you place. Turn it off to place with a single tap.' },
     { target: '#shopBtn', title: '🛒 Shop', text: 'Opens the shop. Everything you can spend coins on is in there.', when: function () { return $('shopBtn').offsetParent !== null; } },
@@ -758,6 +771,7 @@
     { target: '#hammerBtn', sheet: true, title: '🔨 Hammer', text: 'Smashes any item you have placed, to make room. Tap the tool, then the item.' },
     { target: '#moveBtn', sheet: true, title: '🚚 Mover', text: 'Picks up one item and drops it on another empty tile, where it merges like a placed item. Bears and foxes cannot be moved.' },
     { target: '#bridgeBtn', sheet: true, title: '🌉 Bridge', text: 'On maps with water: turns a water tile that has land on both sides into a road bears can cross. Glowing tiles show where it can go. Up to 5, dearer each time.', when: function () { return !$('bridgeBtn').hidden; } },
+    { target: '.tools.shop .tool[data-tool="22"]', sheet: true, title: '🏦 Bank', text: 'Appears once you have built a village. A bank is placed like an item, is a dead tile that animals cannot cross, and pays <b>coins every month</b> (10 turns = a month, shown as 📅 at the top). At most 3, dearer each time; it cannot go in the reserve. Three connected banks merge into 💵 cash.', when: function () { return !!document.querySelector('.tools.shop .tool[data-tool="22"]'); } },
     { target: '#pondBtn', sheet: true, title: '💧 Pond', text: 'Digs a pond on an empty tile. It takes the tile for good, but pays <b>points every turn</b>, and dearer ponds pay more in total. Dig a 2×2, then 3×3 and 4×4 block of water for <b>lake quests</b>: each pays coins and points (see the line under the tools, and at the top of the screen).' },
     { target: '.tool.land', sheet: true, title: '⬆️⬇️⬅️➡️ Land', text: 'Adds one more row or column on that side of the map (each side once, dearer every time). Water that touches that edge carries on into it. Handy when the map is nearly full.' },
     { title: '🎉 You are ready', text: 'The <b>Item guide</b> at the top lists every item and what it merges into, and <b>How to play</b> repeats the rules and this tour. Your game is saved automatically. Have fun!' }

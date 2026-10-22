@@ -1,6 +1,6 @@
 # Ideas / next steps (not built yet)
 
-## Bank 🏦 (owner's spec, to be built later)
+## Bank 🏦 (stage A built: calendar + bank item with monthly income; stage B loans / interest / default / speed control still to build)
 Intent: a bank is a **dead tile** on the map that makes the game harder, like the original genre's maps with a pond in the middle
 (play only on the border tiles). Think of "blocked tile" as a generic primitive: a bank, a tile locked as loan collateral, a seized
 tile and a pond/rock on a map are all cells that cannot hold, merge, move or lose an item.
