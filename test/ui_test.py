@@ -559,6 +559,16 @@ with sync_playwright() as p:
     assert len(floats) == 3 and len(set(floats)) == 1 and '+9' in floats[0], floats
     assert check_consistent(page, 'three banks')['coins'] == 27
 
+    # the mover can carry a bank: line three up and they merge into cash
+    g = [0] * 36; g[0] = 22; g[1] = 22; g[20] = 22; g[35] = 7
+    load(g, coins=500, top=7, banksBought=3, bankOrder=[0, 1, 20])
+    shop_tap(page, '#moveBtn')
+    page.tap('#board .cell[data-i="20"]'); page.wait_for_timeout(100)
+    assert page.locator('#board .cell[data-i="20"].pick').count() == 1, 'the bank is picked up'
+    tap_cell(page, 2, True)
+    mv = check_consistent(page, 'moved bank')
+    assert mv['grid'][2] == 11 and mv['grid'][0] == 0 and mv['grid'][1] == 0 and mv['grid'][20] == 0, mv['grid']
+
     # ---- loans: tap a bank, borrow against the dearest building next to it (locked, padlock), see the debt, repay; the clock speed link cycles
     g = [0] * 36; g[14] = 22; g[13] = 6; g[8] = 5; g[20] = 5
     load(g, coins=0, top=7, banksBought=1, bankOrder=[14], tick=0)
