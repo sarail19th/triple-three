@@ -483,6 +483,20 @@ with sync_playwright() as p:
     classic = check_consistent(page, 'new classic game')
     assert classic['wild'] is False and 'wild' not in page.inner_text('#seed')
 
+    # ---- seasons: the link cycles auto -> spring -> summer -> autumn -> winter, sets data-season, remembers the pick, and the falling bits only exist when there is something to fall
+    sea = lambda: page.evaluate("document.documentElement.dataset.season")
+    assert 'auto' in page.inner_text('#seasonLink') and sea() in ('spring', 'summer', 'autumn', 'winter')
+    seen = {}
+    for want in ['spring', 'summer', 'autumn', 'winter']:
+        page.tap('#seasonLink'); assert sea() == want, (sea(), want)
+        seen[want] = page.evaluate("[getComputedStyle(document.getElementById('board')).backgroundImage.length, document.querySelectorAll('#seasonFx i').length]")
+    assert seen['summer'][1] == 0 and all(seen[k][1] > 0 for k in ('spring', 'autumn', 'winter')), seen
+    assert page.evaluate("JSON.parse(localStorage.getItem('tt-season'))") == 'winter'
+    page.tap('#seasonLink'); assert 'auto' in page.inner_text('#seasonLink')
+    page.reload(); page.wait_for_timeout(300)
+    assert 'auto' in page.inner_text('#seasonLink'), 'the pick survives a reload'
+    check_consistent(page, 'after the season tour')
+
     # ---- calm mode: No bears + No foxes. No animals ever show up, no trap tool, own best score, the picks are remembered
     page.tap('#newBtn'); page.tap('.opt[data-bears="off"]'); page.tap('.opt[data-foxes="off"]'); page.tap('#newStart')
     calm = check_consistent(page, 'new calm game')

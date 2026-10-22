@@ -16,7 +16,7 @@ Single-file HTML game, (no framework, installable PWA, no image assets).
 - Game ends when the grid is full. Score = sum of merge values; keep a local best.
 
 ## Graphics (emoji, no files)
-grass 🌱, bush 🌿, tree 🌳, camp 🏕️, hut 🛖, house 🏠, village 🏘️, school 🏫, hospital 🏥, mall 🏬, cash 💵, bear 🐻, fox 🦊, tombstone 🪦, church ⛪, cathedral 🕌, crystal 💎, treasure 💰. Small decorative critters wander around homes (🐇🐤), graves (👻🐈‍⬛) and on the water (🦢🐟). Water is drawn as smooth rivers and ponds with soft banks. Plain grass-field board (no checkerboard), pop animation on merge, shake when a bear is trapped.
+grass 🌱, bush 🌿, tree 🌳, camp 🏕️, hut 🛖, house 🏠, village 🏘️, school 🏫, hospital 🏥, mall 🏬, cash 💵, bear 🐻, fox 🦊, tombstone 🪦, church ⛪, cathedral 🕌, crystal 💎, treasure 💰. Small decorative critters wander around homes (🐇🐤), graves (👻🐈‍⬛) and on the water (🦢🐟). Water is drawn as smooth rivers and ponds with soft banks. Plain grass-field board (no checkerboard; seasonal colour themes: spring, summer, autumn, winter, auto by calendar), pop animation on merge, shake when a bear is trapped.
 
 ## Build order
 1. Pure logic module (grid, merge flood-fill, bear movement, scoring) with Node tests.

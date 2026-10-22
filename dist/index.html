@@ -11,7 +11,9 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <style>:root {
   --bg: #0f2418; --bg2: #14301f; --ink: #eaf6e6; --muted: #8fb39a; --accent: #ffd45a;
-  --g1: #84c660; --g2: #7bbd57; --line: #3f7a2a;
+  --g1: #84c660; --g2: #7bbd57; --line: #3f7a2a; --edge: #1d4a30;
+  --deco: linear-gradient(transparent, transparent); /* extra speckle layer on the grass (flowers, leaves, frost) */
+  --w1: #6cc3f4; --w2: #4aa3e4; --w3: #3a86cc; --bank: #e3f0b4; /* water */
   /* board side: as wide as the phone allows, as tall as the screen allows after the controls underneath */
   --bs: max(280px, min(100vw - 12px, calc(100dvh - 330px), 640px));
 }
@@ -43,11 +45,12 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 /* one plain grass field: a continuous soft texture under transparent tiles, tile edges only faintly visible */
 #board { --cols: 6; --rows: 6; width: calc(100% * var(--cols) / var(--m)); height: calc(100% * var(--rows) / var(--m)); flex: none; display: grid; grid-template: repeat(var(--rows), 1fr) / repeat(var(--cols), 1fr); gap: 0; padding: 0;
   background:
+    var(--deco),
     radial-gradient(circle at 18% 22%, #ffffff14 0 1.5px, transparent 2.6px) 0 0 / 43px 47px,
     radial-gradient(circle at 72% 64%, #0000000d 0 2px, transparent 3.2px) 0 0 / 59px 53px,
     radial-gradient(ellipse at 40% 80%, #ffffff0f 0 2px, transparent 4.2px) 0 0 / 71px 61px,
     linear-gradient(var(--g1), var(--g2));
-  border-radius: 4px; overflow: hidden; box-shadow: 0 8px 28px #0008, 0 0 0 3px #1d4a30; touch-action: manipulation; }
+  border-radius: 4px; overflow: hidden; box-shadow: 0 8px 28px #0008, 0 0 0 3px var(--edge); touch-action: manipulation; }
 .cell { position: relative; display: flex; align-items: center; justify-content: center;
   font-size: calc(var(--bs) / var(--m) * .62); line-height: 1; cursor: pointer; background: transparent;
   outline: 1px solid #0000000a; outline-offset: -1px; }
@@ -262,9 +265,25 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 .tour-btns .btn { padding: 9px 4px; font-size: 14px; }
 .tour-btns #tourNext { flex: 1.6; }
 #helpTour { margin-bottom: 8px; }
+
+/* seasons: the same tokens, different colours (summer is the default look); ambient petals / leaves / snow fall over the page */
+:root[data-season="spring"] { --bg: #12261c; --bg2: #1a3626; --g1: #92d672; --g2: #86cd66; --line: #4f8f38; --edge: #2b5a3c; --muted: #9bc4a6;
+  --deco: radial-gradient(circle at 30% 40%, #fff 0 1.5px, transparent 2.3px) 0 0 / 37px 41px, radial-gradient(circle at 70% 70%, #ffb3d4 0 1.7px, transparent 2.5px) 0 0 / 53px 47px, radial-gradient(circle at 20% 80%, #ffe27a 0 1.4px, transparent 2.2px) 0 0 / 61px 57px;
+  --w1: #7fd0f8; --w2: #58b2ea; --w3: #4796d6; }
+:root[data-season="autumn"] { --bg: #26180e; --bg2: #38220f; --g1: #b8b04a; --g2: #ada543; --line: #7d7424; --edge: #5b3b1b; --muted: #c9ab88;
+  --deco: radial-gradient(circle at 30% 40%, #e0762a 0 1.7px, transparent 2.5px) 0 0 / 41px 43px, radial-gradient(circle at 70% 70%, #a8501f 0 1.8px, transparent 2.6px) 0 0 / 57px 49px, radial-gradient(circle at 20% 80%, #f2b63c 0 1.5px, transparent 2.3px) 0 0 / 67px 59px;
+  --w1: #7cc4cf; --w2: #55a3b5; --w3: #438a9f; --bank: #d9c78a; }
+:root[data-season="winter"] { --bg: #0d1927; --bg2: #16293d; --g1: #f1f7fb; --g2: #e1edf5; --line: #a9c3d6; --edge: #2c4a63; --muted: #93b0c6;
+  --deco: radial-gradient(circle at 30% 40%, #ffffff 0 1.6px, transparent 2.4px) 0 0 / 31px 33px, radial-gradient(circle at 70% 70%, #b9d6ea 0 1.8px, transparent 2.6px) 0 0 / 47px 43px;
+  --w1: #d2f0fc; --w2: #aadcf2; --w3: #8cc7e6; --bank: #ffffff; }
+.season-fx { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 4; }
+.season-fx i { position: absolute; top: -8vh; font-style: normal; opacity: .6; animation: sfall linear infinite; will-change: transform; }
+@keyframes sfall { 0% { transform: translate(0, -8vh) rotate(0deg); } 50% { transform: translate(var(--sway), 55vh) rotate(180deg); } 100% { transform: translate(0, 110vh) rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .season-fx { display: none; } }
 </style>
 </head>
 <body>
+<div id="seasonFx" class="season-fx" aria-hidden="true"></div>
 <main id="app">
   <header class="hud">
     <button id="newBtn" class="tray newtray" aria-label="New game">
@@ -278,7 +297,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 
   <div class="topinfo">
     <div><span id="turn">Turn 0</span> · <span id="seed">seed</span></div>
-    <div><a href="#" id="helpLink">How to play</a> · <a href="#" id="guideLink">Item guide</a><span class="foot-settings"> · <a href="#" id="hapticLink" role="switch" aria-label="Haptic feedback (vibration)">📳 Haptics: on</a></span></div>
+    <div><a href="#" id="helpLink">How to play</a> · <a href="#" id="guideLink">Item guide</a> · <a href="#" id="seasonLink" aria-label="Season theme">🎨 Season: auto</a><span class="foot-settings"> · <a href="#" id="hapticLink" role="switch" aria-label="Haptic feedback (vibration)">📳 Haptics: on</a></span></div>
   </div>
 
   <div id="boardWrap">
@@ -1232,6 +1251,31 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     link.setAttribute('aria-pressed', haptics);
   }
 
+  // Seasons: a colour theme (`data-season` on <html>, CSS tokens) plus a few petals / leaves / snowflakes drifting over the page. 'auto' follows
+  // the calendar month. Purely cosmetic (never in the game state); the falling bits use Math.random, which is fine outside the logic.
+  var SEASONS = ['auto', 'spring', 'summer', 'autumn', 'winter'];
+  var SEASON_LABEL = { auto: '🎨 Season: auto', spring: '🌸 Spring', summer: '☀️ Summer', autumn: '🍂 Autumn', winter: '❄️ Winter' };
+  var SEASON_BITS = { spring: ['🌸', '🌼', '🌸'], autumn: ['🍂', '🍁', '🍂'], winter: ['❄️', '❄', '❄️'] };
+  var season = store.get('tt-season', 'auto');
+  if (SEASONS.indexOf(season) < 0) season = 'auto';
+  function seasonNow() { var m = new Date().getMonth(); return m >= 2 && m <= 4 ? 'spring' : m >= 5 && m <= 7 ? 'summer' : m >= 8 && m <= 10 ? 'autumn' : 'winter'; }
+  function applySeason() {
+    var cur = season === 'auto' ? seasonNow() : season, fx = $('seasonFx'), bits = SEASON_BITS[cur] || [];
+    document.documentElement.dataset.season = cur;
+    $('seasonLink').textContent = SEASON_LABEL[season];
+    fx.innerHTML = '';
+    if (!bits.length) return;
+    for (var i = 0; i < 16; i++) {
+      var b = document.createElement('i');
+      b.textContent = bits[i % bits.length];
+      b.style.left = (Math.random() * 100) + '%';
+      b.style.fontSize = (9 + Math.random() * 9) + 'px';
+      b.style.animationDuration = (9 + Math.random() * 9) + 's';
+      b.style.animationDelay = (-Math.random() * 18) + 's';
+      b.style.setProperty('--sway', (Math.random() * 60 - 30) + 'px');
+      fx.appendChild(b);
+    }
+  }
   function isCollectible(v) { return v === TT.TREASURE || v === TT.CASH; }
   function isAnimal(v) { return TT.isBear(v) || v === TT.FOX; }
   // Is idx a legal target for the armed tool (or for placement when none is armed)?
@@ -1312,9 +1356,9 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('class', 'water'); svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h); svg.setAttribute('preserveAspectRatio', 'none'); svg.setAttribute('aria-hidden', 'true');
     svg.innerHTML = '<defs><g id="wcells">' + rects + '</g>' + filter('wbank', 6, -0.9) + filter('wbody', 14, -6.3) + mask('wmbank', 'wbank') + mask('wmbody', 'wbody') +
-      '<linearGradient id="wgrad" x1="0" y1="0" x2="0.35" y2="1"><stop offset="0" stop-color="#6cc3f4"/><stop offset="0.55" stop-color="#4aa3e4"/><stop offset="1" stop-color="#3a86cc"/></linearGradient>' +
+      '<linearGradient id="wgrad" x1="0" y1="0" x2="0.35" y2="1"><stop offset="0" style="stop-color:var(--w1)"/><stop offset="0.55" style="stop-color:var(--w2)"/><stop offset="1" style="stop-color:var(--w3)"/></linearGradient>' +
       '<pattern id="wrip" width="0.55" height="0.55" patternUnits="userSpaceOnUse" patternTransform="rotate(24)"><path d="M0 0.1 Q0.14 0 0.28 0.1 T0.55 0.1" fill="none" stroke="#fff" stroke-opacity="0.2" stroke-width="0.03"/></pattern></defs>' +
-      '<rect ' + box + ' fill="#e3f0b4" fill-opacity="0.85" mask="url(#wmbank)"/>' +
+      '<rect ' + box + ' style="fill:var(--bank)" fill-opacity="0.85" mask="url(#wmbank)"/>' +
       '<rect ' + box + ' fill="url(#wgrad)" mask="url(#wmbody)"/>' +
       '<g mask="url(#wmbody)"><rect class="ripples" ' + box + ' fill="url(#wrip)"/></g>';
     boardEl.insertBefore(svg, boardEl.firstChild);
@@ -1746,6 +1790,11 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     vibrate(20); // switching it on gives a sample buzz
   });
   showHaptics();
+  $('seasonLink').addEventListener('click', function (e) {
+    e.preventDefault();
+    season = SEASONS[(SEASONS.indexOf(season) + 1) % SEASONS.length]; store.set('tt-season', season); applySeason();
+  });
+  applySeason();
   $('helpLink').addEventListener('click', function (e) { e.preventDefault(); $('help').classList.remove('hidden'); });
   $('helpClose').addEventListener('click', function () { $('help').classList.add('hidden'); store.set('tt-seen-help', 1); });
 
@@ -1758,7 +1807,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     { target: '#holdBtn', title: '📦 Reserve', text: 'Store the current item here for later. Tap it again to swap with what is stored. Also free.' },
     { target: '.hud .stat', title: '⭐ Score and coins', text: 'Every merge adds to your <b>score</b> and pays 🪙 <b>coins</b> (bigger groups pay more). Coins buy things in the shop. <b>Best</b> is your top score on this map.' },
     { target: '#newBtn', title: '⟳ New game', text: 'Starts a new game: choose the <b>map</b> (Easy, Standard, Medium, Hard) the <b>bear mode</b> (Classic, Wild or No bears) and whether <b>foxes</b> appear. Switch both animals off for a calm game. It erases the game you are playing, and warns you first.' },
-    { target: '.topinfo', title: '📋 Turn, rules and settings', text: 'The turn counter and game seed, <b>How to play</b> (the rules and this tour), the <b>Item guide</b> (every item and what it merges into) and, on phones with vibration, the <b>📳 Haptics</b> switch.' },
+    { target: '.topinfo', title: '📋 Turn, rules and settings', text: 'The turn counter and game seed, <b>How to play</b> (the rules and this tour), the <b>Item guide</b> (every item and what it merges into), the <b>🎨 Season</b> theme (Auto follows the calendar; tap to cycle spring, summer, autumn, winter) and, on phones with vibration, the <b>📳 Haptics</b> switch.' },
     { target: '#undoBtn', title: '↶ Undo', text: 'Takes back your last move. It costs a few coins, and only one move can be undone.' },
     { target: '#previewBtn', title: '👁 Preview', text: 'Shows what a tap would do before you place. Turn it off to place with a single tap.' },
     { target: '#shopBtn', title: '🛒 Shop', text: 'Opens the shop. Everything you can spend coins on is in there.', when: function () { return $('shopBtn').offsetParent !== null; } },

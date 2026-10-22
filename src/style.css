@@ -1,6 +1,8 @@
 :root {
   --bg: #0f2418; --bg2: #14301f; --ink: #eaf6e6; --muted: #8fb39a; --accent: #ffd45a;
-  --g1: #84c660; --g2: #7bbd57; --line: #3f7a2a;
+  --g1: #84c660; --g2: #7bbd57; --line: #3f7a2a; --edge: #1d4a30;
+  --deco: linear-gradient(transparent, transparent); /* extra speckle layer on the grass (flowers, leaves, frost) */
+  --w1: #6cc3f4; --w2: #4aa3e4; --w3: #3a86cc; --bank: #e3f0b4; /* water */
   /* board side: as wide as the phone allows, as tall as the screen allows after the controls underneath */
   --bs: max(280px, min(100vw - 12px, calc(100dvh - 330px), 640px));
 }
@@ -32,11 +34,12 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 /* one plain grass field: a continuous soft texture under transparent tiles, tile edges only faintly visible */
 #board { --cols: 6; --rows: 6; width: calc(100% * var(--cols) / var(--m)); height: calc(100% * var(--rows) / var(--m)); flex: none; display: grid; grid-template: repeat(var(--rows), 1fr) / repeat(var(--cols), 1fr); gap: 0; padding: 0;
   background:
+    var(--deco),
     radial-gradient(circle at 18% 22%, #ffffff14 0 1.5px, transparent 2.6px) 0 0 / 43px 47px,
     radial-gradient(circle at 72% 64%, #0000000d 0 2px, transparent 3.2px) 0 0 / 59px 53px,
     radial-gradient(ellipse at 40% 80%, #ffffff0f 0 2px, transparent 4.2px) 0 0 / 71px 61px,
     linear-gradient(var(--g1), var(--g2));
-  border-radius: 4px; overflow: hidden; box-shadow: 0 8px 28px #0008, 0 0 0 3px #1d4a30; touch-action: manipulation; }
+  border-radius: 4px; overflow: hidden; box-shadow: 0 8px 28px #0008, 0 0 0 3px var(--edge); touch-action: manipulation; }
 .cell { position: relative; display: flex; align-items: center; justify-content: center;
   font-size: calc(var(--bs) / var(--m) * .62); line-height: 1; cursor: pointer; background: transparent;
   outline: 1px solid #0000000a; outline-offset: -1px; }
@@ -251,3 +254,18 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 .tour-btns .btn { padding: 9px 4px; font-size: 14px; }
 .tour-btns #tourNext { flex: 1.6; }
 #helpTour { margin-bottom: 8px; }
+
+/* seasons: the same tokens, different colours (summer is the default look); ambient petals / leaves / snow fall over the page */
+:root[data-season="spring"] { --bg: #12261c; --bg2: #1a3626; --g1: #92d672; --g2: #86cd66; --line: #4f8f38; --edge: #2b5a3c; --muted: #9bc4a6;
+  --deco: radial-gradient(circle at 30% 40%, #fff 0 1.5px, transparent 2.3px) 0 0 / 37px 41px, radial-gradient(circle at 70% 70%, #ffb3d4 0 1.7px, transparent 2.5px) 0 0 / 53px 47px, radial-gradient(circle at 20% 80%, #ffe27a 0 1.4px, transparent 2.2px) 0 0 / 61px 57px;
+  --w1: #7fd0f8; --w2: #58b2ea; --w3: #4796d6; }
+:root[data-season="autumn"] { --bg: #26180e; --bg2: #38220f; --g1: #b8b04a; --g2: #ada543; --line: #7d7424; --edge: #5b3b1b; --muted: #c9ab88;
+  --deco: radial-gradient(circle at 30% 40%, #e0762a 0 1.7px, transparent 2.5px) 0 0 / 41px 43px, radial-gradient(circle at 70% 70%, #a8501f 0 1.8px, transparent 2.6px) 0 0 / 57px 49px, radial-gradient(circle at 20% 80%, #f2b63c 0 1.5px, transparent 2.3px) 0 0 / 67px 59px;
+  --w1: #7cc4cf; --w2: #55a3b5; --w3: #438a9f; --bank: #d9c78a; }
+:root[data-season="winter"] { --bg: #0d1927; --bg2: #16293d; --g1: #f1f7fb; --g2: #e1edf5; --line: #a9c3d6; --edge: #2c4a63; --muted: #93b0c6;
+  --deco: radial-gradient(circle at 30% 40%, #ffffff 0 1.6px, transparent 2.4px) 0 0 / 31px 33px, radial-gradient(circle at 70% 70%, #b9d6ea 0 1.8px, transparent 2.6px) 0 0 / 47px 43px;
+  --w1: #d2f0fc; --w2: #aadcf2; --w3: #8cc7e6; --bank: #ffffff; }
+.season-fx { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 4; }
+.season-fx i { position: absolute; top: -8vh; font-style: normal; opacity: .6; animation: sfall linear infinite; will-change: transform; }
+@keyframes sfall { 0% { transform: translate(0, -8vh) rotate(0deg); } 50% { transform: translate(var(--sway), 55vh) rotate(180deg); } 100% { transform: translate(0, 110vh) rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .season-fx { display: none; } }
