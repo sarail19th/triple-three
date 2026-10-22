@@ -1325,6 +1325,16 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 
   // Seasons: a colour theme (`data-season` on <html>, CSS tokens) plus a few petals / leaves / snowflakes drifting over the page. 'auto' follows
   // the calendar month. Purely cosmetic (never in the game state); the falling bits use Math.random, which is fine outside the logic.
+  // Natural items change with the season: the three plant tiers, and the little critters (who lives around the homes / on the water).
+  var PLANTS = { summer: { 1: '🌱', 2: '🌿', 3: '🌳' }, spring: { 1: '🌱', 2: '🌼', 3: '🌸' }, autumn: { 1: '🌾', 2: '🍂', 3: '🍁' }, winter: { 1: '❄️', 2: '🌲', 3: '🎄' } };
+  var CRITTERS = {
+    summer: { home: ['🐇', '🐤'], grave: ['👻', '🐈\u200d⬛'], water: ['🦢', '🐟'] },
+    spring: { home: ['🐇', '🐤', '🦋'], grave: ['👻', '🐈\u200d⬛'], water: ['🦢', '🐸'] },
+    autumn: { home: ['🐿️', '🦔'], grave: ['👻', '🦇'], water: ['🦆', '🐟'] },
+    winter: { home: ['🐇', '🐦'], grave: ['👻', '🐈\u200d⬛'], water: ['🦢', '🦆'] }
+  };
+  var curSeason = 'summer';
+  function em(code) { var p = PLANTS[curSeason]; return (p && p[code]) || TT.EMOJI[code]; } // the emoji to show for an item code
   var SEASONS = ['auto', 'spring', 'summer', 'autumn', 'winter'];
   var SEASON_LABEL = { auto: '🎨 Season: auto', spring: '🌸 Spring', summer: '☀️ Summer', autumn: '🍂 Autumn', winter: '❄️ Winter' };
   var SEASON_BITS = { spring: ['🌸', '🌼', '🌸'], autumn: ['🍂', '🍁', '🍂'], winter: ['❄️', '❄', '❄️'] };
@@ -1333,7 +1343,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   function seasonNow() { var m = new Date().getMonth(); return m >= 2 && m <= 4 ? 'spring' : m >= 5 && m <= 7 ? 'summer' : m >= 8 && m <= 10 ? 'autumn' : 'winter'; }
   function applySeason() {
     var cur = season === 'auto' ? seasonNow() : season, fx = $('seasonFx'), bits = SEASON_BITS[cur] || [];
-    document.documentElement.dataset.season = cur;
+    document.documentElement.dataset.season = cur; curSeason = cur;
+    if (typeof AREAS !== 'undefined') { AREAS[0].kinds = CRITTERS[cur].home; AREAS[1].kinds = CRITTERS[cur].grave; AREAS[2].kinds = CRITTERS[cur].water; }
     $('seasonLink').textContent = SEASON_LABEL[season];
     fx.innerHTML = '';
     if (!bits.length) return;
@@ -1455,7 +1466,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       var b = document.createElement('button');
       b.className = 'tool' + (fresh && known.indexOf(String(t)) < 0 ? ' fresh' : '');
       b.dataset.tool = t; b.setAttribute('aria-label', 'Buy ' + TT.NAME[t]);
-      b.innerHTML = '<span class="te">' + TT.EMOJI[t] + '</span><span class="tp"></span><span class="tb"></span>';
+      b.innerHTML = '<span class="te">' + em(t) + '</span><span class="tp"></span><span class="tb"></span>';
       b.addEventListener('click', function () {
         var s = TT.buy(state, t);
         if (s) { state = s; save(); render([]); closeShop(); }
@@ -1472,7 +1483,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     cells.forEach(function (c, i) {
       var code = g[i];
       c.dataset.c = code;
-      c.firstChild.textContent = TT.EMOJI[code];
+      c.firstChild.textContent = em(code);
       c.classList.toggle('empty', code === 0);
       var isB = state.bridges.indexOf(i) >= 0, col = i % w; // a bridge tile is walkable water: planks along the way across
       c.classList.toggle('bridge', isB);
@@ -1492,10 +1503,10 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     var best = store.get(bestKey(), 0);
     if (state.score > best) { best = state.score; store.set(bestKey(), best); }
     $('best').textContent = best;
-    $('curItem').textContent = TT.EMOJI[state.cur];
+    $('curItem').textContent = em(state.cur);
     $('curName').textContent = TT.NAME[state.cur];
-    $('nextItem').textContent = TT.EMOJI[state.next];
-    $('holdItem').textContent = state.hold ? TT.EMOJI[state.hold] : '·';
+    $('nextItem').textContent = em(state.next);
+    $('holdItem').textContent = state.hold ? em(state.hold) : '·';
     $('undoBtn').disabled = !TT.canUndo(state);
     $('swapBtn').disabled = state.over;
     buildShop();
@@ -1547,7 +1558,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       (nq ? ' · 🏞️ quest: a ' + nq + '×' + nq + ' lake (biggest now ' + bl + '×' + bl + ')' : ' · 🏞️ all lakes built');
     $('landNote').textContent = 'Land ' + state.land.length + '/' + TT.MAX_LAND + (lp ? ' · next side 🪙' + lp : ' · all bought');
     var nextAt = TT.milestoneScore(state.milestone), gifts = [];
-    [1, 2, 3, TT.CRYSTAL].forEach(function (c) { gifts.push('+' + TT.RESTOCK[c] + TT.EMOJI[c]); });
+    [1, 2, 3, TT.CRYSTAL].forEach(function (c) { gifts.push('+' + TT.RESTOCK[c] + em(c)); });
     $('unlock').textContent = 'Shop restocks at score ' + nextAt + ' (' + (nextAt - state.score) + ' to go): ' + gifts.join(' ') +
       (TT.unlockedTop(state) > 3 ? ' +1 each higher tier' : '') + ' +1🪤 +1🔨';
     $('undoBtn').textContent = '↶ Undo 🪙' + TT.UNDO_COST;
@@ -1595,7 +1606,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       } else {
         cells[moveFrom].classList.add('pick');
         if (pi >= 0 && state.grid[pi] === 0 && (p = TT.previewMove(state, moveFrom, pi))) {
-          cells[pi].classList.add('pv'); cells[pi].setAttribute('data-pv', TT.EMOJI[p.final]);
+          cells[pi].classList.add('pv'); cells[pi].setAttribute('data-pv', em(p.final));
           p.eaten.forEach(function (i) { cells[i].classList.add('eat'); });
           var mv = sel === pi ? 'Tap again to ' : '';
           note = p.merged
@@ -1616,7 +1627,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     } else if (TT.freeCount(state) === 0) {
       note = 'Board full - use the 🔨 hammer (' + TT.PRICE.hammer + ' coins) or buy land'; hot = true;
     } else if (previewOn && pi >= 0 && (p = TT.preview(state, pi))) {
-      cells[pi].classList.add('pv'); cells[pi].setAttribute('data-pv', TT.EMOJI[p.final]);
+      cells[pi].classList.add('pv'); cells[pi].setAttribute('data-pv', em(p.final));
       p.eaten.forEach(function (i) { cells[i].classList.add('eat'); });
       var verb = sel === pi ? 'Tap again to ' : '';
       note = p.merged
@@ -1652,7 +1663,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
         ev.cells.forEach(function (ci) {
           if (ci === ev.at) return;
           var f = cellCenter(ci), gh = document.createElement('div');
-          gh.className = 'ghost'; gh.textContent = TT.EMOJI[ev.from];
+          gh.className = 'ghost'; gh.textContent = em(ev.from);
           gh.style.cssText = 'left:' + (f.x - f.w / 2) + 'px;top:' + (f.y - f.h / 2) + 'px;width:' + f.w + 'px;height:' + f.h +
             'px;--dx:' + (to.x - f.x) + 'px;--dy:' + (to.y - f.y) + 'px';
           fxEl.appendChild(gh);
@@ -1690,13 +1701,13 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
         floatAt(ev.at, ev.level === 1 ? '💢' : '💢💢');
       } else if (ev.type === 'maul') { // it takes it out on the building next to it
         cells[ev.at].classList.add('shake'); cells[ev.bear].classList.add('shake');
-        floatAt(ev.at, '🐻💢 ' + TT.EMOJI[ev.from] + '→' + (ev.to ? TT.EMOJI[ev.to] : '💨'));
+        floatAt(ev.at, '🐻💢 ' + em(ev.from) + '→' + (ev.to ? em(ev.to) : '💨'));
       } else if (ev.type === 'bonus') {
         toast('🪤 A free trap!', 0.2);
       } else if (ev.type === 'unlock') {
         toast('🛒 Shop restocked!');
       } else if (ev.type === 'tierunlock') {
-        toast(TT.EMOJI[ev.tier] + ' ' + TT.NAME[ev.tier] + ' unlocked in the shop!', 0.35);
+        toast(em(ev.tier) + ' ' + TT.NAME[ev.tier] + ' unlocked in the shop!', 0.35);
       } else if (ev.type === 'land') {
         toast('🏞️ New land!');
       } else if (ev.type === 'open') {
@@ -1746,6 +1757,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   }
   function syncCritters() {
     if (reduceMotion) return;
+    critters.slice().forEach(function (c) { if (c.area.kinds.indexOf(c.kind) < 0) { c.el.remove(); critters.splice(critters.indexOf(c), 1); } }); // another season's animals leave
     AREAS.forEach(function (area) {
       var list = areaCells(area), want = Math.min(3, Math.floor(list.length / 2));
       area.kinds.forEach(function (kind) {
@@ -1823,12 +1835,13 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     into.textContent = '';
     g.forEach(function (v) {
       var c = document.createElement('span');
-      if (v === TT.WATER) c.className = 'w'; else if (v) c.textContent = TT.EMOJI[v];
+      if (v === TT.WATER) c.className = 'w'; else if (v) c.textContent = em(v);
       into.appendChild(c);
     });
     return into;
   }
-  document.querySelectorAll('#newGame .mapcard').forEach(function (b) { miniMap(b.dataset.map, CARD_SEED[b.dataset.map], b.querySelector('.mini')); });
+  function buildCards() { document.querySelectorAll('#newGame .mapcard').forEach(function (b) { miniMap(b.dataset.map, CARD_SEED[b.dataset.map], b.querySelector('.mini')); }); }
+  buildCards();
   function showSamples() {
     var box = $('mapSamples');
     box.textContent = '';
@@ -1876,7 +1889,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   $('againBtn').addEventListener('click', function () { startNew(0, { wild: state.wild, map: state.map, bears: state.bears, foxes: state.foxes }); });
   // item guide: built from the logic tables so it can never drift from the real merge chains
   function chip(code, label) {
-    return '<div class="chip"><span class="ce">' + TT.EMOJI[code] + '</span><small>' + (label || TT.NAME[code]) + '</small></div>';
+    return '<div class="chip"><span class="ce">' + em(code) + '</span><small>' + (label || TT.NAME[code]) + '</small></div>';
   }
   function chain(start, firstLabel, finalLabel) {
     var out = [], c = start, first = true;
@@ -1888,9 +1901,10 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     }
     return out.join('');
   }
+  function buildGuide() {
   $('guideBody').innerHTML =
     '<h3>Buildings</h3><div class="chain">' + chain(1, null, 'cash (final)') + '</div>' +
-    '<p class="gnote">💵 Cash is collectible: tap it for +' + TT.CASH_COINS + ' coins. 🐇🐤 hop around the homes (camp to village).</p>' +
+    '<p class="gnote">💵 Cash is collectible: tap it for +' + TT.CASH_COINS + ' coins. ' + CRITTERS[curSeason].home.join('') + ' hop around the homes (camp to village).</p>' +
     '<h3>Bears</h3><div class="chain">' + chip(TT.BEAR, 'trap it') + '<span class="arrow">&rarr;</span>' +
     chain(TT.TOMB, null, 'treasure: tap to open, +' + TT.TREASURE_COINS + ' coins') + '</div>' +
     '<p class="gnote">👻🐈‍⬛ haunt the tombstones and churches. <b>Wild bears</b> mode: a bear that cannot step but is not sealed in gets angry (💢, then 💢💢) and on the third turn mauls a 🌱🌿🌳🏕️🛖 next to it, one tier down (a 🌱 is destroyed), then starts over. In a small pen (4 to 6 tiles) with 2 bears and 2 free tiles, a cub is sometimes born (🍼). Blue tiles are <b>water</b>: nothing can be placed, merged, moved or smashed there, and animals cannot cross it. A 🌉 <b>bridge</b> (up to 5, dearer each time) turns a water tile that has land on both sides into a road bears can walk over; nothing can be built on it.</p>' +
@@ -1898,6 +1912,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     '<p class="gnote">💎 stands in for any tier, including 🏬 (making 💵 cash) and 🕌 (making a 💰 treasure). Three or more 💎 touching each other merge into a 💰 treasure. 🚚 moves one item to an empty tile for coins.</p>' +
     '<p class="gnote">Three or more connected items of the same kind merge into the next one. Bigger groups pay more points and coins.</p>' +
     '<p class="gnote">🍀 <b>Lucky drops</b>: once you have built a higher tier, the next item is sometimes a free 🏕️ 🛖 or 🏠 (a tier below your best, never above a house). Most often on Easy, rarer on Standard and Medium, never on Hard.</p>';
+  }
+  buildGuide();
   $('guideLink').addEventListener('click', function (e) { e.preventDefault(); $('guide').classList.remove('hidden'); });
   $('guideClose').addEventListener('click', function () { $('guide').classList.add('hidden'); });
   $('hapticLink').addEventListener('click', function (e) {
@@ -1909,8 +1925,10 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   $('seasonLink').addEventListener('click', function (e) {
     e.preventDefault();
     season = SEASONS[(SEASONS.indexOf(season) + 1) % SEASONS.length]; store.set('tt-season', season); applySeason();
+    shopKey = ''; buildGuide(); buildCards(); render([]); // the plant emojis and critters follow the season
   });
   applySeason();
+  buildGuide(); buildCards(); // the first build ran before the season was known
   $('helpLink').addEventListener('click', function (e) { e.preventDefault(); $('help').classList.remove('hidden'); });
   $('helpClose').addEventListener('click', function () { $('help').classList.add('hidden'); store.set('tt-seen-help', 1); });
 
@@ -1997,6 +2015,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   window.ttDebug = {
     state: function () { return JSON.parse(JSON.stringify(state)); },
     validate: function () { return TT.validate(state); },
+    emoji: function (code) { return em(code); },
     critters: function () { return critters.map(function (c) { return c.kind; }); },
     critterHomes: function () { return critters.map(function (c) { return { kind: c.kind, cell: c.cell, code: state.grid[c.cell] }; }); }
   };

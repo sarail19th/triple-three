@@ -102,6 +102,7 @@ def shop_tap(page, selector):
 with sync_playwright() as p:
     browser = p.chromium.launch(**({'executable_path': os.environ['TT_CHROMIUM']} if os.environ.get('TT_CHROMIUM') else {}))
     ctx = browser.new_context(viewport={'width': 412, 'height': 860}, device_scale_factor=2, has_touch=True, is_mobile=True)
+    ctx.add_init_script("if (!localStorage.getItem('tt-season')) localStorage.setItem('tt-season', '\"summer\"');")  # the real default is Auto (by month): pin the look the tests expect
     ctx.add_init_script("window.__vib = []; Object.defineProperty(navigator, 'vibrate', { configurable: true, value: (ms) => { window.__vib.push(ms); return true; } });")
     page = ctx.new_page()
     errors = []
@@ -483,18 +484,38 @@ with sync_playwright() as p:
     classic = check_consistent(page, 'new classic game')
     assert classic['wild'] is False and 'wild' not in page.inner_text('#seed')
 
-    # ---- seasons: the link cycles auto -> spring -> summer -> autumn -> winter, sets data-season, remembers the pick, and the falling bits only exist when there is something to fall
+    # ---- seasons: the link cycles auto -> spring -> summer -> autumn -> winter, sets data-season, remembers the pick, the falling bits only exist when
+    # there is something to fall, and the natural items (plants, critters) change with the season. The tests start pinned to summer (see add_init_script).
     sea = lambda: page.evaluate("document.documentElement.dataset.season")
-    assert 'auto' in page.inner_text('#seasonLink') and sea() in ('spring', 'summer', 'autumn', 'winter')
+    PLANTS = {'summer': ['🌱', '🌿', '🌳'], 'spring': ['🌱', '🌼', '🌸'], 'autumn': ['🌾', '🍂', '🍁'], 'winter': ['❄️', '🌲', '🎄']}
+    HOME = {'summer': {'🐇', '🐤'}, 'spring': {'🐇', '🐤', '🦋'}, 'autumn': {'🐿️', '🦔'}, 'winter': {'🐇', '🐦'}}
+    WATER = {'summer': {'🦢', '🐟'}, 'spring': {'🦢', '🐸'}, 'autumn': {'🦆', '🐟'}, 'winter': {'🦢', '🦆'}}
+    assert 'Summer' in page.inner_text('#seasonLink') and sea() == 'summer'
+    g = [0] * 36
+    for i in (12, 14, 16, 25, 27): g[i] = 5      # five huts (not touching, so they do not merge): rabbits / chicks / squirrels live here
+    for i in (2, 8): g[i] = 21                   # a little water for the swans and fish
+    g[30] = 1; g[31] = 2; g[32] = 3              # one of each plant tier on the board
+    load(g, map='medium', coins=100)
     seen = {}
-    for want in ['spring', 'summer', 'autumn', 'winter']:
-        page.tap('#seasonLink'); assert sea() == want, (sea(), want)
-        seen[want] = page.evaluate("[getComputedStyle(document.getElementById('board')).backgroundImage.length, document.querySelectorAll('#seasonFx i').length]")
-    assert seen['summer'][1] == 0 and all(seen[k][1] > 0 for k in ('spring', 'autumn', 'winter')), seen
-    assert page.evaluate("JSON.parse(localStorage.getItem('tt-season'))") == 'winter'
-    page.tap('#seasonLink'); assert 'auto' in page.inner_text('#seasonLink')
-    page.reload(); page.wait_for_timeout(300)
-    assert 'auto' in page.inner_text('#seasonLink'), 'the pick survives a reload'
+    for want in ['autumn', 'winter', 'auto', 'spring', 'summer']:
+        page.tap('#seasonLink')
+        cur = sea()
+        assert (cur == want) if want != 'auto' else ('auto' in page.inner_text('#seasonLink') and cur in PLANTS), (cur, want)
+        seen[cur] = page.evaluate("[document.querySelectorAll('#seasonFx i').length, [1, 2, 3].map(c => window.ttDebug.emoji(c))]")
+        assert seen[cur][1] == PLANTS[cur], (cur, seen[cur])
+        cells = page.evaluate("[30, 31, 32].map(i => document.querySelector('#board .cell[data-i=\"' + i + '\"]').firstChild.textContent)")
+        assert cells == PLANTS[cur], f'the board shows the {cur} plants: {cells}'
+        assert page.inner_text('#curItem') == page.evaluate('window.ttDebug.emoji(window.ttDebug.state().cur)')
+        page.wait_for_timeout(150)
+        kinds = set(page.evaluate('window.ttDebug.critters()'))
+        assert kinds <= HOME[cur] | WATER[cur] and kinds & HOME[cur] and kinds & WATER[cur], f'{cur} critters: {kinds}'
+        if want == 'winter':
+            assert page.evaluate("JSON.parse(localStorage.getItem('tt-season'))") == 'winter'
+            page.reload(); page.wait_for_selector('#board .cell'); page.wait_for_timeout(300)
+            assert 'Winter' in page.inner_text('#seasonLink') and sea() == 'winter', 'the pick survives a reload'
+    assert seen['summer'][0] == 0 and all(seen[k][0] > 0 for k in ('spring', 'autumn', 'winter')), seen
+    assert page.evaluate("document.getElementById('guideBody').textContent.includes('🐇')"), 'the item guide follows the season too'
+    assert 'Summer' in page.inner_text('#seasonLink') and sea() == 'summer'
     check_consistent(page, 'after the season tour')
 
     # ---- calm mode: No bears + No foxes. No animals ever show up, no trap tool, own best score, the picks are remembered
