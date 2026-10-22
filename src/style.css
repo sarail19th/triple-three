@@ -303,3 +303,14 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 .loanrow .btn { flex: none; width: auto; padding: 8px 10px; font-size: 13px; margin: 0; }
 .loanrow.bad .lt { color: #ffb4a8; }
 #bankDlg .btn { margin-top: 6px; }
+
+/* How to play is paged: one topic at a time with Back / Next */
+.card a { color: var(--accent); }
+.helppage[hidden] { display: none; }
+.helppage h3 { text-align: center !important; margin: 4px 0 8px; font-size: 14px; }
+.pager { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 0 10px; }
+.pager .btn { flex: none; width: auto; padding: 8px 14px; margin: 0; font-size: 14px; }
+.pager .btn:disabled { opacity: .35; }
+#helpPageLabel { color: var(--muted); font-size: 13px; text-align: center; }
+.helpbtns { display: flex; gap: 8px; }
+.helpbtns .btn { flex: 1; margin: 0; }
