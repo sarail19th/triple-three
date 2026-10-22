@@ -216,7 +216,12 @@
   function tap(idx) {
     if (!state || state.over) return;
     if (!mode && state.grid[idx] === TT.BANK) { openBank(idx); return; } // tap a bank: loans
-    if (!targetOk(idx)) { bump(idx); return; }
+    if (!targetOk(idx)) {
+      bump(idx);
+      if (lockedNow[idx] && (mode === 'move' || mode === 'hammer')) toast('🔒 Locked by a loan: tap the bank and repay it first', 0.3);
+      else if (state.grid[idx] === TT.SEIZED) toast('🏚️ A seized lot: tap its bank and pay the debt to free the tile', 0.3);
+      return;
+    }
     if (mode === 'move') { tapMove(idx); return; }
     if (!mode && isCollectible(state.grid[idx])) { // collecting is always good news: no confirmation step
       var o = TT.open(state, idx);

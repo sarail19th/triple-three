@@ -521,7 +521,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       </section>
     </div>
     <div class="pager"><button id="helpPrev" class="btn" aria-label="Previous page">‹ Back</button><span id="helpPageLabel" aria-live="polite"></span><button id="helpNext" class="btn" aria-label="Next page">Next ›</button></div>
-    <p class="gnote">Version <b id="buildId">63e5446a</b> · <a href="#" id="updateLink">↻ Get the latest version</a><br>(keeps your saved game and best scores)</p>
+    <p class="gnote">Version <b id="buildId">036c3c92</b> · <a href="#" id="updateLink">↻ Get the latest version</a><br>(keeps your saved game and best scores)</p>
     <div class="helpbtns"><button id="helpTour" class="btn">▶ Quick tour</button><button id="helpClose" class="btn primary">Got it</button></div>
   </div>
 </div>
@@ -1662,7 +1662,12 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   function tap(idx) {
     if (!state || state.over) return;
     if (!mode && state.grid[idx] === TT.BANK) { openBank(idx); return; } // tap a bank: loans
-    if (!targetOk(idx)) { bump(idx); return; }
+    if (!targetOk(idx)) {
+      bump(idx);
+      if (lockedNow[idx] && (mode === 'move' || mode === 'hammer')) toast('🔒 Locked by a loan: tap the bank and repay it first', 0.3);
+      else if (state.grid[idx] === TT.SEIZED) toast('🏚️ A seized lot: tap its bank and pay the debt to free the tile', 0.3);
+      return;
+    }
     if (mode === 'move') { tapMove(idx); return; }
     if (!mode && isCollectible(state.grid[idx])) { // collecting is always good news: no confirmation step
       var o = TT.open(state, idx);
