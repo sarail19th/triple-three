@@ -1305,14 +1305,14 @@ t('bank: bought with coins once a village stands, placed like an item, never in 
 t('bank: pays coins at the end of every month; three connected banks merge into cash', () => {
   const income = TT.bankIncome(withGrid({}, { top: 7 })); assert.strictEqual(income, Math.round(TT.PRICE[7] * 0.1));
   // two banks, month ends on the 10th turn
-  let s = withGrid({ [I(0, 0)]: TT.BANK, [I(0, 5)]: TT.BANK, [I(5, 5)]: 7 }, { coins: 0, top: 7, cur: 1, next: 1, tick: 9, banksBought: 2 });
+  let s = withGrid({ [I(0, 0)]: TT.BANK, [I(0, 5)]: TT.BANK, [I(5, 5)]: 7 }, { coins: 0, top: 7, cur: 1, next: 1, tick: 9, banksBought: 2, bankOrder: [I(0, 0), I(0, 5)] });
   assert.deepStrictEqual(TT.validate(s), []);
   const r = TT.place(s, I(3, 3)), ev = r.events.find((e) => e.type === 'bankpay');
   assert(ev && ev.coins === 2 * income && ev.months === 1 && ev.banks === 2, JSON.stringify(ev)); assert.strictEqual(r.state.coins, 2 * income);
   assert(!TT.place(Object.assign({}, s, { tick: 3 }), I(3, 3)).events.some((e) => e.type === 'bankpay'), 'only on a month boundary');
   assert(!TT.place(Object.assign({}, s, { speed: 0 }), I(3, 3)).events.some((e) => e.type === 'bankpay'), 'paused clock, no pay');
   // trio -> cash on the tapped tile
-  const trio = withGrid({ [I(2, 1)]: TT.BANK, [I(2, 3)]: TT.BANK }, { cur: TT.BANK, next: 1, banksBought: 3, top: 7, coins: 0 });
+  const trio = withGrid({ [I(2, 1)]: TT.BANK, [I(2, 3)]: TT.BANK }, { cur: TT.BANK, next: 1, banksBought: 3, top: 7, coins: 0, bankOrder: [I(2, 1), I(2, 3)] });
   assert.deepStrictEqual(TT.validate(trio), []);
   const m = TT.place(trio, I(2, 2));
   assert.strictEqual(m.state.grid[I(2, 2)], TT.CASH, 'three banks become cash where the last one landed');
@@ -1321,6 +1321,88 @@ t('bank: pays coins at the end of every month; three connected banks merge into 
   // old saves
   const legacy = JSON.parse(JSON.stringify(withGrid({}))); delete legacy.tick; delete legacy.speed; delete legacy.banksBought;
   const mg = TT.migrate(legacy); assert.strictEqual(mg.tick, 0); assert.strictEqual(mg.speed, 1); assert.strictEqual(mg.banksBought, 0); assert.deepStrictEqual(TT.validate(mg), []);
+});
+
+t('loans: the most expensive neighbouring building is the collateral, half its shop price comes in, the building and the bank are locked', () => {
+  const B = I(2, 2), bank = (extra = {}, over = {}) => withGrid(Object.assign({ [B]: TT.BANK, [I(2, 1)]: 6, [I(1, 2)]: 5, [I(3, 2)]: 5 }, extra), Object.assign({ coins: 0, top: 7, banksBought: 1, bankOrder: [B], cur: 1, next: 1 }, over));
+  let s = bank();
+  assert.deepStrictEqual(TT.validate(s), []);
+  let o = TT.loanOptions(s, B); assert(o.at === I(2, 1) && o.tier === 6 && o.principal === Math.floor(TT.PRICE[6] / 2) && o.rate === 0.15, JSON.stringify(o));
+  assert.strictEqual(TT.loanOptions(s, I(0, 0)), null, 'only a bank lends');
+  const r = TT.borrow(s, B); s = r.state;
+  assert.strictEqual(s.coins, 200); assert.strictEqual(s.loans.length, 1); assert.strictEqual(s.loans[0].at, I(2, 1)); assert.strictEqual(r.events[0].type, 'loan');
+  assert.deepStrictEqual(TT.validate(s), []);
+  // locked: cannot be smashed (the building or the bank), cannot be moved, will not merge
+  const rich = Object.assign({}, s, { coins: 5000 });
+  assert.strictEqual(TT.hammer(rich, I(2, 1)), null, 'the collateral cannot be smashed'); assert.strictEqual(TT.hammer(rich, B), null, 'nor the bank');
+  assert.strictEqual(TT.move(rich, I(2, 1), I(0, 0)), null, 'nor moved');
+  const stack = bank({ [I(3, 1)]: 6 }, {}); stack.loans = [{ bank: B, at: I(2, 1), tier: 6, principal: 200, rate: 0.15, since: 0, defaulted: false }]; stack.coins = 200;
+  assert.deepStrictEqual(TT.validate(stack), []);
+  const next = Object.assign({}, stack, { cur: 6, next: 1 }), m = TT.place(next, I(4, 1));
+  assert.strictEqual(m.state.grid[I(4, 1)], 6, 'a locked house does not join a merge'); assert.strictEqual(m.state.grid[I(2, 1)], 6); assert.strictEqual(m.state.grid[I(3, 1)], 6);
+  // the next loan takes the next most expensive neighbour; a bank with every side locked or empty cannot lend
+  o = TT.loanOptions(s, B); assert.strictEqual(o.at, I(1, 2), 'a hut now (ties: lowest index)');
+  s = TT.borrow(s, B).state; s = TT.borrow(s, B).state; assert.strictEqual(s.loans.length, 3); assert.strictEqual(TT.borrow(s, B), null, 'nothing left to lock');
+  assert.deepStrictEqual(TT.validate(s), []);
+  assert.strictEqual(TT.bankRate({ bankOrder: [5, 9, 12] }, 5), 0.15); assert.strictEqual(TT.bankRate({ bankOrder: [5, 9, 12] }, 9), 0.3); assert.strictEqual(TT.bankRate({ bankOrder: [5, 9, 12] }, 12), 0.6, '15% -> 30% -> 60%');
+  // a bank with no building next to it cannot lend; a game that is over cannot borrow
+  assert.strictEqual(TT.borrow(withGrid({ [B]: TT.BANK }, { top: 7, banksBought: 1, bankOrder: [B] }), B), null);
+});
+
+t('loans: interest grows by the month, a year without repaying seizes the tile, repaying pays interest and unlocks (and merges) or frees the tile', () => {
+  const B = I(2, 2);
+  const mk = (over = {}) => { const s = withGrid({ [B]: TT.BANK, [I(2, 1)]: 6, [I(2, 0)]: 6, [I(1, 1)]: 6 }, Object.assign({ coins: 0, top: 7, banksBought: 1, bankOrder: [B], cur: 1, next: 1, speed: 1 }, over)); s.loans = [{ bank: B, at: I(2, 1), tier: 6, principal: 200, rate: 0.15, since: 0, defaulted: false }]; return s; };
+  let s = mk();
+  assert.deepStrictEqual(TT.validate(s), [], 'a locked house next to two houses is a valid (unmerged) position');
+  assert.strictEqual(TT.loanOwed(Object.assign({}, s, { tick: 5 }), s.loans[0]), 200, 'no interest before a full month');
+  assert.strictEqual(TT.loanOwed(Object.assign({}, s, { tick: 50 }), s.loans[0]), 200 + 12, '5 months at 15%/yr: 200 x 0.15 x 5/12 = 12');
+  assert.strictEqual(TT.loanOwed(Object.assign({}, s, { tick: 500 }), s.loans[0]), 230, 'after a year it stops growing');
+  assert.strictEqual(TT.loanMonthsLeft(Object.assign({}, s, { tick: 50 }), s.loans[0]), 7);
+  // repay: pays principal + interest, unlocks the house, and the trio merges into a village on the repaid tile
+  const paid = TT.repay(Object.assign({}, s, { tick: 50, coins: 300 }), 0);
+  assert.strictEqual(paid.state.coins, 300 - 212 + TT.COIN[6], 'the merge that follows pays its coins'); assert.strictEqual(paid.state.loans.length, 0);
+  assert.strictEqual(paid.state.grid[I(2, 1)], 7, 'the freed house merges at once'); assert.strictEqual(paid.state.grid[I(2, 0)], 0); assert.strictEqual(paid.state.grid[I(1, 1)], 0);
+  assert(paid.state.score > 0); assert.deepStrictEqual(TT.validate(paid.state), []);
+  assert.strictEqual(TT.repay(Object.assign({}, s, { tick: 50, coins: 100 }), 0), null, 'too poor'); assert.strictEqual(TT.repay(s, 3), null);
+  // default: on the turn the year is up the building is gone, the tile is seized and the bank stops paying
+  const late = Object.assign(mk({ tick: 119, coins: 0 }), { cur: 1, next: 1 }), d = TT.place(late, I(5, 5));
+  assert(d.events.some((e) => e.type === 'default' && e.at === I(2, 1)), 'default event');
+  assert.strictEqual(d.state.grid[I(2, 1)], TT.SEIZED); assert(d.state.loans[0].defaulted); assert.deepStrictEqual(TT.validate(d.state), []);
+  assert.strictEqual(d.state.coins, 0, 'no bank income while a loan is in default');
+  assert.strictEqual(TT.hammer(Object.assign({}, d.state, { coins: 99 }), I(2, 1)), null, 'a seized lot cannot be smashed');
+  assert.strictEqual(TT.move(Object.assign({}, d.state, { coins: 999 }), I(2, 1), I(0, 0)), null);
+  assert.strictEqual(TT.freeCount(d.state), 36 - 5, 'a seized lot is not a free tile');
+  const hold = TT.repay(Object.assign({}, d.state, { coins: 1000 }), 0);
+  assert.strictEqual(hold.state.grid[I(2, 1)], 0, 'paying the debt brings the tile back, empty'); assert.strictEqual(hold.state.coins, 1000 - 230); assert(hold.events[0].freed);
+  assert.deepStrictEqual(TT.validate(hold.state), []);
+  // a bank with no loan in default pays at the month end
+  const ok = TT.place(mk({ tick: 9, coins: 0 }), I(5, 5)); assert.strictEqual(ok.state.coins, TT.bankIncome(ok.state), 'locked or not, the bank still pays while the loan is in good standing');
+  // a paused clock ages no loan
+  assert.strictEqual(TT.place(mk({ tick: 119, speed: 0 }), I(5, 5)).state.loans[0].defaulted, false);
+});
+
+t('loans: a stuck board is not over while a defaulted lot can be paid for or a loan buys the hammer; speed control; land and old saves', () => {
+  const B = I(2, 2), full = (over = {}) => { const g = {}; for (let i = 0; i < 36; i++) g[i] = ((i % 6) + ((i / 6) | 0)) % 2 ? 5 : 6; g[B] = TT.BANK; g[I(2, 1)] = TT.SEIZED; return withGrid(g, Object.assign({ coins: 0, top: 7, banksBought: 1, bankOrder: [B], cur: 1, next: 1, tick: 130 }, over, {})); };
+  let s = full(); s.stock.hammer = 0; s.loans = [{ bank: B, at: I(2, 1), tier: 6, principal: 200, rate: 0.15, since: 0, defaulted: true }]; s.grid[I(2, 1)] = TT.SEIZED;
+  s.grid[I(0, 0)] = 0; // one free tile so the position is legal; filling it ends the game unless there is an escape
+  assert.deepStrictEqual(TT.validate(s), []);
+  const stuck = Object.assign({}, s, { cur: 1, next: 1 }), poor = TT.place(stuck, I(0, 0));
+  assert(poor.state.over, 'no hammer, no land money, nothing to pay: the game ends');
+  const rich = TT.place(Object.assign({}, stuck, { coins: 240 }), I(0, 0));
+  assert(!rich.state.over, 'but 230 coins would free the seized lot: not over');
+  // speed control
+  const a = withGrid({}, {}); assert.strictEqual(TT.setSpeed(a, 1), null, 'already 1x'); assert.strictEqual(TT.setSpeed(a, 4), null); assert.strictEqual(TT.setSpeed(a, 2).speed, 2); assert.strictEqual(TT.setSpeed(a, 0).speed, 0);
+  // land buys remap banks, loans and the order
+  const L = withGrid({ [B]: TT.BANK, [I(2, 1)]: 6 }, { coins: 10000, top: 7, banksBought: 1, bankOrder: [B] }); L.loans = [{ bank: B, at: I(2, 1), tier: 6, principal: 200, rate: 0.15, since: 0, defaulted: false }];
+  const up = TT.buyLand(L, 'top').state; assert.deepStrictEqual(up.bankOrder, [B + 6]); assert.strictEqual(up.loans[0].bank, B + 6); assert.strictEqual(up.loans[0].at, I(2, 1) + 6); assert.deepStrictEqual(TT.validate(up), []);
+  const lf = TT.buyLand(L, 'left').state; assert.strictEqual(lf.loans[0].bank, 2 * 7 + 3); assert.deepStrictEqual(TT.validate(lf), []);
+  // undo takes a loan back (undo restores the snapshot from before the last turn)
+  const t0 = withGrid({ [B]: TT.BANK, [I(2, 1)]: 6 }, { coins: 50, top: 7, banksBought: 1, bankOrder: [B], cur: 1, next: 1 });
+  const t1 = TT.place(t0, I(5, 5)).state, loaned = TT.borrow(t1, B).state, back = TT.undo(loaned);
+  assert.strictEqual(back.loans.length, 0); assert.strictEqual(back.coins, 50 - TT.UNDO_COST);
+  // old saves
+  const legacy = JSON.parse(JSON.stringify(withGrid({}))); delete legacy.loans; delete legacy.bankOrder;
+  const mg = TT.migrate(legacy); assert.deepStrictEqual(mg.loans, []); assert.deepStrictEqual(mg.bankOrder, []); assert.deepStrictEqual(TT.validate(mg), []);
 });
 
 t('animals can be switched off per game: no bears, no foxes, or calm (neither)', () => {
@@ -1350,7 +1432,7 @@ t('animals can be switched off per game: no bears, no foxes, or calm (neither)',
 });
 
 t('fuzz: 400 random games keep state valid and always terminate', () => {
-  let banksBought = 0, maxTurns = 0, merges = 0, trapped = 0, churches = 0, hammers = 0, lands = 0, foxMoves = 0, maxTier = 0, moves = 0, growls = 0, mauls = 0, cubs = 0, bridges = 0;
+  let loansUsed = 0, defaults = 0, banksBought = 0, maxTurns = 0, merges = 0, trapped = 0, churches = 0, hammers = 0, lands = 0, foxMoves = 0, maxTier = 0, moves = 0, growls = 0, mauls = 0, cubs = 0, bridges = 0;
   for (let seed = 1; seed <= 400; seed++) {
     let s = TT.newGame(seed, { wild: seed % 2 === 0, map: TT.MAPS[((seed / 2) | 0) % 4] });
     if (seed % 5 === 0) { s.top = 7; s.coins = 60000; } // banks need a village in the past and the money
@@ -1371,6 +1453,14 @@ t('fuzz: 400 random games keep state valid and always terminate', () => {
         const mv = TT.move(s, occupied[Math.floor(TT.rand(pick) * occupied.length)], empties[Math.floor(TT.rand(pick) * empties.length)]);
         if (mv) { moves++; s = mv.state; assert.deepStrictEqual(TT.validate(s), []); continue; }
       }
+      if (s.bankOrder.length && TT.rand(pick) < 0.04) { // borrow, repay or change the clock speed now and then
+        const roll = TT.rand(pick);
+        let act = null;
+        if (roll < 0.5) act = TT.borrow(s, s.bankOrder[Math.floor(TT.rand(pick) * s.bankOrder.length)]);
+        else if (roll < 0.8 && s.loans.length) act = TT.repay(s, Math.floor(TT.rand(pick) * s.loans.length));
+        else { const sp = TT.setSpeed(s, Math.floor(TT.rand(pick) * 4)); if (sp) { s = sp; assert.deepStrictEqual(TT.validate(s), []); continue; } }
+        if (act) { loansUsed++; s = act.state; assert.deepStrictEqual(TT.validate(s), []); continue; }
+      }
       if (TT.rand(pick) < 0.03) { const bk = TT.buyBank(s); if (bk) { banksBought++; s = bk; assert.deepStrictEqual(TT.validate(s), []); continue; } } // a bank now and then (needs a village on the board and the coins)
       if (TT.rand(pick) < 0.01 && empties.length) { // dig a pond now and then
         const pd = TT.buyPond(s, empties[Math.floor(TT.rand(pick) * empties.length)]);
@@ -1386,9 +1476,14 @@ t('fuzz: 400 random games keep state valid and always terminate', () => {
         if (l) { lands++; s = l.state; assert.deepStrictEqual(TT.validate(s), []); continue; }
       }
       if (!empties.length || TT.rand(pick) < 0.03) { // full board (rich) or a random hammer
-        const h = TT.hammer(s, occupied[Math.floor(TT.rand(pick) * occupied.length)]);
+        let h = null; const off = Math.floor(TT.rand(pick) * occupied.length); // locked and seized tiles refuse the hammer: try the others
+        for (let q = 0; q < occupied.length && !h; q++) h = TT.hammer(s, occupied[(off + q) % occupied.length]);
         if (h) { hammers++; s = h.state; assert.deepStrictEqual(TT.validate(s), []); continue; }
-        if (!empties.length) { // out of hammers: only the remaining land can save the game
+        if (!empties.length) { // out of hammers: pay a seized lot, borrow for the hammer, or buy the remaining land
+          let esc = null;
+          for (let li = 0; li < s.loans.length && !esc; li++) if (s.loans[li].defaulted) esc = TT.repay(s, li);
+          if (!esc && s.stock.hammer > 0 && s.coins < TT.PRICE.hammer) for (const bk2 of s.bankOrder) if (!esc) esc = TT.borrow(s, bk2);
+          if (esc) { loansUsed++; s = esc.state; assert.deepStrictEqual(TT.validate(s), []); continue; }
           const side = TT.SIDES.find((x) => TT.buyLand(s, x));
           assert(side, 'full board must either be over or rescuable');
           s = TT.buyLand(s, side).state; lands++; assert.deepStrictEqual(TT.validate(s), []); continue;
@@ -1400,7 +1495,7 @@ t('fuzz: 400 random games keep state valid and always terminate', () => {
       const prob = TT.validate(r.state);
       assert.deepStrictEqual(prob, [], `seed ${seed} turn ${s.turn}: ${prob.join(', ')}`);
       assert(r.state.score >= s.score);
-      r.events.forEach((e) => { if (e.type === 'merge') { merges++; if (e.to === TT.CHURCH) churches++; } if (e.type === 'trapped') trapped++; if (e.type === 'fox') foxMoves++; if (e.type === 'growl') growls++; if (e.type === 'maul') mauls++; if (e.type === 'cub') cubs++; if (e.type === 'merge') maxTier = Math.max(maxTier, e.to); });
+      r.events.forEach((e) => { if (e.type === 'default') defaults++; if (e.type === 'merge') { merges++; if (e.to === TT.CHURCH) churches++; } if (e.type === 'trapped') trapped++; if (e.type === 'fox') foxMoves++; if (e.type === 'growl') growls++; if (e.type === 'maul') mauls++; if (e.type === 'cub') cubs++; if (e.type === 'merge') maxTier = Math.max(maxTier, e.to); });
       if (TT.rand(pick) < 0.05) {
         const u = TT.undo(r.state);
         assert.strictEqual(!!u, TT.canUndo(r.state));
@@ -1410,9 +1505,9 @@ t('fuzz: 400 random games keep state valid and always terminate', () => {
     }
     maxTurns = Math.max(maxTurns, s.turn);
   }
-  assert(banksBought > 0, 'the fuzz bought banks');
+  assert(banksBought > 0 && loansUsed > 0 && defaults > 0, 'the fuzz bought banks, used loans and saw defaults: ' + [banksBought, loansUsed, defaults]);
   assert(merges > 0 && trapped > 0 && foxMoves > 0, 'fuzz exercised merges, trapped bears and fox warps');
-  console.log(`  fuzz: max ${maxTurns} turns, ${merges} merges, ${trapped} trapped bears, ${churches} churches, ${hammers} hammers, ${lands} land purchases, ${moves} moves, ${foxMoves} fox warps, ${growls} growls, ${mauls} mauls, ${cubs} cubs, ${bridges} bridges, best tier ${maxTier}`);
+  console.log(`  fuzz: ${banksBought} banks, ${loansUsed} loan actions, ${defaults} defaults, max ${maxTurns} turns, ${merges} merges, ${trapped} trapped bears, ${churches} churches, ${hammers} hammers, ${lands} land purchases, ${moves} moves, ${foxMoves} fox warps, ${growls} growls, ${mauls} mauls, ${cubs} cubs, ${bridges} bridges, best tier ${maxTier}`);
 });
 
 console.log(`OK: ${n} logic tests passed`);
