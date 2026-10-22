@@ -479,6 +479,7 @@
     dim(state);
     if (state.over || !(idx >= 0 && idx < N) || state.grid[idx] === EMPTY || state.grid[idx] === WATER || state.grid[idx] === SEIZED || LOCK[idx] || !canHammer(state)) return null; // a loan locks its building and its bank
     var s = clone(state), item = s.grid[idx];
+    s.undo = snapshot(state);
     s.grid[idx] = EMPTY; s.coins -= PRICE.hammer; s.stock.hammer--; settleBanks(s); s.over = isOver(s);
     return { state: s, events: [{ type: 'hammer', at: idx, item: item }] };
   }
@@ -499,6 +500,7 @@
     dim(state);
     if (state.over || !(idx >= 0 && idx < N) || (!isBear(state.grid[idx]) && state.grid[idx] !== FOX) || state.coins < PRICE.trap || !(state.stock.trap > 0)) return null;
     var s = clone(state), events = [{ type: 'trap', at: idx }];
+    s.undo = snapshot(state); // a tool use can be undone by itself
     s.coins -= PRICE.trap; s.stock.trap--; s.grid[idx] = TOMB;
     resolveAt(s, idx, events);
     settleCrystals(s, events);
@@ -520,6 +522,7 @@
     dim(state);
     if (!moveLegal(state, from, to) || !canMove(state)) return null;
     var s = clone(state), item = state.grid[from], events = [{ type: 'move', from: from, to: to, item: item }];
+    s.undo = snapshot(state); // a tool use can be undone by itself (a mover drop that merges is easy to regret)
     s.coins -= PRICE.move; s.stock.move--;
     s.grid[from] = EMPTY;
     s.bankOrder = s.bankOrder.map(function (i) { return i === from ? to : i; }); // a moved bank keeps its place in the order (and so its loan rate)
@@ -742,9 +745,11 @@
   }
 
   // Undo is possible when there is a snapshot and the player can pay UNDO_COST (taken from the restored coins).
+  // the state as it is now, kept as the one level of undo (no nesting)
+  function snapshot(state) { var u = clone(state); u.undo = null; return u; }
   function canUndo(state) { return !!state.undo && state.undo.coins >= UNDO_COST; }
 
-  // Revert the last placement (one level, including any shop use / swap / land bought since) for UNDO_COST coins.
+  // Revert the last placement, or the last mover / hammer / trap use (one level, including any other shop use / swap / land bought since) for UNDO_COST coins.
   // Returns null if there is nothing to undo or the player cannot pay.
   function undo(state) {
     if (!canUndo(state)) return null;

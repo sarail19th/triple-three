@@ -201,7 +201,7 @@ with sync_playwright() as p:
             page.tap('#undoBtn'); undos += 1
             after = check_consistent(page, f'undo@{turns}')
             assert after['coins'] == st['undo']['coins'] - 5, 'undo costs coins'
-            assert after['turn'] == before_turn - 1, 'undo reverts one turn'
+            assert after['turn'] == st['undo']['turn'] and after['turn'] <= before_turn, 'undo goes back to the snapshot (a placement, or a tool use in the same turn)'
             assert after['undo'] is None and page.locator('#undoBtn').is_disabled(), 'single-level undo'
             continue
         if roll < 0.20:  # shop: buy grass / bush / tree if enabled
@@ -568,6 +568,10 @@ with sync_playwright() as p:
     tap_cell(page, 2, True)
     mv = check_consistent(page, 'moved bank')
     assert mv['grid'][2] == 11 and mv['grid'][0] == 0 and mv['grid'][1] == 0 and mv['grid'][20] == 0, mv['grid']
+    assert page.locator('#undoBtn').is_enabled(), 'the mover drop can be undone'
+    page.tap('#undoBtn')
+    back = check_consistent(page, 'undo mover')
+    assert back['grid'][0] == 22 and back['grid'][1] == 22 and back['grid'][20] == 22 and back['grid'][2] == 0 and back['coins'] == 500 - 5, back
 
     # ---- loans: tap a bank, borrow against the dearest building next to it (locked, padlock), see the debt, repay; the clock speed link cycles
     g = [0] * 36; g[14] = 22; g[13] = 6; g[8] = 5; g[20] = 5

@@ -482,7 +482,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
         <ul>
         <li>On a computer, hover a tile to preview the move (the result shows faintly, merged items are outlined) and click to place the item shown in <b>Place</b>. On a touch screen, tap to preview and tap again to place. Turn <b>Preview</b> off to place with one tap.</li>
         <li>Connect <b>3 or more</b> identical items (up, down, left, right) and <i>all</i> of them merge into one of the next tier on the tile you tapped (4 or 5 pay more points and coins, nothing is left over):<br>🌱 → 🌿 → 🌳 → 🏕️ → 🛖 → 🏠 → 🏘️ → 🏫 → 🏥 → 🏬 → 💵 <b>cash</b>: tap it to collect coins.</li>
-        <li>Tap the <b>⇄</b> button between <b>Place</b> and <b>Next</b> (or the Next item itself) to swap them (free, as often as you like). The <b>Reserve</b> slot (left of Place) stores the current item for later (free swap). <b>Undo</b> takes back your last move for a few coins.</li>
+        <li>Tap the <b>⇄</b> button between <b>Place</b> and <b>Next</b> (or the Next item itself) to swap them (free, as often as you like). The <b>Reserve</b> slot (left of Place) stores the current item for later (free swap). <b>Undo</b> takes back your last move, or your last 🚚 / 🔨 / 🪤 use, for a few coins (one step only).</li>
         <li>The game ends when the board is full and you cannot afford a hammer.</li>
         </ul>
       </section>
@@ -521,7 +521,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       </section>
     </div>
     <div class="pager"><button id="helpPrev" class="btn" aria-label="Previous page">‹ Back</button><span id="helpPageLabel" aria-live="polite"></span><button id="helpNext" class="btn" aria-label="Next page">Next ›</button></div>
-    <p class="gnote">Version <b id="buildId">036c3c92</b> · <a href="#" id="updateLink">↻ Get the latest version</a><br>(keeps your saved game and best scores)</p>
+    <p class="gnote">Version <b id="buildId">2ae74f5f</b> · <a href="#" id="updateLink">↻ Get the latest version</a><br>(keeps your saved game and best scores)</p>
     <div class="helpbtns"><button id="helpTour" class="btn">▶ Quick tour</button><button id="helpClose" class="btn primary">Got it</button></div>
   </div>
 </div>
@@ -1007,6 +1007,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     dim(state);
     if (state.over || !(idx >= 0 && idx < N) || state.grid[idx] === EMPTY || state.grid[idx] === WATER || state.grid[idx] === SEIZED || LOCK[idx] || !canHammer(state)) return null; // a loan locks its building and its bank
     var s = clone(state), item = s.grid[idx];
+    s.undo = snapshot(state);
     s.grid[idx] = EMPTY; s.coins -= PRICE.hammer; s.stock.hammer--; settleBanks(s); s.over = isOver(s);
     return { state: s, events: [{ type: 'hammer', at: idx, item: item }] };
   }
@@ -1027,6 +1028,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     dim(state);
     if (state.over || !(idx >= 0 && idx < N) || (!isBear(state.grid[idx]) && state.grid[idx] !== FOX) || state.coins < PRICE.trap || !(state.stock.trap > 0)) return null;
     var s = clone(state), events = [{ type: 'trap', at: idx }];
+    s.undo = snapshot(state); // a tool use can be undone by itself
     s.coins -= PRICE.trap; s.stock.trap--; s.grid[idx] = TOMB;
     resolveAt(s, idx, events);
     settleCrystals(s, events);
@@ -1048,6 +1050,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     dim(state);
     if (!moveLegal(state, from, to) || !canMove(state)) return null;
     var s = clone(state), item = state.grid[from], events = [{ type: 'move', from: from, to: to, item: item }];
+    s.undo = snapshot(state); // a tool use can be undone by itself (a mover drop that merges is easy to regret)
     s.coins -= PRICE.move; s.stock.move--;
     s.grid[from] = EMPTY;
     s.bankOrder = s.bankOrder.map(function (i) { return i === from ? to : i; }); // a moved bank keeps its place in the order (and so its loan rate)
@@ -1270,9 +1273,11 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   }
 
   // Undo is possible when there is a snapshot and the player can pay UNDO_COST (taken from the restored coins).
+  // the state as it is now, kept as the one level of undo (no nesting)
+  function snapshot(state) { var u = clone(state); u.undo = null; return u; }
   function canUndo(state) { return !!state.undo && state.undo.coins >= UNDO_COST; }
 
-  // Revert the last placement (one level, including any shop use / swap / land bought since) for UNDO_COST coins.
+  // Revert the last placement, or the last mover / hammer / trap use (one level, including any other shop use / swap / land bought since) for UNDO_COST coins.
   // Returns null if there is nothing to undo or the player cannot pay.
   function undo(state) {
     if (!canUndo(state)) return null;
@@ -2303,7 +2308,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     { target: '.hud .stat', title: '⭐ Score and coins', text: 'Every merge adds to your <b>score</b> and pays 🪙 <b>coins</b> (bigger groups pay more). Coins buy things in the shop. <b>Best</b> is your top score on this map.' },
     { target: '#newBtn', title: '⟳ New game', text: 'Starts a new game: choose the <b>map</b> (Easy, Standard, Medium, Hard) the <b>bear mode</b> (Classic, Wild or No bears) and whether <b>foxes</b> appear. Switch both animals off for a calm game. It erases the game you are playing, and warns you first.' },
     { target: '.topinfo', title: '📋 Turn, rules and settings', text: 'The turn counter with the 📅 calendar and, once you own a bank, the ⏱ clock speed (tap to cycle 1×, 2×, 3×, paused) (10 turns = a month, 12 months = a year) and game seed, <b>How to play</b> (the rules and this tour), the <b>Item guide</b> (every item and what it merges into), the <b>🎨 Season</b> theme (Auto follows the calendar; tap to cycle spring, summer, autumn, winter), the 🏞️ <b>lake quest</b> line (tap it to open the shop) and, on phones with vibration, the <b>📳 Haptics</b> switch.' },
-    { target: '#undoBtn', title: '↶ Undo', text: 'Takes back your last move. It costs a few coins, and only one move can be undone.' },
+    { target: '#undoBtn', title: '↶ Undo', text: 'Takes back your last move, or your last 🚚 mover, 🔨 hammer or 🪤 trap use (a mover drop that merges at once, say). It costs a few coins, and only one step can be undone.' },
     { target: '#previewBtn', title: '👁 Preview', text: 'Shows what a tap would do before you place. Turn it off to place with a single tap.' },
     { target: '#shopBtn', title: '🛒 Shop', text: 'Opens the shop. Everything you can spend coins on is in there.', when: function () { return $('shopBtn').offsetParent !== null; } },
     { target: '#shop', sheet: true, title: '🏠 Buy an item', text: 'Buy a building and it becomes your item to place right away. The little number is the stock left; after that the price <b>doubles</b> each time. Higher kinds unlock once you have built them.' },

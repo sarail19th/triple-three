@@ -1446,6 +1446,27 @@ t('the mover carries an unlocked bank (to line three up for a merge into cash), 
   assert.strictEqual(TT.move(lk, B1, I(5, 4)), null, 'a bank with a loan cannot be moved'); assert.deepStrictEqual(TT.validate(lk), []);
 });
 
+t('undo also takes back a mover, hammer or trap use by itself (one step, costs the undo fee)', () => {
+  // mover: carry a bank so that three banks merge into cash, then undo
+  const B1 = I(0, 0), B2 = I(0, 1), B3 = I(3, 3);
+  const s = withGrid({ [B1]: TT.BANK, [B2]: TT.BANK, [B3]: TT.BANK }, { coins: 1000, top: 7, banksBought: 3, bankOrder: [B1, B2, B3], cur: 1, next: 1 });
+  const m = TT.move(s, B3, I(0, 2));
+  assert.strictEqual(m.state.grid[I(0, 2)], TT.CASH); assert(TT.canUndo(m.state), 'a mover use can be undone');
+  const u = TT.undo(m.state);
+  assert.strictEqual(u.grid[B3], TT.BANK); assert.strictEqual(u.grid[B1], TT.BANK); assert.strictEqual(u.grid[B2], TT.BANK); assert.strictEqual(u.grid[I(0, 2)], 0);
+  assert.strictEqual(u.coins, 1000 - TT.UNDO_COST, 'the 60 coins come back, the undo fee is paid'); assert.strictEqual(u.stock.move, s.stock.move);
+  assert.deepStrictEqual(u.bankOrder, [B1, B2, B3]); assert.deepStrictEqual(TT.validate(u), []); assert.strictEqual(TT.undo(u), null, 'one step only');
+  // hammer
+  const h = TT.hammer(withGrid({ [I(2, 2)]: 5 }, { coins: 100 }), I(2, 2)), hu = TT.undo(h.state);
+  assert.strictEqual(hu.grid[I(2, 2)], 5); assert.strictEqual(hu.coins, 100 - TT.UNDO_COST);
+  // trap
+  const t = TT.trap(withGrid({ [I(2, 2)]: TT.BEAR }, { coins: 100 }), I(2, 2)), tu = TT.undo(t.state);
+  assert.strictEqual(tu.grid[I(2, 2)], TT.BEAR); assert.strictEqual(tu.stock.trap, TT.START_STOCK.trap);
+  // a placement after a tool use is undone as before
+  const p = TT.place(TT.hammer(withGrid({ [I(2, 2)]: 5 }, { coins: 100, cur: 1, next: 1 }), I(2, 2)).state, I(0, 0));
+  assert.strictEqual(TT.undo(p.state).grid[I(0, 0)], 0);
+});
+
 t('animals can be switched off per game: no bears, no foxes, or calm (neither)', () => {
   for (const [bears, foxes] of [[false, true], [true, false], [false, false]]) {
     for (let seed = 1; seed <= 40; seed++) {
