@@ -563,8 +563,7 @@
         cells[ev.at].classList.add('shake'); floatAt(ev.at, '🏚️');
         toast('🏚️ A loan ran out: the ' + em(ev.tier) + ' and its tile were seized!', 0.25);
       } else if (ev.type === 'bankpay') {
-        var bk = state.grid.indexOf(TT.BANK);
-        if (bk >= 0) { floatAt(bk, '🏦 +' + fmt(ev.coins) + '🪙'); cells[bk].classList.add('drop'); }
+        ev.at.forEach(function (bk) { floatAt(bk, '🏦 +' + fmt(ev.each) + '🪙'); cells[bk].classList.add('drop'); }); // each bank shows its own income
       } else if (ev.type === 'bonus') {
         toast('🪤 A free trap!', 0.2);
       } else if (ev.type === 'unlock') {

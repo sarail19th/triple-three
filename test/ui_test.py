@@ -550,6 +550,15 @@ with sync_playwright() as p:
     assert 'Put a building next to the bank' in page.inner_text('#bankNote') and page.locator('#bankBorrow').is_hidden(), 'no building next to this bank: nothing to borrow against'
     page.tap('#bankClose'); assert page.locator('#bankDlg').is_hidden()
 
+    # every paying bank floats its own income over its own tile
+    g = [0] * 36; g[0] = 22; g[5] = 22; g[35] = 22; g[20] = 7
+    load(g, coins=0, top=7, banksBought=3, bankOrder=[0, 5, 35])
+    tap_cell(page, 14, True)
+    page.wait_for_timeout(100)
+    floats = page.evaluate("[...document.querySelectorAll('#fx .pts')].filter(e => e.textContent.includes('🏦')).map(e => e.textContent)")
+    assert len(floats) == 3 and len(set(floats)) == 1 and '+9' in floats[0], floats
+    assert check_consistent(page, 'three banks')['coins'] == 27
+
     # ---- loans: tap a bank, borrow against the dearest building next to it (locked, padlock), see the debt, repay; the clock speed link cycles
     g = [0] * 36; g[14] = 22; g[13] = 6; g[8] = 5; g[20] = 5
     load(g, coins=0, top=7, banksBought=1, bankOrder=[14], tick=0)
