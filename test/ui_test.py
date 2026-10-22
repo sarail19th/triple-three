@@ -683,7 +683,7 @@ with sync_playwright() as p:
     load(g, coins=1000, top=4, score=0, milestone=0)
     open_shop(page)
     assert page.locator('#pondBtn').is_visible() and page.inner_text('#pondBtn .tp') == '🪙60' and page.inner_text('#pondBtn .tb') == '×16'
-    assert 'Ponds 0/16' in page.inner_text('#pondNote') and '2×2' in page.inner_text('#pondNote') and '🪙300' in page.inner_text('#pondNote')
+    assert 'Ponds 0/16' in page.inner_text('#pondNote') and '2×2' in page.inner_text('#pondNote') and '🪙200' in page.inner_text('#pondNote')
     assert page.locator('#bridgeBtn').is_hidden(), 'no water on this map: no bridge tool'
     shop_tap(page, '#pondBtn')
     assert page.get_attribute('#pondBtn', 'aria-pressed') == 'true', page.get_attribute('#pondBtn', 'aria-pressed')
@@ -696,7 +696,7 @@ with sync_playwright() as p:
     assert page.locator('#board .cell.pond').count() == 1 and page.get_attribute('#board .cell[data-i="14"]', 'aria-label').endswith('water')
     assert page.get_attribute('#pondBtn', 'aria-pressed') == 'false' and page.locator('#board svg.water').count() == 1
     page.tap('#board .cell[data-i="14"]'); assert state(page)['turn'] == 3, 'nothing happens on a pond'
-    open_shop(page); assert page.inner_text('#pondBtn .tp') == '🪙100' and page.inner_text('#pondBtn .tb') == '×15' and 'Ponds 1/16' in page.inner_text('#pondNote')
+    open_shop(page); assert page.inner_text('#pondBtn .tp') == '🪙80' and page.inner_text('#pondBtn .tb') == '×15' and 'Ponds 1/16' in page.inner_text('#pondNote')
     page.tap('#shopClose')
     before = state(page)['score']
     tap_cell(page, 20, True)
@@ -704,7 +704,7 @@ with sync_playwright() as p:
     # a poor player cannot dig
     assert page.evaluate("document.getElementById('bridgeBtn').hidden"), 'a dug pond cannot be bridged, so the tool stays hidden'
     # the lake quest is always in view at the top; tapping it opens the shop
-    assert 'Lake quest 2×2' in page.inner_text('#questLine') and 'biggest 1×1' in page.inner_text('#questLine') and '🪙300' in page.inner_text('#questLine')
+    assert 'Lake quest 2×2' in page.inner_text('#questLine') and 'biggest 1×1' in page.inner_text('#questLine') and '🪙200' in page.inner_text('#questLine')
     qb = page.evaluate("[document.getElementById('questLine').getBoundingClientRect().bottom, document.querySelector('.panel').getBoundingClientRect().top]")
     assert qb[0] <= qb[1], f'the quest line sits above the Place row: {qb}'
     page.tap('#questLine'); assert page.locator('#shopSheet').is_visible(); page.tap('#shopClose')
@@ -713,7 +713,7 @@ with sync_playwright() as p:
     load(gq, coins=1000, top=4, score=0, milestone=0)
     shop_tap(page, '#pondBtn'); tap_cell(page, 7, True)
     done = check_consistent(page, 'lake quest')
-    assert done['lake'] == 1 and done['coins'] == 1000 - 60 + 300 and done['score'] >= 30 * 90, done
+    assert done['lake'] == 1 and done['coins'] == 1000 - 60 + 200 and done['score'] >= 30 * 90, done
     assert 'Lake quest 3×3' in page.inner_text('#questLine'), page.inner_text('#questLine')
     # a poor player cannot dig
     load(g, coins=50, top=4)
