@@ -516,12 +516,12 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       <section class="helppage" data-title="Banks and loans" hidden>
         <h3>Banks and loans</h3>
         <ul>
-        <li>🏦 <b>Banks</b> (shop, once a village is built): a bank is placed like an item, is a dead tile for animals and the mover (only the hammer breaks it) and cannot go in the reserve. It pays <b>coins every turn</b> (the 📅 date at the top counts 10 turns to a month). At most 3, each dearer than the last; three connected banks merge into 💵 cash. <b>Loans</b>: tap a bank to borrow half the shop price of the dearest building next to it; that building and the bank are locked until you repay it with simple interest (15% a year, 30% at the second bank, 60% at the third). A year unpaid and the building is lost and its tile seized until you pay the debt, and that bank stops paying. The ⏱ clock speed (tap it: 1×, 2×, 3×, paused) sets how fast the calendar, income and interest run.</li>
+        <li>🏦 <b>Banks</b> (shop, once a village is built): a bank is placed like an item, is a dead tile for animals, can be carried by the 🚚 mover (unless a loan locks it; use it to line three banks up) and is broken only by the hammer. It cannot go in the reserve. It pays <b>coins every turn</b> (the 📅 date at the top counts 10 turns to a month). At most 3, each dearer than the last; three connected banks merge into 💵 cash. <b>Loans</b>: tap a bank to borrow half the shop price of the dearest building next to it; that building and the bank are locked until you repay it with simple interest (15% a year, 30% at the second bank, 60% at the third). A year unpaid and the building is lost and its tile seized until you pay the debt, and that bank stops paying. The ⏱ clock speed (tap it: 1×, 2×, 3×, paused) sets how fast the calendar, income and interest run.</li>
         </ul>
       </section>
     </div>
     <div class="pager"><button id="helpPrev" class="btn" aria-label="Previous page">‹ Back</button><span id="helpPageLabel" aria-live="polite"></span><button id="helpNext" class="btn" aria-label="Next page">Next ›</button></div>
-    <p class="gnote">Version <b id="buildId">7d051319</b> · <a href="#" id="updateLink">↻ Get the latest version</a><br>(keeps your saved game and best scores)</p>
+    <p class="gnote">Version <b id="buildId">63e5446a</b> · <a href="#" id="updateLink">↻ Get the latest version</a><br>(keeps your saved game and best scores)</p>
     <div class="helpbtns"><button id="helpTour" class="btn">▶ Quick tour</button><button id="helpClose" class="btn primary">Got it</button></div>
   </div>
 </div>
@@ -1039,7 +1039,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   // Shop: the mover picks up the item on `from` and drops it on the empty cell `to` (free action, costs coins, limited stock).
   // It merges there exactly as a placed item would. Bears and foxes cannot be moved (only the trap deals with them).
   // Returns {state, events} or null.
-  function isMovable(code) { return code !== EMPTY && code !== WATER && code !== BANK && code !== SEIZED && !isBear(code) && code !== FOX; }
+  function isMovable(code) { return code !== EMPTY && code !== WATER && code !== SEIZED && !isBear(code) && code !== FOX; } // a bank can be carried too (unless a loan locks it: moveLegal)
   function canMove(s) { return s.coins >= PRICE.move && s.stock.move > 0; }
   function moveLegal(state, from, to) {
     return !state.over && from >= 0 && from < N && to >= 0 && to < N && from !== to && isMovable(state.grid[from]) && !LOCK[from] && state.grid[to] === EMPTY && state.bridges.indexOf(to) < 0;
@@ -1050,7 +1050,9 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     var s = clone(state), item = state.grid[from], events = [{ type: 'move', from: from, to: to, item: item }];
     s.coins -= PRICE.move; s.stock.move--;
     s.grid[from] = EMPTY;
+    s.bankOrder = s.bankOrder.map(function (i) { return i === from ? to : i; }); // a moved bank keeps its place in the order (and so its loan rate)
     applyItem(s, to, item, events);
+    settleBanks(s);
     noteTop(s, events);
     grantMilestones(s, events);
     s.over = isOver(s); // the board is as full as before, so this only ever stays false
@@ -2222,7 +2224,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     '<p class="gnote">👻🐈‍⬛ haunt the tombstones and churches. <b>Wild bears</b> mode: a bear that cannot step but is not sealed in gets angry (💢, then 💢💢) and on the third turn mauls a 🌱🌿🌳🏕️🛖 next to it, one tier down (a 🌱 is destroyed), then starts over. In a small pen (4 to 6 tiles) with 2 bears and 2 free tiles, a cub is sometimes born (🍼). Blue tiles are <b>water</b>: nothing can be placed, merged, moved or smashed there, and animals cannot cross it. A 🌉 <b>bridge</b> (up to 5, dearer each time) turns a water tile that has land on both sides into a road bears can walk over; nothing can be built on it.</p>' +
     '<h3>Special</h3><div class="chain">' + chip(TT.CRYSTAL, 'wildcard') + chip(TT.FOX, 'warps, walls trap it') + '</div>' +
     '<h3>Bank</h3><div class="chain">' + chip(TT.BANK, 'pays every turn') + '<span class="arrow">&rarr;<small>x3</small></span>' + chip(TT.CASH, 'cash') + '</div>' +
-    '<p class="gnote">🏦 A <b>bank</b> is sold in the shop once you have built a village. It is a dead tile (animals and the mover cannot touch it, only the hammer breaks it), cannot go in the reserve, and pays you coins every turn (more at higher clock speed; the 📅 date is at the top). At most 3; each is dearer. Three connected banks merge into 💵 cash.</p>' +
+    '<p class="gnote">🏦 A <b>bank</b> is sold in the shop once you have built a village. It is a dead tile for animals (they cannot cross it), cannot go in the reserve, can be carried by the 🚚 mover (unless a loan locks it) and is broken only by the hammer, and pays you coins every turn (more at higher clock speed; the 📅 date is at the top). At most 3; each is dearer. Three connected banks merge into 💵 cash.</p>' +
     '<p class="gnote">💸 <b>Loans</b>: tap a bank to borrow half the shop price of the dearest building next to it. That building and the bank are 🔒 locked (no merging, moving or smashing) until you repay the loan plus simple interest: 15% a year at the first bank, 30% at the second, 60% at the third. A year unpaid and the building is gone and its tile becomes a 🏚️ seized lot (a dead tile; the bank stops paying) until you pay the debt. ⏱ The clock speed (shown once you own a bank) decides how many ticks a turn adds: faster means income, interest and the deadline all come sooner; paused stops them all.</p>' +
     '<p class="gnote">💎 stands in for any tier, including 🏬 (making 💵 cash) and 🕌 (making a 💰 treasure). Three or more 💎 touching each other merge into a 💰 treasure. 🚚 moves one item to an empty tile for coins.</p>' +
     '<p class="gnote">🍂 The animals follow the season: bear and fox are ' + SKINS.autumn.bear[0] + ' ' + SKINS.autumn.fox[0] + ' in autumn and ' + SKINS.winter.bear[0] + ' ' + SKINS.winter.fox[0] + ' in winter (now: ' + em(TT.BEAR) + ' ' + em(TT.FOX) + '). Only the looks change.</p>' +

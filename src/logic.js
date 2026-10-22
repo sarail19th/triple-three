@@ -511,7 +511,7 @@
   // Shop: the mover picks up the item on `from` and drops it on the empty cell `to` (free action, costs coins, limited stock).
   // It merges there exactly as a placed item would. Bears and foxes cannot be moved (only the trap deals with them).
   // Returns {state, events} or null.
-  function isMovable(code) { return code !== EMPTY && code !== WATER && code !== BANK && code !== SEIZED && !isBear(code) && code !== FOX; }
+  function isMovable(code) { return code !== EMPTY && code !== WATER && code !== SEIZED && !isBear(code) && code !== FOX; } // a bank can be carried too (unless a loan locks it: moveLegal)
   function canMove(s) { return s.coins >= PRICE.move && s.stock.move > 0; }
   function moveLegal(state, from, to) {
     return !state.over && from >= 0 && from < N && to >= 0 && to < N && from !== to && isMovable(state.grid[from]) && !LOCK[from] && state.grid[to] === EMPTY && state.bridges.indexOf(to) < 0;
@@ -522,7 +522,9 @@
     var s = clone(state), item = state.grid[from], events = [{ type: 'move', from: from, to: to, item: item }];
     s.coins -= PRICE.move; s.stock.move--;
     s.grid[from] = EMPTY;
+    s.bankOrder = s.bankOrder.map(function (i) { return i === from ? to : i; }); // a moved bank keeps its place in the order (and so its loan rate)
     applyItem(s, to, item, events);
+    settleBanks(s);
     noteTop(s, events);
     grantMilestones(s, events);
     s.over = isOver(s); // the board is as full as before, so this only ever stays false

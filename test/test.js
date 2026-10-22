@@ -1290,7 +1290,7 @@ t('bank: bought with coins once a village stands, placed like an item, never in 
   const r = TT.place(s, I(2, 2));
   assert.strictEqual(r.state.grid[I(2, 2)], TT.BANK); assert.strictEqual(TT.bankCount(r.state), 1); assert.strictEqual(r.state.cur, 1);
   // a dead tile: movers cannot carry it, animals cannot walk through it, the hammer can break it
-  assert(!TT.isMovable(TT.BANK)); assert.strictEqual(TT.move(r.state, I(2, 2), I(0, 0)), null);
+  assert(TT.isMovable(TT.BANK), 'the mover can carry a bank');
   const hm = TT.hammer(Object.assign(r.state, { coins: 1000 }), I(2, 2)); assert.strictEqual(hm.state.grid[I(2, 2)], 0, 'the hammer destroys a bank');
   assert.strictEqual(hm.state.banksBought, 1, 'rebuying costs the next price');
   assert(TT.bankPrice(hm.state) > TT.BANK_PRICE[0]);
@@ -1426,6 +1426,24 @@ t('pond income and lake bonuses add to the score but never trigger shop restocks
   // old saves (no bonusScore) count their whole score, as before
   const legacy = JSON.parse(JSON.stringify(withGrid({}, { score: 500, milestone: 1 }))); delete legacy.bonusScore;
   const mg = TT.migrate(legacy); assert.strictEqual(mg.bonusScore, 0); assert.strictEqual(TT.milestoneProgress(mg), 500); assert.deepStrictEqual(TT.validate(mg), []);
+});
+
+t('the mover carries an unlocked bank (to line three up for a merge into cash), keeps its place in the order; a bank with a loan is locked', () => {
+  const B1 = I(0, 0), B2 = I(0, 1), B3 = I(3, 3);
+  const s = withGrid({ [B1]: TT.BANK, [B2]: TT.BANK, [B3]: TT.BANK, [I(1, 1)]: 6 }, { coins: 1000, top: 7, banksBought: 3, bankOrder: [B3, B1, B2], cur: 1, next: 1 });
+  assert.deepStrictEqual(TT.validate(s), []);
+  // B3 is the 1st bank; carry it next to the other two: the trio merges into cash where it lands
+  const pv = TT.previewMove(s, B3, I(0, 2)); assert(pv && pv.merged && pv.final === TT.CASH, 'the preview shows the cash');
+  const r = TT.move(s, B3, I(0, 2));
+  assert.strictEqual(r.state.grid[I(0, 2)], TT.CASH); assert.strictEqual(r.state.grid[B1], 0); assert.strictEqual(r.state.grid[B2], 0); assert.strictEqual(r.state.grid[B3], 0);
+  assert.deepStrictEqual(r.state.bankOrder, []); assert.deepStrictEqual(TT.validate(r.state), []);
+  // a plain move keeps the bank's rank: the first-placed bank stays first (15%)
+  const two = withGrid({ [B1]: TT.BANK, [B3]: TT.BANK, [I(1, 0)]: 6 }, { coins: 1000, top: 7, banksBought: 2, bankOrder: [B3, B1], cur: 1, next: 1 });
+  const mv = TT.move(two, B3, I(5, 5)); assert.deepStrictEqual(mv.state.bankOrder, [I(5, 5), B1]); assert.strictEqual(TT.bankRate(mv.state, I(5, 5)), 0.15);
+  assert.deepStrictEqual(TT.validate(mv.state), []);
+  // locked by a loan: no move
+  const lk = Object.assign({}, two); lk.loans = [{ bank: B1, at: I(1, 0), tier: 6, principal: 200, rate: 0.15, since: 0, defaulted: false }];
+  assert.strictEqual(TT.move(lk, B1, I(5, 4)), null, 'a bank with a loan cannot be moved'); assert.deepStrictEqual(TT.validate(lk), []);
 });
 
 t('animals can be switched off per game: no bears, no foxes, or calm (neither)', () => {
