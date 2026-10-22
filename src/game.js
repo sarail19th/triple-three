@@ -589,15 +589,34 @@
   });
   // New game: pick the map and the bear mode in a small dialog (the last picks are remembered); Play again repeats both
   var dlg = { map: 'easy', bears: 'classic', foxes: true };
+  // sample maps: the real generator with fixed seeds, drawn as tiny boards (water blue, plants as emoji). Easy and Medium are the same every game.
+  var SAMPLE_SEEDS = { easy: [1], standard: [3, 8, 21], medium: [1], hard: [4, 9, 17] }, CARD_SEED = { easy: 1, standard: 3, medium: 1, hard: 4 };
+  function miniMap(map, seed, into) {
+    var g = TT.newGame(seed, { map: map }).grid;
+    into.textContent = '';
+    g.forEach(function (v) {
+      var c = document.createElement('span');
+      if (v === TT.WATER) c.className = 'w'; else if (v) c.textContent = TT.EMOJI[v];
+      into.appendChild(c);
+    });
+    return into;
+  }
+  document.querySelectorAll('#newGame .mapcard').forEach(function (b) { miniMap(b.dataset.map, CARD_SEED[b.dataset.map], b.querySelector('.mini')); });
+  function showSamples() {
+    var box = $('mapSamples');
+    box.textContent = '';
+    SAMPLE_SEEDS[dlg.map].forEach(function (seed) { var m = document.createElement('div'); m.className = 'mini'; box.appendChild(miniMap(dlg.map, seed, m)); });
+  }
   function showDialog() {
     document.querySelectorAll('#newGame .opt[data-map]').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.map === dlg.map); });
     document.querySelectorAll('#newGame .opt[data-bears]').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.bears === dlg.bears); });
     document.querySelectorAll('#newGame .opt[data-foxes]').forEach(function (b) { b.setAttribute('aria-pressed', (b.dataset.foxes === 'on') === dlg.foxes); });
     $('mapNote').textContent = MAP_NOTES[dlg.map];
+    showSamples();
     $('foxNote').textContent = dlg.foxes ? 'Foxes warp around the board; walls or a full box trap them.' : 'No foxes in the item queue.';
     $('bearNote').textContent = dlg.bears === 'off' ? 'No bears in the item queue' + (dlg.foxes ? '.' : ' (calm mode: no animals at all, nothing to interrupt you).') : dlg.bears === 'wild' ? 'Boxed-in bears growl, get angry, then maul a 🌱🌿🌳🏕️🛖 next to them (one tier down). Bears breed in small pens. Own best scores.' : 'Bears wander and get trapped into tombstones.';
   }
-  var MAP_NOTES = { easy: 'A plain grass field.', standard: 'A plain field with a few grass, bushes and trees already growing.', medium: 'A river runs across the field and splits it in two.', hard: 'Random ponds eat into the field (different every game).' };
+  var MAP_NOTES = { easy: 'A plain grass field.', standard: 'A plain field with a few grass, bushes and trees already growing (different every game, e.g. these).', medium: 'A river runs across the field and splits it in two (the same map every game).', hard: 'Random ponds eat into the field (different every game, e.g. these).' };
   function openNewGame() {
     dlg.map = mapPref(); dlg.bears = !bearsPref() ? 'off' : wildPref() ? 'wild' : 'classic'; dlg.foxes = foxesPref();
     // a game in progress would be erased: say so loudly, with what is at stake, and make the button say it too

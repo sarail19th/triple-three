@@ -273,3 +273,13 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 
 /* a dug pond carries a lily pad (income marker); the water itself is the shared SVG layer */
 .cell.pond::after { content: "🪷"; position: absolute; right: 6%; bottom: 4%; font-size: calc(var(--bs) / var(--m) * .3); opacity: .8; pointer-events: none; }
+
+/* New game: each map card shows a small sample map, and the selected category lists a few more examples */
+.opt.mapcard { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 7px 2px 8px; }
+.mini { display: grid; grid-template: repeat(6, 1fr) / repeat(6, 1fr); width: 52px; height: 52px; border-radius: 5px; overflow: hidden; flex: none;
+  background: linear-gradient(var(--g1), var(--g2)); box-shadow: 0 0 0 1.5px var(--edge); }
+.mini span { display: flex; align-items: center; justify-content: center; font-size: 6px; line-height: 1; box-shadow: inset 0 0 0 .5px #0000001c; }
+.mini span.w { background: linear-gradient(var(--w1), var(--w3)); box-shadow: none; }
+.samples { display: flex; justify-content: center; gap: 12px; margin: 8px 0 2px; }
+.samples .mini { width: 68px; height: 68px; border-radius: 7px; }
+.samples .mini span { font-size: 9px; }
