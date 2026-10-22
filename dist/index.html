@@ -1327,7 +1327,20 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   // Seasons: a colour theme (`data-season` on <html>, CSS tokens) plus a few petals / leaves / snowflakes drifting over the page. 'auto' follows
   // the calendar month. Purely cosmetic (never in the game state); the falling bits use Math.random, which is fine outside the logic.
   // Natural items change with the season: the three plant tiers, and the little critters (who lives around the homes / on the water).
-  var PLANTS = { summer: { 1: '🌱', 2: '🌿', 3: '🌳' }, spring: { 1: '🌱', 2: '🌼', 3: '🌸' }, autumn: { 1: '🌾', 2: '🍂', 3: '🍁' }, winter: { 1: '❄️', 2: '🌲', 3: '🎄' } };
+  var PLANTS = { summer: { 1: '🌱', 2: '🌿', 3: '🌳' }, spring: { 1: '🌻', 2: '💐', 3: '🌸' }, autumn: { 1: '🍂', 2: '🍄', 3: '🪾' }, winter: { 1: '❄️', 2: '🎁', 3: '🎄' } };
+  // Very new emoji (the bare tree 🪾 is from 2023) show as a black-and-white empty box on older devices. A real emoji has coloured pixels,
+  // the missing-glyph box has none: draw it on a canvas and look; if it is not coloured use a leaf instead.
+  function glyphOk(ch) {
+    try {
+      var c = document.createElement('canvas'); c.width = c.height = 40;
+      var x = c.getContext('2d'); x.font = '30px sans-serif'; x.textBaseline = 'top';
+      x.fillText(ch, 0, 0);
+      var d = x.getImageData(0, 0, 40, 40).data;
+      for (var i = 0; i < d.length; i += 4) if (d[i + 3] > 200 && Math.max(d[i], d[i + 1], d[i + 2]) - Math.min(d[i], d[i + 1], d[i + 2]) > 40) return true;
+      return false;
+    } catch (e) { return true; }
+  }
+  if (!glyphOk(PLANTS.autumn[3])) PLANTS.autumn[3] = '🍁';
   var CRITTERS = {
     summer: { home: ['🐇', '🐤'], grave: ['👻', '🐈\u200d⬛'], water: ['🦢', '🐟'] },
     spring: { home: ['🐇', '🐤', '🦋'], grave: ['👻', '🐈\u200d⬛'], water: ['🦢', '🐸'] },
