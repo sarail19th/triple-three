@@ -586,6 +586,17 @@ with sync_playwright() as p:
     assert '🏚️' in page.inner_text('#loanLine') and 'seized' in page.inner_text('#loanLine')
     page.tap('#board .cell[data-i="13"]'); assert state(page)['turn'] == sz['turn'], 'a seized lot is just a dead tile'
 
+    # ---- version id and "Get the latest version": reloads without touching the saved game
+    page.tap('#helpLink')
+    import re as _re
+    assert _re.fullmatch(r'[0-9a-f]{8}', page.inner_text('#buildId')), page.inner_text('#buildId')
+    before = state(page)
+    with page.expect_navigation():
+        page.tap('#updateLink')
+    page.wait_for_selector('#board .cell')
+    after = state(page)
+    assert after['seed'] == before['seed'] and after['turn'] == before['turn'] and after['grid'] == before['grid'], 'the saved game survives the update'
+
     # ---- calm mode: No bears + No foxes. No animals ever show up, no trap tool, own best score, the picks are remembered
     page.tap('#newBtn'); page.tap('.opt[data-bears="off"]'); page.tap('.opt[data-foxes="off"]'); page.tap('#newStart')
     calm = check_consistent(page, 'new calm game')
