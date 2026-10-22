@@ -160,28 +160,53 @@
 <div id="help" class="overlay hidden" role="dialog" aria-modal="true">
   <div class="card">
     <h2>How to play</h2>
-    <ul>
-      <li>On a computer, hover a tile to preview the move (the result shows faintly, merged items are outlined) and click to place the item shown in <b>Place</b>. On a touch screen, tap to preview and tap again to place. Turn <b>Preview</b> off to place with one tap.</li>
-      <li>Connect <b>3 or more</b> identical items (up, down, left, right) and <i>all</i> of them merge into one of the next tier on the tile you tapped (4 or 5 pay more points and coins, nothing is left over):<br>🌱 → 🌿 → 🌳 → 🏕️ → 🛖 → 🏠 → 🏘️ → 🏫 → 🏥 → 🏬 → 💵 <b>cash</b>: tap it to collect coins.</li>
-      <li>🐻 <b>Bears</b> wander one step each turn. Box one in so it cannot move and it becomes a 🪦 (bears sharing a pocket that still has room are safe). Three connected 🪦 merge into ⛪, three ⛪ into 🕌, three 🕌 into a 💰 <b>treasure</b>: tap it to open it for coins.</li>
-      <li>🌿 <b>Calm mode</b> (pick <b>No bears</b> and/or <b>No foxes</b> in <b>New</b>): the switched-off animals never appear. With both off there is nothing to interrupt you, and no trap tool. These games keep their own best score.</li>
-      <li>🐻💢 <b>Wild bears</b> (pick it in <b>New</b>): a bear that cannot step but is not sealed in gets angry (💢, then 💢💢) and on the third turn <b>mauls</b> a 🌱🌿🌳🏕️🛖 next to it one tier down (a 🌱 is destroyed, which opens an escape hole), then starts over. Houses and everything above are safe. In a small pen (4 to 6 tiles) holding 2 bears and 2 free tiles, a cub is sometimes born 🍼.</li>
-      <li>🍀 <b>Lucky drops</b>: once you have built a higher tier, the next item is sometimes a free 🏕️ 🛖 or 🏠 (a tier below your best, never above a house). Most often on Easy, less on Standard and Medium, never on Hard.</li>
-      <li>🗺️ <b>Maps</b> (also in <b>New</b>): Easy is a plain field, Standard starts with a few plants, Medium has a river across the field, Hard has random ponds. Blue tiles are <b>water</b>: nothing can be placed, merged, moved or smashed there, and animals cannot enter it. Use the 🌉 <b>bridge</b> tool (up to 5, dearer each time) on a water tile that has land on both sides, up/down or left/right (never a corner or the middle of wide water): it becomes a road that bears can walk over, but nothing can be built on it.</li>
-      <li>💧 <b>Ponds</b> (shop): dig a pond on an empty tile. It stays for the whole game, takes a tile away, and pays <b>points every turn</b> (about 5% of your best building's value each, more with every pond). <b>Lake quests</b>: the pond that completes a 2×2, then a 3×3, then a 4×4 block of water pays a one-off bonus of <b>coins and points</b>. The first pond costs only 60 coins, then each one is dearer (up to 16). Animals cannot cross water, and a bear or fox shut in by ponds is trapped like anywhere else.</li>
-      <li>🐺 <b>Animals follow the season</b>: the bear is a 🐗 boar and the fox a 🦝 raccoon in autumn, a 🐺 wolf and a 🐇 rabbit in winter (🐻 and 🦊 in spring and summer). Only the looks change, the rules do not.</li>
-      <li>🏦 <b>Banks</b> (shop, once a village is built): a bank is placed like an item, is a dead tile for animals and the mover (only the hammer breaks it) and cannot go in the reserve. It pays <b>coins every turn</b> (the 📅 date at the top counts 10 turns to a month). At most 3, each dearer than the last; three connected banks merge into 💵 cash. <b>Loans</b>: tap a bank to borrow half the shop price of the dearest building next to it; that building and the bank are locked until you repay it with simple interest (15% a year, 30% at the second bank, 60% at the third). A year unpaid and the building is lost and its tile seized until you pay the debt, and that bank stops paying. The ⏱ clock speed (tap it: 1×, 2×, 3×, paused) sets how fast the calendar, income and interest run.</li>
-      <li>🪤 <b>Free traps</b>: now and then (about 1 turn in 30) the queue brings a free 🪤 trap for your stock, so foxes never pile up for good. 🦊 foxes are rare, and 💎 gems turn up now and then (the shop sells them for about the price of a house).</li>
-      <li>🦊 The <b>fox</b> never walks: every turn it <b>warps</b> to a random empty tile (never into a hole it could not get out of). Corner it, though: when walls and items close it in on every side (or you fill the last free tile of its box) it becomes a 🪦, and so does a fox on a full board. The 🪤 trap kills it anywhere.</li>
-      <li>💎 The <b>crystal</b> is a wildcard: it turns into whatever earns the most (it plays out every kind including the merges that follow, so it can pull a whole chain together) (any building tier up to 🏬 which makes 💵 cash, 🪦, ⛪ or 🕌 which makes a 💰 treasure). If no tier fits it waits as a wildcard, and <b>three 💎 touching each other merge into a 💰 treasure</b> on the tile you tapped.</li>
-      <li>🪙 <b>Coins</b> come from merges. Spend them in the shop: buy an item as your current one (the old one moves to Next). You can buy 🌱 🌿 🌳, and any higher tier once you have built one. Stock is limited (the ×N badge): after it runs out the price <b>doubles</b> with every purchase, and score milestones restock it.</li>
-      <li>🪤 kills a bear or fox on the spot, 🔨 removes any placed item, 🚚 <b>moves</b> one item (not animals) to an empty tile, merging it there like a placed item, and ⬆️⬇️⬅️➡️ buy <b>land</b>: one more row or column on that side (each side once, dearer every time).</li>
-      <li>Tap the <b>⇄</b> button between <b>Place</b> and <b>Next</b> (or the Next item itself) to swap them (free, as often as you like). The <b>Reserve</b> slot (left of Place) stores the current item for later (free swap). <b>Undo</b> takes back your last move for a few coins.</li>
-      <li>The game ends when the board is full and you cannot afford a hammer.</li>
-    </ul>
+    <div id="helpPages">
+      <section class="helppage" data-title="The basics">
+        <h3>The basics</h3>
+        <ul>
+        <li>On a computer, hover a tile to preview the move (the result shows faintly, merged items are outlined) and click to place the item shown in <b>Place</b>. On a touch screen, tap to preview and tap again to place. Turn <b>Preview</b> off to place with one tap.</li>
+        <li>Connect <b>3 or more</b> identical items (up, down, left, right) and <i>all</i> of them merge into one of the next tier on the tile you tapped (4 or 5 pay more points and coins, nothing is left over):<br>🌱 → 🌿 → 🌳 → 🏕️ → 🛖 → 🏠 → 🏘️ → 🏫 → 🏥 → 🏬 → 💵 <b>cash</b>: tap it to collect coins.</li>
+        <li>Tap the <b>⇄</b> button between <b>Place</b> and <b>Next</b> (or the Next item itself) to swap them (free, as often as you like). The <b>Reserve</b> slot (left of Place) stores the current item for later (free swap). <b>Undo</b> takes back your last move for a few coins.</li>
+        <li>The game ends when the board is full and you cannot afford a hammer.</li>
+        </ul>
+      </section>
+      <section class="helppage" data-title="Animals" hidden>
+        <h3>Animals</h3>
+        <ul>
+        <li>🐻 <b>Bears</b> wander one step each turn. Box one in so it cannot move and it becomes a 🪦 (bears sharing a pocket that still has room are safe). Three connected 🪦 merge into ⛪, three ⛪ into 🕌, three 🕌 into a 💰 <b>treasure</b>: tap it to open it for coins.</li>
+        <li>🦊 The <b>fox</b> never walks: every turn it <b>warps</b> to a random empty tile (never into a hole it could not get out of). Corner it, though: when walls and items close it in on every side (or you fill the last free tile of its box) it becomes a 🪦, and so does a fox on a full board. The 🪤 trap kills it anywhere.</li>
+        <li>🪤 <b>Free traps</b>: now and then (about 1 turn in 30) the queue brings a free 🪤 trap for your stock, so foxes never pile up for good. 🦊 foxes are rare, and 💎 gems turn up now and then (the shop sells them for about the price of a house).</li>
+        <li>🌿 <b>Calm mode</b> (pick <b>No bears</b> and/or <b>No foxes</b> in <b>New</b>): the switched-off animals never appear. With both off there is nothing to interrupt you, and no trap tool. These games keep their own best score.</li>
+        <li>🐻💢 <b>Wild bears</b> (pick it in <b>New</b>): a bear that cannot step but is not sealed in gets angry (💢, then 💢💢) and on the third turn <b>mauls</b> a 🌱🌿🌳🏕️🛖 next to it one tier down (a 🌱 is destroyed, which opens an escape hole), then starts over. Houses and everything above are safe. In a small pen (4 to 6 tiles) holding 2 bears and 2 free tiles, a cub is sometimes born 🍼.</li>
+        <li>🐺 <b>Animals follow the season</b>: the bear is a 🐗 boar and the fox a 🦝 raccoon in autumn, a 🐺 wolf and a 🐇 rabbit in winter (🐻 and 🦊 in spring and summer). Only the looks change, the rules do not.</li>
+        </ul>
+      </section>
+      <section class="helppage" data-title="Shop and items" hidden>
+        <h3>Shop and items</h3>
+        <ul>
+        <li>🪙 <b>Coins</b> come from merges. Spend them in the shop: buy an item as your current one (the old one moves to Next). You can buy 🌱 🌿 🌳, and any higher tier once you have built one. Stock is limited (the ×N badge): after it runs out the price <b>doubles</b> with every purchase, and score milestones restock it.</li>
+        <li>🪤 kills a bear or fox on the spot, 🔨 removes any placed item, 🚚 <b>moves</b> one item (not animals) to an empty tile, merging it there like a placed item, and ⬆️⬇️⬅️➡️ buy <b>land</b>: one more row or column on that side (each side once, dearer every time).</li>
+        <li>💎 The <b>crystal</b> is a wildcard: it turns into whatever earns the most (it plays out every kind including the merges that follow, so it can pull a whole chain together) (any building tier up to 🏬 which makes 💵 cash, 🪦, ⛪ or 🕌 which makes a 💰 treasure). If no tier fits it waits as a wildcard, and <b>three 💎 touching each other merge into a 💰 treasure</b> on the tile you tapped.</li>
+        <li>🍀 <b>Lucky drops</b>: once you have built a higher tier, the next item is sometimes a free 🏕️ 🛖 or 🏠 (a tier below your best, never above a house). Most often on Easy, less on Standard and Medium, never on Hard.</li>
+        </ul>
+      </section>
+      <section class="helppage" data-title="Maps and water" hidden>
+        <h3>Maps and water</h3>
+        <ul>
+        <li>🗺️ <b>Maps</b> (also in <b>New</b>): Easy is a plain field, Standard starts with a few plants, Medium has a river across the field, Hard has random ponds. Blue tiles are <b>water</b>: nothing can be placed, merged, moved or smashed there, and animals cannot enter it. Use the 🌉 <b>bridge</b> tool (up to 5, dearer each time) on a water tile that has land on both sides, up/down or left/right (never a corner or the middle of wide water): it becomes a road that bears can walk over, but nothing can be built on it.</li>
+        <li>💧 <b>Ponds</b> (shop): dig a pond on an empty tile. It stays for the whole game, takes a tile away, and pays <b>points every turn</b> (about 5% of your best building's value each, more with every pond). <b>Lake quests</b>: the pond that completes a 2×2, then a 3×3, then a 4×4 block of water pays a one-off bonus of <b>coins and points</b>. The first pond costs only 60 coins, then each one is dearer (up to 16). Animals cannot cross water, and a bear or fox shut in by ponds is trapped like anywhere else.</li>
+        </ul>
+      </section>
+      <section class="helppage" data-title="Banks and loans" hidden>
+        <h3>Banks and loans</h3>
+        <ul>
+        <li>🏦 <b>Banks</b> (shop, once a village is built): a bank is placed like an item, is a dead tile for animals and the mover (only the hammer breaks it) and cannot go in the reserve. It pays <b>coins every turn</b> (the 📅 date at the top counts 10 turns to a month). At most 3, each dearer than the last; three connected banks merge into 💵 cash. <b>Loans</b>: tap a bank to borrow half the shop price of the dearest building next to it; that building and the bank are locked until you repay it with simple interest (15% a year, 30% at the second bank, 60% at the third). A year unpaid and the building is lost and its tile seized until you pay the debt, and that bank stops paying. The ⏱ clock speed (tap it: 1×, 2×, 3×, paused) sets how fast the calendar, income and interest run.</li>
+        </ul>
+      </section>
+    </div>
+    <div class="pager"><button id="helpPrev" class="btn" aria-label="Previous page">‹ Back</button><span id="helpPageLabel" aria-live="polite"></span><button id="helpNext" class="btn" aria-label="Next page">Next ›</button></div>
     <p class="gnote">Version <b id="buildId">__BUILD__</b> · <a href="#" id="updateLink">↻ Get the latest version</a><br>(keeps your saved game and best scores)</p>
-    <button id="helpTour" class="btn">▶ Take the quick tour of the buttons</button>
-    <button id="helpClose" class="btn primary">Got it</button>
+    <div class="helpbtns"><button id="helpTour" class="btn">▶ Quick tour</button><button id="helpClose" class="btn primary">Got it</button></div>
   </div>
 </div>
 

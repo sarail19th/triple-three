@@ -827,7 +827,20 @@
   });
   applySeason();
   buildGuide(); buildCards(); // the first build ran before the season was known
-  $('helpLink').addEventListener('click', function (e) { e.preventDefault(); $('help').classList.remove('hidden'); });
+  // How to play: one page (topic) at a time
+  var helpPage = 0;
+  function showHelpPage(n) {
+    var pages = document.querySelectorAll('#helpPages .helppage');
+    helpPage = Math.max(0, Math.min(pages.length - 1, n));
+    pages.forEach(function (p, i) { p.hidden = i !== helpPage; });
+    $('helpPageLabel').textContent = (helpPage + 1) + ' / ' + pages.length + ' · ' + pages[helpPage].dataset.title;
+    $('helpPrev').disabled = helpPage === 0; $('helpNext').disabled = helpPage === pages.length - 1;
+    $('helpPages').scrollTop = 0; $('help').querySelector('.card').scrollTop = 0;
+  }
+  $('helpPrev').addEventListener('click', function () { showHelpPage(helpPage - 1); });
+  $('helpNext').addEventListener('click', function () { showHelpPage(helpPage + 1); });
+  showHelpPage(0);
+  $('helpLink').addEventListener('click', function (e) { e.preventDefault(); showHelpPage(0); $('help').classList.remove('hidden'); });
   $('helpClose').addEventListener('click', function () { $('help').classList.add('hidden'); store.set('tt-seen-help', 1); });
 
   // ---- first-run guided tour: spotlights each control in turn (opening the shop sheet for its contents) with a short explanation.

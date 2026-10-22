@@ -590,6 +590,17 @@ with sync_playwright() as p:
     page.tap('#helpLink')
     import re as _re
     assert _re.fullmatch(r'[0-9a-f]{8}', page.inner_text('#buildId')), page.inner_text('#buildId')
+    # How to play is paged
+    pages = page.evaluate("[...document.querySelectorAll('#helpPages .helppage')].map(p => p.dataset.title)")
+    assert len(pages) == 5 and pages[0] == 'The basics', pages
+    vis = lambda: page.evaluate("[...document.querySelectorAll('#helpPages .helppage')].map(p => !p.hidden)")
+    assert vis() == [True, False, False, False, False] and page.is_disabled('#helpPrev') and '1 / 5' in page.inner_text('#helpPageLabel')
+    for k in range(1, 5):
+        page.tap('#helpNext'); assert vis()[k] and sum(vis()) == 1 and pages[k] in page.inner_text('#helpPageLabel')
+    assert page.is_disabled('#helpNext') and not page.is_disabled('#helpPrev')
+    page.tap('#helpPrev'); assert vis()[3]
+    assert page.evaluate("getComputedStyle(document.getElementById('updateLink')).color") == 'rgb(255, 212, 90)', 'the link is readable on the green card'
+    page.tap('#helpClose'); page.tap('#helpLink'); assert vis() == [True, False, False, False, False], 'it opens on the first page again'
     before = state(page)
     with page.expect_navigation():
         page.tap('#updateLink')
