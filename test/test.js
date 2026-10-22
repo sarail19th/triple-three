@@ -1302,14 +1302,15 @@ t('bank: bought with coins once a village stands, placed like an item, never in 
   assert.strictEqual(TT.bankPrice(base({ banksBought: 1 })), TT.BANK_PRICE[1]); assert.strictEqual(TT.bankPrice(base({ banksBought: 2 })), TT.BANK_PRICE[2]);
 });
 
-t('bank: pays coins at the end of every month; three connected banks merge into cash', () => {
-  const income = TT.bankIncome(withGrid({}, { top: 7 })); assert.strictEqual(income, Math.round(TT.PRICE[7] * 0.1));
-  // two banks, month ends on the 10th turn
+t('bank: pays coins every turn (more at a higher clock speed, nothing paused); three connected banks merge into cash', () => {
+  const income = TT.bankIncome(withGrid({}, { top: 7 })); assert.strictEqual(income, Math.round(TT.PRICE[7] * 0.01), '1% of the best tier price per tick');
+  // two banks pay on an ordinary turn
   let s = withGrid({ [I(0, 0)]: TT.BANK, [I(0, 5)]: TT.BANK, [I(5, 5)]: 7 }, { coins: 0, top: 7, cur: 1, next: 1, tick: 9, banksBought: 2, bankOrder: [I(0, 0), I(0, 5)] });
   assert.deepStrictEqual(TT.validate(s), []);
   const r = TT.place(s, I(3, 3)), ev = r.events.find((e) => e.type === 'bankpay');
-  assert(ev && ev.coins === 2 * income && ev.months === 1 && ev.banks === 2, JSON.stringify(ev)); assert.strictEqual(r.state.coins, 2 * income);
-  assert(!TT.place(Object.assign({}, s, { tick: 3 }), I(3, 3)).events.some((e) => e.type === 'bankpay'), 'only on a month boundary');
+  assert(ev && ev.coins === 2 * income && ev.ticks === 1 && ev.banks === 2, JSON.stringify(ev)); assert.strictEqual(r.state.coins, 2 * income);
+  assert.strictEqual(TT.place(Object.assign({}, s, { tick: 3 }), I(3, 3)).state.coins, 2 * income, 'not only at a month end: every turn');
+  assert.strictEqual(TT.place(Object.assign({}, s, { speed: 3 }), I(3, 3)).state.coins, 2 * income * 3, 'x3 speed: three ticks of income a turn');
   assert(!TT.place(Object.assign({}, s, { speed: 0 }), I(3, 3)).events.some((e) => e.type === 'bankpay'), 'paused clock, no pay');
   // trio -> cash on the tapped tile
   const trio = withGrid({ [I(2, 1)]: TT.BANK, [I(2, 3)]: TT.BANK }, { cur: TT.BANK, next: 1, banksBought: 3, top: 7, coins: 0, bankOrder: [I(2, 1), I(2, 3)] });

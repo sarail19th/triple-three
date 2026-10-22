@@ -542,8 +542,8 @@ with sync_playwright() as p:
     tap_cell(page, 3, True)
     after = check_consistent(page, 'bank placed')
     assert after['grid'][3] == 22 and after['turn'] == 4 and 'Y1 M2' in page.inner_text('#turn'), page.inner_text('#turn')
-    income = round(900 * 0.1)
-    assert after['coins'] == 3500 + income, f"one month ends: {after['coins']}"
+    income = round(900 * 0.01)
+    assert after['coins'] == 3500 + income, f"the bank pays every turn: {after['coins']}"
     assert page.locator('#board .cell[data-i="3"]').get_attribute('data-c') == '22'
     page.tap('#board .cell[data-i="3"]'); assert state(page)['turn'] == 4, 'tapping a bank takes no turn'
     assert page.locator('#bankDlg').is_visible() and 'Nothing' not in page.inner_text('#bankNote') or 'Put a building' in page.inner_text('#bankNote'), page.inner_text('#bankNote')

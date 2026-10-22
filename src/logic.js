@@ -26,9 +26,9 @@
   var MAPS = ['easy', 'standard', 'medium', 'hard'];
   var STANDARD_ITEMS = 5;
   // Calendar: every turn advances the game clock by `speed` ticks (1 = normal; 0 pauses it), 10 ticks = a month, 12 months = a year.
-  // Banks (a shop item, at most MAX_BANKS on the board) pay coins at the end of every month; three connected banks merge into cash.
+  // Banks (a shop item, at most MAX_BANKS on the board) pay coins every turn; three connected banks merge into cash.
   var TICKS_PER_MONTH = 10, MONTHS_PER_YEAR = 12, MAX_SPEED = 3;
-  var MAX_BANKS = 3, BANK_PRICE = [1500, 3500, 8000], BANK_MIN_TIER = 7, BANK_INCOME_RATE = 0.1; // income per bank per month = 10% of the shop price of your best tier
+  var MAX_BANKS = 3, BANK_PRICE = [1500, 3500, 8000], BANK_MIN_TIER = 7, BANK_INCOME_RATE = 0.01; // income per bank per tick (a turn at normal speed) = 1% of the shop price of your best tier
   // Loans: tap a bank to borrow half the shop value of the most expensive building on one of its four sides; that building (and the bank)
   // is locked until repaid. Simple interest, charged per month: the first bank asks 15% a year, each later bank (in the order they were
   // placed) doubles the previous rate. A year without repaying: the building is lost and its tile is seized (dead) until the debt is paid,
@@ -51,7 +51,7 @@
   // 19/20 a bear that was boxed in for 1 / 2 turns in a row (Wild bears games only: the warning stages before it mauls),
   // 21 water (map tiles that never change: nothing can be placed, merged, moved or smashed there, and animals cannot enter it),
   // 23 seized lot (a tile lost to an unpaid loan: a dead tile until the debt is paid, then empty again),
-  // 22 bank (a shop item placed like a building: a dead tile for animals and movers that pays coins every month; three connected banks merge into cash).
+  // 22 bank (a shop item placed like a building: a dead tile for animals and movers that pays coins every turn; three connected banks merge into cash).
   var EMPTY = 0, LAST_BUILDING = 10, CASH = 11, BEAR = 12, TOMB = 13, CHURCH = 14, CATHEDRAL = 15, CRYSTAL = 16, TREASURE = 17, FOX = 18, BEAR_GROWL = 19, BEAR_ANGRY = 20, WATER = 21, BANK = 22, SEIZED = 23;
   var EMOJI = ['', '🌱', '🌿', '🌳', '🏕️', '🛖', '🏠', '🏘️', '🏫', '🏥', '🏬', '💵', '🐻', '🪦', '⛪', '🕌', '💎', '💰', '🦊', '🐻', '🐻', '', '🏦', '🏚️'];
   var NAME = ['empty', 'grass', 'bush', 'tree', 'camp', 'hut', 'house', 'village', 'school', 'hospital', 'mall', 'cash', 'bear', 'tombstone', 'church', 'cathedral', 'crystal', 'treasure', 'fox', 'growling bear', 'angry bear', 'water', 'bank', 'seized lot'];
@@ -429,14 +429,13 @@
     noteTop(s, events);
     var pp = pondPoints(s);
     if (pp) { s.score += pp; events.push({ type: 'pondpts', points: pp }); }
-    var months = -Math.floor(s.tick / TICKS_PER_MONTH);
-    s.tick += s.speed; months += Math.floor(s.tick / TICKS_PER_MONTH);
+    s.tick += s.speed;
     s.loans.forEach(function (l) { // a year without repaying: the building is gone and its tile seized
       if (!l.defaulted && s.tick - l.since >= LOAN_TICKS) { l.defaulted = true; s.grid[l.at] = SEIZED; events.push({ type: 'default', bank: l.bank, at: l.at, tier: l.tier }); }
     });
-    if (months > 0) {
-      var banks = bankCount(s) - Object.keys(s.loans.reduce(function (o, l) { if (l.defaulted) o[l.bank] = 1; return o; }, {})).length, pay = banks * bankIncome(s) * months;
-      if (pay) { s.coins += pay; events.push({ type: 'bankpay', coins: pay, months: months, banks: banks }); }
+    if (s.speed > 0) { // every turn each paying bank earns its income for the ticks that passed (a bank with a defaulted loan earns nothing)
+      var banks = bankCount(s) - Object.keys(s.loans.reduce(function (o, l) { if (l.defaulted) o[l.bank] = 1; return o; }, {})).length, pay = banks * bankIncome(s) * s.speed;
+      if (pay) { s.coins += pay; events.push({ type: 'bankpay', coins: pay, ticks: s.speed, banks: banks }); }
     }
     grantMilestones(s, events);
     s.cur = s.next; s.next = drawItem(s, events); s.turn++;
@@ -559,8 +558,8 @@
   function isBankAvailable(s) { return unlockedTop(s) >= BANK_MIN_TIER; }
   function bankPrice(s) { var n = s.banksBought || 0; return n < BANK_PRICE.length ? BANK_PRICE[n] : Math.round(BANK_PRICE[BANK_PRICE.length - 1] * Math.pow(1.5, n - BANK_PRICE.length + 1) / 10) * 10; }
   function bankSlots(s) { return bankCount(s) + (s.cur === BANK ? 1 : 0) + (s.next === BANK ? 1 : 0) + (s.hold === BANK ? 1 : 0); }
-  // coins one bank pays per month
-  function bankIncome(s) { return Math.max(10, Math.round(PRICE[Math.min(s.top || 1, LAST_BUILDING)] * BANK_INCOME_RATE)); }
+  // coins one bank pays per tick (per turn at normal speed)
+  function bankIncome(s) { return Math.max(1, Math.round(PRICE[Math.min(s.top || 1, LAST_BUILDING)] * BANK_INCOME_RATE)); }
   function calendar(s) { var m = Math.floor((s.tick || 0) / TICKS_PER_MONTH); return { year: Math.floor(m / MONTHS_PER_YEAR) + 1, month: m % MONTHS_PER_YEAR + 1 }; }
   function canBuyBank(s) { return !s.over && isBankAvailable(s) && s.coins >= bankPrice(s) && s.cur !== BANK && s.next !== BANK && bankSlots(s) < MAX_BANKS; }
   // Shop: buy a bank. It becomes the current item (the old current item moves to `next`, the old next is dropped), to be placed like any item;
