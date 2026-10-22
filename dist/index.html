@@ -294,6 +294,10 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 .samples { display: flex; justify-content: center; gap: 12px; margin: 8px 0 2px; }
 .samples .mini { width: 68px; height: 68px; border-radius: 7px; }
 .samples .mini span { font-size: 9px; }
+
+/* the lake quest, always in view under the turn / rules line (tap it to open the shop) */
+.questline { display: inline-block; margin-top: 3px; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--edge); background: #0b1a1166; color: var(--ink); font-size: 12px; cursor: pointer; max-width: 100%; }
+.questline[hidden] { display: none; }
 </style>
 </head>
 <body>
@@ -312,6 +316,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   <div class="topinfo">
     <div><span id="turn">Turn 0</span> · <span id="seed">seed</span></div>
     <div><a href="#" id="helpLink">How to play</a> · <a href="#" id="guideLink">Item guide</a> · <a href="#" id="seasonLink" aria-label="Season theme">🎨 Season: auto</a><span class="foot-settings"> · <a href="#" id="hapticLink" role="switch" aria-label="Haptic feedback (vibration)">📳 Haptics: on</a></span></div>
+      <div id="questLine" class="questline" role="button" tabindex="0" aria-label="Lake quest: open the shop"></div>
   </div>
 
   <div id="boardWrap">
@@ -440,7 +445,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       <li>🐻💢 <b>Wild bears</b> (pick it in <b>New</b>): a bear that cannot step but is not sealed in gets angry (💢, then 💢💢) and on the third turn <b>mauls</b> a 🌱🌿🌳🏕️🛖 next to it one tier down (a 🌱 is destroyed, which opens an escape hole), then starts over. Houses and everything above are safe. In a small pen (4 to 6 tiles) holding 2 bears and 2 free tiles, a cub is sometimes born 🍼.</li>
       <li>🍀 <b>Lucky drops</b>: once you have built a higher tier, the next item is sometimes a free 🏕️ 🛖 or 🏠 (a tier below your best, never above a house). Most often on Easy, less on Standard and Medium, never on Hard.</li>
       <li>🗺️ <b>Maps</b> (also in <b>New</b>): Easy is a plain field, Standard starts with a few plants, Medium has a river across the field, Hard has random ponds. Blue tiles are <b>water</b>: nothing can be placed, merged, moved or smashed there, and animals cannot enter it. Use the 🌉 <b>bridge</b> tool (up to 5, dearer each time) on a water tile that has land on both sides, up/down or left/right (never a corner or the middle of wide water): it becomes a road that bears can walk over, but nothing can be built on it.</li>
-      <li>💧 <b>Ponds</b> (shop): dig a pond on an empty tile. It stays for the whole game, takes a tile away, and pays <b>points every turn</b> (about 5% of your best building's value each, more with every pond). Each pond is dearer than the last (up to 16). <b>Lake quests</b>: the pond that completes a 2×2, then a 3×3, then a 4×4 block of water pays a big one-off bonus. Animals cannot cross water, and a bear or fox shut in by ponds is trapped like anywhere else.</li>
+      <li>💧 <b>Ponds</b> (shop): dig a pond on an empty tile. It stays for the whole game, takes a tile away, and pays <b>points every turn</b> (about 5% of your best building's value each, more with every pond). <b>Lake quests</b>: the pond that completes a 2×2, then a 3×3, then a 4×4 block of water pays a one-off bonus of <b>coins and points</b>. The first pond costs only 60 coins, then each one is dearer (up to 16). Animals cannot cross water, and a bear or fox shut in by ponds is trapped like anywhere else.</li>
       <li>🐺 <b>Animals follow the season</b>: the bear is a 🐗 boar and the fox a 🦝 raccoon in autumn, a 🐺 wolf and a 🐇 rabbit in winter (🐻 and 🦊 in spring and summer). Only the looks change, the rules do not.</li>
       <li>🪤 <b>Free traps</b>: now and then (about 1 turn in 30) the queue brings a free 🪤 trap for your stock, so foxes never pile up for good. 💎 gems and 🦊 foxes are rare, and a gem is expensive in the shop.</li>
       <li>🦊 The <b>fox</b> never walks: every turn it <b>warps</b> to a random empty tile (never into a hole it could not get out of). Corner it, though: when walls and items close it in on every side (or you fill the last free tile of its box) it becomes a 🪦, and so does a fox on a full board. The 🪤 trap kills it anywhere.</li>
@@ -479,8 +484,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   // Ponds: a shop tool (any map). Turns one empty tile into permanent water (state.ponds) that pays points every turn, scaled to your best
   // building tier; dearer every time. Lake quests: the first pond that completes a 2x2 / 3x3 / 4x4 block of water pays a one-off bonus (state.lake).
   var MAX_PONDS = 16;
-  var POND_PRICE = []; (function () { for (var n = 0, p = 300; n < MAX_PONDS; n++, p *= 1.45) POND_PRICE.push(Math.round(p / 10) * 10); })();
-  var LAKE_SIZES = [2, 3, 4], LAKE_BONUS = [30, 100, 300]; // bonus points = BASE[top] * LAKE_BONUS
+  var POND_PRICE = []; (function () { for (var n = 0, p = 60; n < MAX_PONDS; n++, p *= 1.6) POND_PRICE.push(Math.round(p / 10) * 10); })();
+  var LAKE_SIZES = [2, 3, 4], LAKE_BONUS = [30, 100, 300], LAKE_COINS = [300, 3500, 90000]; // a quest pays points (BASE[top] * LAKE_BONUS) AND coins
   // Bridges: a shop tool for maps with water. A bridge turns one water tile into a walkable tile (bears and foxes cross it, nothing can
   // be built on it) and is remembered in state.bridges. At most MAX_BRIDGES per game, dearer every time.
   var MAX_BRIDGES = 5;
@@ -1013,8 +1018,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     s.grid[idx] = WATER; s.ponds.push(idx); s.ponds.sort(function (a, b) { return a - b; });
     while (s.lake < LAKE_SIZES.length && squareAt(s.grid, idx, LAKE_SIZES[s.lake])) {
       var bonus = BASE[s.top] * LAKE_BONUS[s.lake];
-      s.score += bonus;
-      events.push({ type: 'lake', size: LAKE_SIZES[s.lake], points: bonus });
+      s.score += bonus; s.coins += LAKE_COINS[s.lake];
+      events.push({ type: 'lake', size: LAKE_SIZES[s.lake], points: bonus, coins: LAKE_COINS[s.lake] });
       s.lake++;
     }
     grantMilestones(s, events);
@@ -1221,7 +1226,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     RESTOCK: RESTOCK, MILESTONES: MILESTONES, milestoneScore: milestoneScore, canUndo: canUndo, canHammer: canHammer, migrate: migrate,
     rand: rand, drawItem: drawItem, newGame: newGame, neighbors: neighbors, group: group,
     place: place, swap: swap, swapNext: swapNext, undo: undo, validate: validate, emptyCount: emptyCount,
-    buy: buy, hammer: hammer, trap: trap, move: move, open: open, buyLand: buyLand, buyBridge: buyBridge, buyPond: buyPond, pondPrice: pondPrice, pondPoints: pondPoints, canPond: canPond, bestLake: bestLake, MAX_PONDS: MAX_PONDS, POND_PRICE: POND_PRICE, LAKE_SIZES: LAKE_SIZES, LAKE_BONUS: LAKE_BONUS, bridgeSpots: bridgeSpots, bridgePrice: bridgePrice, canBridge: canBridge, freeCount: freeCount, MAX_BRIDGES: MAX_BRIDGES, BRIDGE_PRICE: BRIDGE_PRICE, preview: preview, previewMove: previewMove, isOver: isOver,
+    buy: buy, hammer: hammer, trap: trap, move: move, open: open, buyLand: buyLand, buyBridge: buyBridge, buyPond: buyPond, pondPrice: pondPrice, pondPoints: pondPoints, canPond: canPond, bestLake: bestLake, MAX_PONDS: MAX_PONDS, POND_PRICE: POND_PRICE, LAKE_SIZES: LAKE_SIZES, LAKE_BONUS: LAKE_BONUS, LAKE_COINS: LAKE_COINS, bridgeSpots: bridgeSpots, bridgePrice: bridgePrice, canBridge: canBridge, freeCount: freeCount, MAX_BRIDGES: MAX_BRIDGES, BRIDGE_PRICE: BRIDGE_PRICE, preview: preview, previewMove: previewMove, isOver: isOver,
     priceOf: priceOf, isMovable: isMovable, canMove: canMove, isAvailable: isAvailable, unlockedTop: unlockedTop, landPrice: landPrice, canLand: canLand
   };
 });
@@ -1551,7 +1556,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
         b.querySelector('.tb').textContent = '×' + (TT.MAX_PONDS - state.ponds.length);
         return;
       } else if (t === 'bridge') {
-        b.hidden = !g.some(function (v) { return v === TT.WATER; }) && !state.bridges.length; // only on maps with water
+        b.hidden = !state.bridges.length && !TT.bridgeSpots(state).length; // only where a bridge can actually go (dug ponds are not crossable)
         b.disabled = state.over || !TT.canBridge(state);
         b.setAttribute('aria-pressed', mode === 'bridge');
         b.querySelector('.tp').textContent = TT.bridgePrice(state) === null ? 'max' : '🪙' + fmt(TT.bridgePrice(state));
@@ -1581,7 +1586,9 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     });
     var nq = state.lake < TT.LAKE_SIZES.length ? TT.LAKE_SIZES[state.lake] : 0, bl = TT.bestLake(state);
     $('pondNote').textContent = 'Ponds ' + state.ponds.length + '/' + TT.MAX_PONDS + (state.ponds.length ? ' · +' + fmt(TT.pondPoints(state)) + ' pts per turn' : '') +
-      (nq ? ' · 🏞️ quest: a ' + nq + '×' + nq + ' lake (biggest now ' + bl + '×' + bl + ')' : ' · 🏞️ all lakes built');
+      (nq ? ' · 🏞️ quest: a ' + nq + '×' + nq + ' lake (biggest now ' + bl + '×' + bl + ') pays 🪙' + fmt(TT.LAKE_COINS[state.lake]) + ' + points' : ' · 🏞️ all lakes built');
+    var ql = $('questLine');
+    ql.textContent = nq ? '🏞️ Lake quest ' + nq + '×' + nq + ': biggest ' + bl + '×' + bl + ' · reward 🪙' + fmt(TT.LAKE_COINS[state.lake]) + ' + points' : '🏞️ All lakes built';
     $('landNote').textContent = 'Land ' + state.land.length + '/' + TT.MAX_LAND + (lp ? ' · next side 🪙' + lp : ' · all bought');
     var nextAt = TT.milestoneScore(state.milestone), gifts = [];
     [1, 2, 3, TT.CRYSTAL].forEach(function (c) { gifts.push('+' + TT.RESTOCK[c] + em(c)); });
@@ -1716,7 +1723,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
         cells[ev.at].classList.add('drop');
         floatAt(ev.at, '💧 -' + fmt(ev.price) + '🪙');
       } else if (ev.type === 'lake') {
-        toast('🏞️ ' + ev.size + '×' + ev.size + ' lake! +' + fmt(ev.points) + ' points', 0.3);
+        toast('🏞️ ' + ev.size + '×' + ev.size + ' lake! +' + fmt(ev.coins) + ' coins, +' + fmt(ev.points) + ' points', 0.3);
       } else if (ev.type === 'pondpts') {
         if (state.ponds.length) floatAt(state.ponds[0], '💧 +' + fmt(ev.points));
       } else if (ev.type === 'cub') { // a bear cub is born in the pen
@@ -1946,6 +1953,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     '<p class="gnote">🍀 <b>Lucky drops</b>: once you have built a higher tier, the next item is sometimes a free 🏕️ 🛖 or 🏠 (a tier below your best, never above a house). Most often on Easy, rarer on Standard and Medium, never on Hard.</p>';
   }
   buildGuide();
+  $('questLine').addEventListener('click', openShop);
+  $('questLine').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openShop(); } });
   $('guideLink').addEventListener('click', function (e) { e.preventDefault(); $('guide').classList.remove('hidden'); });
   $('guideClose').addEventListener('click', function () { $('guide').classList.add('hidden'); });
   $('hapticLink').addEventListener('click', function (e) {
@@ -1973,7 +1982,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     { target: '#holdBtn', title: '📦 Reserve', text: 'Store the current item here for later. Tap it again to swap with what is stored. Also free.' },
     { target: '.hud .stat', title: '⭐ Score and coins', text: 'Every merge adds to your <b>score</b> and pays 🪙 <b>coins</b> (bigger groups pay more). Coins buy things in the shop. <b>Best</b> is your top score on this map.' },
     { target: '#newBtn', title: '⟳ New game', text: 'Starts a new game: choose the <b>map</b> (Easy, Standard, Medium, Hard) the <b>bear mode</b> (Classic, Wild or No bears) and whether <b>foxes</b> appear. Switch both animals off for a calm game. It erases the game you are playing, and warns you first.' },
-    { target: '.topinfo', title: '📋 Turn, rules and settings', text: 'The turn counter and game seed, <b>How to play</b> (the rules and this tour), the <b>Item guide</b> (every item and what it merges into), the <b>🎨 Season</b> theme (Auto follows the calendar; tap to cycle spring, summer, autumn, winter) and, on phones with vibration, the <b>📳 Haptics</b> switch.' },
+    { target: '.topinfo', title: '📋 Turn, rules and settings', text: 'The turn counter and game seed, <b>How to play</b> (the rules and this tour), the <b>Item guide</b> (every item and what it merges into), the <b>🎨 Season</b> theme (Auto follows the calendar; tap to cycle spring, summer, autumn, winter), the 🏞️ <b>lake quest</b> line (tap it to open the shop) and, on phones with vibration, the <b>📳 Haptics</b> switch.' },
     { target: '#undoBtn', title: '↶ Undo', text: 'Takes back your last move. It costs a few coins, and only one move can be undone.' },
     { target: '#previewBtn', title: '👁 Preview', text: 'Shows what a tap would do before you place. Turn it off to place with a single tap.' },
     { target: '#shopBtn', title: '🛒 Shop', text: 'Opens the shop. Everything you can spend coins on is in there.', when: function () { return $('shopBtn').offsetParent !== null; } },
@@ -1982,7 +1991,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     { target: '#hammerBtn', sheet: true, title: '🔨 Hammer', text: 'Smashes any item you have placed, to make room. Tap the tool, then the item.' },
     { target: '#moveBtn', sheet: true, title: '🚚 Mover', text: 'Picks up one item and drops it on another empty tile, where it merges like a placed item. Bears and foxes cannot be moved.' },
     { target: '#bridgeBtn', sheet: true, title: '🌉 Bridge', text: 'On maps with water: turns a water tile that has land on both sides into a road bears can cross. Glowing tiles show where it can go. Up to 5, dearer each time.', when: function () { return !$('bridgeBtn').hidden; } },
-    { target: '#pondBtn', sheet: true, title: '💧 Pond', text: 'Digs a pond on an empty tile. It takes the tile for good, but pays <b>points every turn</b>, and dearer ponds pay more in total. Dig a 2×2, then 3×3 and 4×4 block of water for big <b>lake quest</b> bonuses (see the line under the tools).' },
+    { target: '#pondBtn', sheet: true, title: '💧 Pond', text: 'Digs a pond on an empty tile. It takes the tile for good, but pays <b>points every turn</b>, and dearer ponds pay more in total. Dig a 2×2, then 3×3 and 4×4 block of water for <b>lake quests</b>: each pays coins and points (see the line under the tools, and at the top of the screen).' },
     { target: '.tool.land', sheet: true, title: '⬆️⬇️⬅️➡️ Land', text: 'Adds one more row or column on that side of the map (each side once, dearer every time). Water that touches that edge carries on into it. Handy when the map is nearly full.' },
     { title: '🎉 You are ready', text: 'The <b>Item guide</b> at the top lists every item and what it merges into, and <b>How to play</b> repeats the rules and this tour. Your game is saved automatically. Have fun!' }
   ];

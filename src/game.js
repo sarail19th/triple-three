@@ -323,7 +323,7 @@
         b.querySelector('.tb').textContent = '×' + (TT.MAX_PONDS - state.ponds.length);
         return;
       } else if (t === 'bridge') {
-        b.hidden = !g.some(function (v) { return v === TT.WATER; }) && !state.bridges.length; // only on maps with water
+        b.hidden = !state.bridges.length && !TT.bridgeSpots(state).length; // only where a bridge can actually go (dug ponds are not crossable)
         b.disabled = state.over || !TT.canBridge(state);
         b.setAttribute('aria-pressed', mode === 'bridge');
         b.querySelector('.tp').textContent = TT.bridgePrice(state) === null ? 'max' : '🪙' + fmt(TT.bridgePrice(state));
@@ -353,7 +353,9 @@
     });
     var nq = state.lake < TT.LAKE_SIZES.length ? TT.LAKE_SIZES[state.lake] : 0, bl = TT.bestLake(state);
     $('pondNote').textContent = 'Ponds ' + state.ponds.length + '/' + TT.MAX_PONDS + (state.ponds.length ? ' · +' + fmt(TT.pondPoints(state)) + ' pts per turn' : '') +
-      (nq ? ' · 🏞️ quest: a ' + nq + '×' + nq + ' lake (biggest now ' + bl + '×' + bl + ')' : ' · 🏞️ all lakes built');
+      (nq ? ' · 🏞️ quest: a ' + nq + '×' + nq + ' lake (biggest now ' + bl + '×' + bl + ') pays 🪙' + fmt(TT.LAKE_COINS[state.lake]) + ' + points' : ' · 🏞️ all lakes built');
+    var ql = $('questLine');
+    ql.textContent = nq ? '🏞️ Lake quest ' + nq + '×' + nq + ': biggest ' + bl + '×' + bl + ' · reward 🪙' + fmt(TT.LAKE_COINS[state.lake]) + ' + points' : '🏞️ All lakes built';
     $('landNote').textContent = 'Land ' + state.land.length + '/' + TT.MAX_LAND + (lp ? ' · next side 🪙' + lp : ' · all bought');
     var nextAt = TT.milestoneScore(state.milestone), gifts = [];
     [1, 2, 3, TT.CRYSTAL].forEach(function (c) { gifts.push('+' + TT.RESTOCK[c] + em(c)); });
@@ -488,7 +490,7 @@
         cells[ev.at].classList.add('drop');
         floatAt(ev.at, '💧 -' + fmt(ev.price) + '🪙');
       } else if (ev.type === 'lake') {
-        toast('🏞️ ' + ev.size + '×' + ev.size + ' lake! +' + fmt(ev.points) + ' points', 0.3);
+        toast('🏞️ ' + ev.size + '×' + ev.size + ' lake! +' + fmt(ev.coins) + ' coins, +' + fmt(ev.points) + ' points', 0.3);
       } else if (ev.type === 'pondpts') {
         if (state.ponds.length) floatAt(state.ponds[0], '💧 +' + fmt(ev.points));
       } else if (ev.type === 'cub') { // a bear cub is born in the pen
@@ -718,6 +720,8 @@
     '<p class="gnote">🍀 <b>Lucky drops</b>: once you have built a higher tier, the next item is sometimes a free 🏕️ 🛖 or 🏠 (a tier below your best, never above a house). Most often on Easy, rarer on Standard and Medium, never on Hard.</p>';
   }
   buildGuide();
+  $('questLine').addEventListener('click', openShop);
+  $('questLine').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openShop(); } });
   $('guideLink').addEventListener('click', function (e) { e.preventDefault(); $('guide').classList.remove('hidden'); });
   $('guideClose').addEventListener('click', function () { $('guide').classList.add('hidden'); });
   $('hapticLink').addEventListener('click', function (e) {
@@ -745,7 +749,7 @@
     { target: '#holdBtn', title: '📦 Reserve', text: 'Store the current item here for later. Tap it again to swap with what is stored. Also free.' },
     { target: '.hud .stat', title: '⭐ Score and coins', text: 'Every merge adds to your <b>score</b> and pays 🪙 <b>coins</b> (bigger groups pay more). Coins buy things in the shop. <b>Best</b> is your top score on this map.' },
     { target: '#newBtn', title: '⟳ New game', text: 'Starts a new game: choose the <b>map</b> (Easy, Standard, Medium, Hard) the <b>bear mode</b> (Classic, Wild or No bears) and whether <b>foxes</b> appear. Switch both animals off for a calm game. It erases the game you are playing, and warns you first.' },
-    { target: '.topinfo', title: '📋 Turn, rules and settings', text: 'The turn counter and game seed, <b>How to play</b> (the rules and this tour), the <b>Item guide</b> (every item and what it merges into), the <b>🎨 Season</b> theme (Auto follows the calendar; tap to cycle spring, summer, autumn, winter) and, on phones with vibration, the <b>📳 Haptics</b> switch.' },
+    { target: '.topinfo', title: '📋 Turn, rules and settings', text: 'The turn counter and game seed, <b>How to play</b> (the rules and this tour), the <b>Item guide</b> (every item and what it merges into), the <b>🎨 Season</b> theme (Auto follows the calendar; tap to cycle spring, summer, autumn, winter), the 🏞️ <b>lake quest</b> line (tap it to open the shop) and, on phones with vibration, the <b>📳 Haptics</b> switch.' },
     { target: '#undoBtn', title: '↶ Undo', text: 'Takes back your last move. It costs a few coins, and only one move can be undone.' },
     { target: '#previewBtn', title: '👁 Preview', text: 'Shows what a tap would do before you place. Turn it off to place with a single tap.' },
     { target: '#shopBtn', title: '🛒 Shop', text: 'Opens the shop. Everything you can spend coins on is in there.', when: function () { return $('shopBtn').offsetParent !== null; } },
@@ -754,7 +758,7 @@
     { target: '#hammerBtn', sheet: true, title: '🔨 Hammer', text: 'Smashes any item you have placed, to make room. Tap the tool, then the item.' },
     { target: '#moveBtn', sheet: true, title: '🚚 Mover', text: 'Picks up one item and drops it on another empty tile, where it merges like a placed item. Bears and foxes cannot be moved.' },
     { target: '#bridgeBtn', sheet: true, title: '🌉 Bridge', text: 'On maps with water: turns a water tile that has land on both sides into a road bears can cross. Glowing tiles show where it can go. Up to 5, dearer each time.', when: function () { return !$('bridgeBtn').hidden; } },
-    { target: '#pondBtn', sheet: true, title: '💧 Pond', text: 'Digs a pond on an empty tile. It takes the tile for good, but pays <b>points every turn</b>, and dearer ponds pay more in total. Dig a 2×2, then 3×3 and 4×4 block of water for big <b>lake quest</b> bonuses (see the line under the tools).' },
+    { target: '#pondBtn', sheet: true, title: '💧 Pond', text: 'Digs a pond on an empty tile. It takes the tile for good, but pays <b>points every turn</b>, and dearer ponds pay more in total. Dig a 2×2, then 3×3 and 4×4 block of water for <b>lake quests</b>: each pays coins and points (see the line under the tools, and at the top of the screen).' },
     { target: '.tool.land', sheet: true, title: '⬆️⬇️⬅️➡️ Land', text: 'Adds one more row or column on that side of the map (each side once, dearer every time). Water that touches that edge carries on into it. Handy when the map is nearly full.' },
     { title: '🎉 You are ready', text: 'The <b>Item guide</b> at the top lists every item and what it merges into, and <b>How to play</b> repeats the rules and this tour. Your game is saved automatically. Have fun!' }
   ];

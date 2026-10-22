@@ -1253,6 +1253,8 @@ t('lake quests: the pond that completes a 2x2, 3x3, 4x4 block of water pays a on
   dig(1, 1);
   assert.strictEqual(s.lake, 1); assert.strictEqual(TT.bestLake(s), 2);
   const q = ev.filter((e) => e.type === 'lake'); assert.deepStrictEqual(q.map((e) => e.size), [2]); assert.strictEqual(q[0].points, TT.BASE[5] * TT.LAKE_BONUS[0]);
+  assert.strictEqual(q[0].coins, TT.LAKE_COINS[0], 'a quest pays coins too');
+  const paid = 10 ** 7 - s.coins; assert.strictEqual(paid, TT.POND_PRICE[0] + TT.POND_PRICE[1] + TT.POND_PRICE[2] + TT.POND_PRICE[3] - TT.LAKE_COINS[0], 'four ponds cost their prices minus the quest coins');
   dig(2, 2); dig(0, 2); dig(1, 2); dig(2, 0); dig(2, 1); // 3x3
   assert.strictEqual(s.lake, 2); assert.strictEqual(TT.bestLake(s), 3);
   [[0, 3], [1, 3], [2, 3], [3, 0], [3, 1], [3, 2], [3, 3]].forEach(([r, c]) => dig(r, c)); // 4x4
