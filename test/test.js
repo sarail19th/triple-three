@@ -1211,6 +1211,57 @@ t('the queue sometimes brings a free trap (+1 trap stock, event), never in a cal
   assert(TT.PRICE[TT.CRYSTAL] >= 500, 'a gem is no longer cheap');
 });
 
+t('ponds: dug on an empty tile, dearer each time, pay points every turn, never take the last free tile', () => {
+  let s = withGrid({}, { coins: 100000, top: 4 });
+  const r = TT.buyPond(s, I(2, 2));
+  assert.strictEqual(r.state.grid[I(2, 2)], TT.WATER); assert.deepStrictEqual(r.state.ponds, [I(2, 2)]);
+  assert.strictEqual(r.state.coins, s.coins - TT.POND_PRICE[0]);
+  assert.deepStrictEqual(r.events[0], { type: 'pond', at: I(2, 2), price: TT.POND_PRICE[0] });
+  assert(TT.POND_PRICE[1] > TT.POND_PRICE[0] && TT.POND_PRICE[15] > TT.POND_PRICE[14], 'dearer every time');
+  assert.deepStrictEqual(TT.validate(r.state), []);
+  // an occupied tile, water, a bridge tile and a poor player are all refused
+  assert.strictEqual(TT.buyPond(withGrid({ [I(1, 1)]: 3 }, { coins: 100000 }), I(1, 1)), null);
+  assert.strictEqual(TT.buyPond(r.state, I(2, 2)), null);
+  assert.strictEqual(TT.buyPond(withGrid({}, { coins: TT.POND_PRICE[0] - 1 }), I(0, 0)), null);
+  // income: ponds x ceil(BASE[top] / 20) every turn, on top of what the merges pay
+  s = r.state; s.cur = 1; s.next = 1;
+  const t = TT.place(s, I(5, 5));
+  assert.strictEqual(t.state.score - s.score, TT.pondPoints(s)); assert.strictEqual(TT.pondPoints(s), Math.ceil(TT.BASE[4] / 20));
+  assert(t.events.some((e) => e.type === 'pondpts' && e.points === TT.pondPoints(s)));
+  // never the last free tile (a fuller board than that would end the game by your own hand)
+  const g = {}; for (let i = 0; i < 34; i++) g[i] = (i % 2) ? 5 : 6;
+  const tight = withGrid(g, { coins: 100000 });
+  assert.strictEqual(TT.buyPond(tight, 34).state.grid[34], TT.WATER, 'two free tiles: one may go');
+  assert.strictEqual(TT.buyPond(TT.buyPond(tight, 34).state, 35), null, 'one free tile left: refused');
+  // land keeps the index list in step; a dug pond is never a bridge spot
+  const moved = TT.buyLand(r.state, 'top').state;
+  assert.deepStrictEqual(moved.ponds, [I(2, 2) + 6]); assert.strictEqual(moved.grid[moved.ponds[0]], TT.WATER);
+  assert.deepStrictEqual(TT.validate(moved), []);
+  const lone = withGrid({}, { coins: 100000 }); lone.grid[I(2, 2)] = 0;
+  assert(!TT.bridgeSpots(TT.buyPond(lone, I(2, 2)).state).includes(I(2, 2)));
+  // old saves get an empty pond list
+  const legacy = JSON.parse(JSON.stringify(withGrid({}))); delete legacy.ponds; delete legacy.lake;
+  const m = TT.migrate(legacy); assert.deepStrictEqual(m.ponds, []); assert.strictEqual(m.lake, 0); assert.deepStrictEqual(TT.validate(m), []);
+});
+
+t('lake quests: the pond that completes a 2x2, 3x3, 4x4 block of water pays a one-off bonus', () => {
+  let s = withGrid({}, { coins: 10 ** 7, top: 5 });
+  const ev = [];
+  const dig = (r, c) => { const x = TT.buyPond(s, I(r, c)); s = x.state; ev.push(...x.events); };
+  [[0, 0], [0, 1], [1, 0]].forEach(([r, c]) => dig(r, c));
+  assert.strictEqual(s.lake, 0); assert.strictEqual(TT.bestLake(s), 1, 'an L of water is not a lake yet');
+  dig(1, 1);
+  assert.strictEqual(s.lake, 1); assert.strictEqual(TT.bestLake(s), 2);
+  const q = ev.filter((e) => e.type === 'lake'); assert.deepStrictEqual(q.map((e) => e.size), [2]); assert.strictEqual(q[0].points, TT.BASE[5] * TT.LAKE_BONUS[0]);
+  dig(2, 2); dig(0, 2); dig(1, 2); dig(2, 0); dig(2, 1); // 3x3
+  assert.strictEqual(s.lake, 2); assert.strictEqual(TT.bestLake(s), 3);
+  [[0, 3], [1, 3], [2, 3], [3, 0], [3, 1], [3, 2], [3, 3]].forEach(([r, c]) => dig(r, c)); // 4x4
+  assert.strictEqual(s.lake, 3); assert.strictEqual(TT.bestLake(s), 4); assert.strictEqual(s.ponds.length, 16);
+  assert.strictEqual(ev.filter((e) => e.type === 'lake').length, 3, 'each quest pays once');
+  assert.strictEqual(TT.buyPond(s, I(5, 5)), null, 'at most ' + TT.MAX_PONDS + ' ponds');
+  assert.deepStrictEqual(TT.validate(s), []);
+});
+
 t('animals can be switched off per game: no bears, no foxes, or calm (neither)', () => {
   for (const [bears, foxes] of [[false, true], [true, false], [false, false]]) {
     for (let seed = 1; seed <= 40; seed++) {
@@ -1257,6 +1308,10 @@ t('fuzz: 400 random games keep state valid and always terminate', () => {
       if (TT.rand(pick) < 0.02 && empties.length && occupied.length) { // the mover, now and then
         const mv = TT.move(s, occupied[Math.floor(TT.rand(pick) * occupied.length)], empties[Math.floor(TT.rand(pick) * empties.length)]);
         if (mv) { moves++; s = mv.state; assert.deepStrictEqual(TT.validate(s), []); continue; }
+      }
+      if (TT.rand(pick) < 0.01 && empties.length) { // dig a pond now and then
+        const pd = TT.buyPond(s, empties[Math.floor(TT.rand(pick) * empties.length)]);
+        if (pd) { s = pd.state; assert.deepStrictEqual(TT.validate(s), []); continue; }
       }
       if (TT.rand(pick) < 0.02) { // build a bridge now and then (maps with water only have spots)
         const spots = TT.bridgeSpots(s), b = spots.length ? TT.buyBridge(s, spots[Math.floor(TT.rand(pick) * spots.length)]) : null;

@@ -173,7 +173,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 
 /* shop: the item row scrolls sideways once many tiers are unlocked; tools and land sit in a fixed row of six */
 .tools { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
-.tools.util { grid-template-columns: repeat(var(--tools, 7), 1fr); }
+.tools.util { grid-template-columns: repeat(5, 1fr); } /* trap / hammer / mover / bridge / pond on the first row, the four land buttons on the second */
+.tools.util .tool.land[data-land="top"] { grid-column-start: 1; }
 .tool[hidden] { display: none; }
 .tools.shop { display: flex; overflow-x: auto; scrollbar-width: thin; padding-bottom: 2px; }
 /* 6.5 buttons wide: the half button peeking in on the right shows that the row scrolls */
@@ -269,3 +270,6 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 .season-fx i { position: absolute; top: -8vh; font-style: normal; opacity: .6; animation: sfall linear infinite; will-change: transform; }
 @keyframes sfall { 0% { transform: translate(0, -8vh) rotate(0deg); } 50% { transform: translate(var(--sway), 55vh) rotate(180deg); } 100% { transform: translate(0, 110vh) rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .season-fx { display: none; } }
+
+/* a dug pond carries a lily pad (income marker); the water itself is the shared SVG layer */
+.cell.pond::after { content: "🪷"; position: absolute; right: 6%; bottom: 4%; font-size: calc(var(--bs) / var(--m) * .3); opacity: .8; pointer-events: none; }
