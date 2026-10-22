@@ -488,13 +488,15 @@ with sync_playwright() as p:
     # there is something to fall, and the natural items (plants, critters) change with the season. The tests start pinned to summer (see add_init_script).
     sea = lambda: page.evaluate("document.documentElement.dataset.season")
     PLANTS = {'summer': ['🌱', '🌿', '🌳'], 'spring': ['🌱', '🌼', '🌸'], 'autumn': ['🌾', '🍂', '🍁'], 'winter': ['❄️', '🌲', '🎄']}
-    HOME = {'summer': {'🐇', '🐤'}, 'spring': {'🐇', '🐤', '🦋'}, 'autumn': {'🐿️', '🦔'}, 'winter': {'🐇', '🐦'}}
+    HOME = {'summer': {'🐇', '🐤'}, 'spring': {'🐇', '🐤', '🦋'}, 'autumn': {'🐿️', '🦔'}, 'winter': {'🦌', '🐦'}}
+    SKIN = {'summer': ('🐻', 'bear', '🦊', 'fox'), 'spring': ('🐻', 'bear', '🦊', 'fox'), 'autumn': ('🐗', 'boar', '🦝', 'raccoon'), 'winter': ('🐺', 'wolf', '🐇', 'rabbit')}
     WATER = {'summer': {'🦢', '🐟'}, 'spring': {'🦢', '🐸'}, 'autumn': {'🦆', '🐟'}, 'winter': {'🦢', '🦆'}}
     assert 'Summer' in page.inner_text('#seasonLink') and sea() == 'summer'
     g = [0] * 36
     for i in (12, 14, 16, 25, 27): g[i] = 5      # five huts (not touching, so they do not merge): rabbits / chicks / squirrels live here
     for i in (2, 8): g[i] = 21                   # a little water for the swans and fish
     g[30] = 1; g[31] = 2; g[32] = 3              # one of each plant tier on the board
+    g[33] = 12; g[34] = 18; g[35] = 13           # a bear, a fox and a tombstone
     load(g, map='medium', coins=100)
     seen = {}
     for want in ['autumn', 'winter', 'auto', 'spring', 'summer']:
@@ -506,6 +508,11 @@ with sync_playwright() as p:
         cells = page.evaluate("[30, 31, 32].map(i => document.querySelector('#board .cell[data-i=\"' + i + '\"]').firstChild.textContent)")
         assert cells == PLANTS[cur], f'the board shows the {cur} plants: {cells}'
         assert page.inner_text('#curItem') == page.evaluate('window.ttDebug.emoji(window.ttDebug.state().cur)')
+        animals = page.evaluate("[33, 34].map(i => document.querySelector('#board .cell[data-i=\"' + i + '\"]').firstChild.textContent)")
+        names = page.evaluate("[12, 19, 20, 18].map(c => window.ttDebug.name(c))")
+        be, bn, fe, fn = SKIN[cur]
+        assert animals == [be, fe], f'the {cur} animals on the board: {animals}'
+        assert names == [bn, 'growling ' + bn, 'angry ' + bn, fn], names
         page.wait_for_timeout(150)
         kinds = set(page.evaluate('window.ttDebug.critters()'))
         assert kinds <= HOME[cur] | WATER[cur] and kinds & HOME[cur] and kinds & WATER[cur], f'{cur} critters: {kinds}'
