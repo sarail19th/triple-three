@@ -157,16 +157,55 @@
       fx.appendChild(b);
     }
   }
+  var SPEED_LABEL = ['⏸ paused', '⏱ 1×', '⏩ 2×', '⏩ 3×'];
+  // ---- banks: tap one to borrow against the best building next to it, repay, see the interest
+  var bankAt = -1;
+  function loanText(l) { return l.defaulted ? '🏚️ seized lot' : em(l.tier) + ' ' + nm(l.tier) + ' (locked)'; }
+  function openBank(idx) { bankAt = idx; renderBank(); $('bankDlg').classList.remove('hidden'); }
+  function closeBank() { $('bankDlg').classList.add('hidden'); bankAt = -1; }
+  function renderBank() {
+    if (bankAt < 0 || state.grid[bankAt] !== TT.BANK) { closeBank(); return; }
+    var rate = TT.bankRate(state, bankAt), box = $('bankLoans'), mine = [];
+    state.loans.forEach(function (l, i) { if (l.bank === bankAt) mine.push(i); });
+    $('bankTitle').textContent = '🏦 Bank ' + (state.bankOrder.indexOf(bankAt) + 1);
+    $('bankInfo').textContent = 'Interest ' + Math.round(rate * 100) + '% a year (simple, counted by the month) · pays 🪙' + fmt(TT.bankIncome(state)) + ' a month while no loan is in default. A loan is half the shop price of the dearest building next to the bank, which is locked until you repay. A year unpaid and that building and its tile are seized.';
+    box.textContent = '';
+    mine.forEach(function (i) {
+      var l = state.loans[i], owed = TT.loanOwed(state, l), row = document.createElement('div');
+      row.className = 'loanrow' + (l.defaulted ? ' bad' : '');
+      row.innerHTML = '<div class="lt">' + loanText(l) + '<small>borrowed 🪙' + fmt(l.principal) + ' · owe 🪙' + fmt(owed) + ' · ' + (l.defaulted ? 'in default: pay to get the tile back' : 'due in ' + TT.loanMonthsLeft(state, l) + ' month' + (TT.loanMonthsLeft(state, l) === 1 ? '' : 's')) + '</small></div>';
+      var b = document.createElement('button');
+      b.className = 'btn'; b.textContent = 'Repay 🪙' + fmt(owed); b.disabled = state.coins < owed;
+      b.addEventListener('click', function () {
+        var r = TT.repay(state, i);
+        if (r) { state = r.state; save(); render(r.events); vibrate(15); }
+      });
+      row.appendChild(b); box.appendChild(row);
+    });
+    var o = TT.loanOptions(state, bankAt), bb = $('bankBorrow');
+    bb.hidden = !o;
+    if (o) bb.textContent = 'Borrow 🪙' + fmt(o.principal) + ' · locks the ' + em(o.tier) + ' ' + nm(o.tier);
+    $('bankNote').textContent = o ? '' : (mine.length ? 'Nothing else to lock next to this bank.' : 'Put a building next to the bank (up, down, left or right) to borrow against it.');
+  }
+  function renderLoanLine() {
+    var el = $('loanLine'), n = state.loans.length;
+    el.hidden = !n;
+    if (!n) return;
+    var bad = state.loans.filter(function (l) { return l.defaulted; }).length, owed = 0, soon = 99;
+    state.loans.forEach(function (l) { owed += TT.loanOwed(state, l); if (!l.defaulted) soon = Math.min(soon, TT.loanMonthsLeft(state, l)); });
+    el.textContent = (bad ? '🏚️ ' + bad + ' seized · ' : '') + (n - bad ? '⚠️ ' + (n - bad) + ' loan' + (n - bad > 1 ? 's' : '') + ' · due in ' + soon + ' mo · ' : '') + 'owe 🪙' + fmt(owed);
+  }
   function isCollectible(v) { return v === TT.TREASURE || v === TT.CASH; }
   function isAnimal(v) { return TT.isBear(v) || v === TT.FOX; }
   // Is idx a legal target for the armed tool (or for placement when none is armed)?
   function targetOk(idx) {
     var v = state.grid[idx];
-    if (mode === 'move') return TT.isMovable(v) || (v === 0 && moveFrom >= 0 && !isBridgeTile(idx)); // pick something up, then an empty tile to drop it on
+    if (mode === 'move') return (TT.isMovable(v) && !lockedNow[idx]) || (v === 0 && moveFrom >= 0 && !isBridgeTile(idx)); // pick something up (not a locked tile), then an empty tile to drop it on
     if (mode === 'bridge') return TT.bridgeSpots(state).indexOf(idx) >= 0;
     if (mode === 'pond') return v === 0 && !isBridgeTile(idx);
-    return mode === 'hammer' ? v !== 0 && v !== TT.WATER : mode === 'trap' ? isAnimal(v) : ((v === 0 && !isBridgeTile(idx)) || isCollectible(v));
+    return mode === 'hammer' ? v !== 0 && v !== TT.WATER && v !== TT.SEIZED && !lockedNow[idx] : mode === 'trap' ? isAnimal(v) : ((v === 0 && !isBridgeTile(idx)) || isCollectible(v));
   }
+  var lockedNow = {}; // cells a loan has locked (rebuilt on every render)
   function isBridgeTile(i) { return state.bridges.indexOf(i) >= 0; }
   function doAction(idx) {
     return mode === 'hammer' ? TT.hammer(state, idx) : mode === 'trap' ? TT.trap(state, idx) : mode === 'bridge' ? TT.buyBridge(state, idx) : mode === 'pond' ? TT.buyPond(state, idx) : TT.place(state, idx);
@@ -176,6 +215,7 @@
   // (when Preview is on), a second tap on the same tile commits.
   function tap(idx) {
     if (!state || state.over) return;
+    if (!mode && state.grid[idx] === TT.BANK) { openBank(idx); return; } // tap a bank: loans
     if (!targetOk(idx)) { bump(idx); return; }
     if (mode === 'move') { tapMove(idx); return; }
     if (!mode && isCollectible(state.grid[idx])) { // collecting is always good news: no confirmation step
@@ -278,6 +318,7 @@
     if (state.w !== bw || state.h !== bh) buildBoard();
     clearAnim();
     var g = state.grid, w = state.w;
+    lockedNow = {}; TT.lockedCells(state).forEach(function (i) { lockedNow[i] = true; });
     drawWater();
     cells.forEach(function (c, i) {
       var code = g[i];
@@ -287,6 +328,7 @@
       var isB = state.bridges.indexOf(i) >= 0, col = i % w; // a bridge tile is walkable water: planks along the way across
       c.classList.toggle('bridge', isB);
       c.classList.toggle('pond', state.ponds.indexOf(i) >= 0);
+      c.classList.toggle('locked', !!lockedNow[i]);
       c.classList.toggle('bh', isB && col > 0 && col < w - 1 && g[i - 1] !== TT.WATER && g[i + 1] !== TT.WATER);
       c.classList.toggle('bv', isB && !c.classList.contains('bh'));
       c.setAttribute('aria-label', 'row ' + (((i / w) | 0) + 1) + ' column ' + ((i % w) + 1) + ' ' + (state.bridges.indexOf(i) >= 0 ? 'bridge ' : '') + nm(code));
@@ -312,10 +354,10 @@
     document.querySelectorAll('.tool[data-tool]').forEach(function (b) {
       var t = b.dataset.tool;
       if (t === 'hammer') {
-        b.disabled = !TT.canHammer(state) || state.over || !g.some(function (v) { return v !== 0 && v !== TT.WATER; });
+        b.disabled = !TT.canHammer(state) || state.over || !g.some(function (v, i) { return v !== 0 && v !== TT.WATER && v !== TT.SEIZED && !lockedNow[i]; });
         b.setAttribute('aria-pressed', mode === 'hammer');
       } else if (t === 'move') {
-        b.disabled = state.over || !TT.canMove(state) || !g.some(TT.isMovable) || TT.freeCount(state) === 0;
+        b.disabled = state.over || !TT.canMove(state) || !g.some(function (v, i) { return TT.isMovable(v) && !lockedNow[i]; }) || TT.freeCount(state) === 0;
         b.setAttribute('aria-pressed', mode === 'move');
       } else if (t === 'pond') {
         b.disabled = !TT.canPond(state);
@@ -370,6 +412,10 @@
     $('undoBtn').textContent = '↶ Undo 🪙' + TT.UNDO_COST;
     var cal = TT.calendar(state);
     $('turn').textContent = 'Turn ' + state.turn + ' · 📅 Y' + cal.year + ' M' + cal.month;
+    $('speedBox').hidden = !state.bankOrder.length && !state.loans.length;
+    $('speedLink').textContent = SPEED_LABEL[state.speed];
+    renderLoanLine();
+    if (!$('bankDlg').classList.contains('hidden')) renderBank();
     $('seed').textContent = 'seed ' + state.seed + (state.map !== 'easy' ? ' · ' + state.map + ' map' : '') + modeLabel(state);
     animate(events);
     updatePreview();
@@ -423,11 +469,11 @@
         } else note = '🚚 Tap an empty tile to drop the ' + nm(state.grid[moveFrom]) + ' (tap it again to put it down)';
       }
     } else if (mode === 'hammer') {
-      if (pi >= 0 && state.grid[pi] !== 0 && state.grid[pi] !== TT.WATER) {
+      if (pi >= 0 && targetOk(pi)) {
         cells[pi].classList.add('target');
         note = (lastPointer !== 'mouse' && sel === pi ? 'Tap again to smash ' : 'Smash ') + nm(state.grid[pi]) + ' (-' + TT.PRICE.hammer + ' coins)';
         hot = sel === pi;
-      } else note = '🔨 Tap an item to remove it';
+      } else note = pi >= 0 && lockedNow[pi] ? '🔒 Locked by a loan: repay it first' : pi >= 0 && state.grid[pi] === TT.SEIZED ? '🏚️ A seized lot: pay the debt to free the tile' : '🔨 Tap an item to remove it';
     } else if (pi >= 0 && isCollectible(state.grid[pi])) {
       var cash = state.grid[pi] === TT.CASH;
       note = (cash ? '💵 Click to collect the cash: +' + TT.CASH_COINS : '💰 Click to open the treasure: +' + TT.TREASURE_COINS) + ' coins'; hot = true;
@@ -509,6 +555,13 @@
       } else if (ev.type === 'maul') { // it takes it out on the building next to it
         cells[ev.at].classList.add('shake'); cells[ev.bear].classList.add('shake');
         floatAt(ev.at, em(TT.BEAR) + '💢 ' + em(ev.from) + '→' + (ev.to ? em(ev.to) : '💨'));
+      } else if (ev.type === 'loan') {
+        floatAt(ev.at, '🏦 +' + fmt(ev.coins) + '🪙'); cells[ev.at].classList.add('shake');
+      } else if (ev.type === 'repay') {
+        floatAt(ev.at, ev.freed ? '🏚️ → free' : '🔓 -' + fmt(ev.coins) + '🪙');
+      } else if (ev.type === 'default') {
+        cells[ev.at].classList.add('shake'); floatAt(ev.at, '🏚️');
+        toast('🏚️ A loan ran out: the ' + em(ev.tier) + ' and its tile were seized!', 0.25);
       } else if (ev.type === 'bankpay') {
         var bk = state.grid.indexOf(TT.BANK);
         if (bk >= 0) { floatAt(bk, '🏦 +' + fmt(ev.coins) + '🪙'); cells[bk].classList.add('drop'); }
@@ -727,12 +780,27 @@
     '<h3>Special</h3><div class="chain">' + chip(TT.CRYSTAL, 'wildcard') + chip(TT.FOX, 'warps, walls trap it') + '</div>' +
     '<h3>Bank</h3><div class="chain">' + chip(TT.BANK, 'pays monthly') + '<span class="arrow">&rarr;<small>x3</small></span>' + chip(TT.CASH, 'cash') + '</div>' +
     '<p class="gnote">🏦 A <b>bank</b> is sold in the shop once you have built a village. It is a dead tile (animals and the mover cannot touch it, only the hammer breaks it), cannot go in the reserve, and pays you coins at the end of every month (a month is 10 turns; the date is at the top). At most 3; each is dearer. Three connected banks merge into 💵 cash.</p>' +
+    '<p class="gnote">💸 <b>Loans</b>: tap a bank to borrow half the shop price of the dearest building next to it. That building and the bank are 🔒 locked (no merging, moving or smashing) until you repay the loan plus simple interest: 15% a year at the first bank, 30% at the second, 60% at the third. A year unpaid and the building is gone and its tile becomes a 🏚️ seized lot (a dead tile; the bank stops paying) until you pay the debt. ⏱ The clock speed (shown once you own a bank) decides how many ticks a turn adds: faster means income, interest and the deadline all come sooner; paused stops them all.</p>' +
     '<p class="gnote">💎 stands in for any tier, including 🏬 (making 💵 cash) and 🕌 (making a 💰 treasure). Three or more 💎 touching each other merge into a 💰 treasure. 🚚 moves one item to an empty tile for coins.</p>' +
     '<p class="gnote">🍂 The animals follow the season: bear and fox are ' + SKINS.autumn.bear[0] + ' ' + SKINS.autumn.fox[0] + ' in autumn and ' + SKINS.winter.bear[0] + ' ' + SKINS.winter.fox[0] + ' in winter (now: ' + em(TT.BEAR) + ' ' + em(TT.FOX) + '). Only the looks change.</p>' +
     '<p class="gnote">Three or more connected items of the same kind merge into the next one. Bigger groups pay more points and coins.</p>' +
     '<p class="gnote">🍀 <b>Lucky drops</b>: once you have built a higher tier, the next item is sometimes a free 🏕️ 🛖 or 🏠 (a tier below your best, never above a house). Most often on Easy, rarer on Standard and Medium, never on Hard.</p>';
   }
   buildGuide();
+  $('bankBorrow').addEventListener('click', function () {
+    var r = TT.borrow(state, bankAt);
+    if (r) { state = r.state; save(); render(r.events); vibrate(15); }
+  });
+  $('bankClose').addEventListener('click', closeBank);
+  $('bankDlg').addEventListener('click', function (e) { if (e.target === this) closeBank(); });
+  $('speedLink').addEventListener('click', function (e) {
+    e.preventDefault();
+    var s = TT.setSpeed(state, state.speed === 0 ? 1 : (state.speed + 1) % 4); // 1x -> 2x -> 3x -> paused -> 1x
+    if (s) { state = s; save(); render([]); }
+  });
+  function openFirstLoanBank() { if (state.loans.length) openBank(state.loans[0].bank); }
+  $('loanLine').addEventListener('click', openFirstLoanBank);
+  $('loanLine').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openFirstLoanBank(); } });
   $('questLine').addEventListener('click', openShop);
   $('questLine').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openShop(); } });
   $('guideLink').addEventListener('click', function (e) { e.preventDefault(); $('guide').classList.remove('hidden'); });
@@ -762,7 +830,7 @@
     { target: '#holdBtn', title: '📦 Reserve', text: 'Store the current item here for later. Tap it again to swap with what is stored. Also free.' },
     { target: '.hud .stat', title: '⭐ Score and coins', text: 'Every merge adds to your <b>score</b> and pays 🪙 <b>coins</b> (bigger groups pay more). Coins buy things in the shop. <b>Best</b> is your top score on this map.' },
     { target: '#newBtn', title: '⟳ New game', text: 'Starts a new game: choose the <b>map</b> (Easy, Standard, Medium, Hard) the <b>bear mode</b> (Classic, Wild or No bears) and whether <b>foxes</b> appear. Switch both animals off for a calm game. It erases the game you are playing, and warns you first.' },
-    { target: '.topinfo', title: '📋 Turn, rules and settings', text: 'The turn counter with the 📅 calendar (10 turns = a month, 12 months = a year) and game seed, <b>How to play</b> (the rules and this tour), the <b>Item guide</b> (every item and what it merges into), the <b>🎨 Season</b> theme (Auto follows the calendar; tap to cycle spring, summer, autumn, winter), the 🏞️ <b>lake quest</b> line (tap it to open the shop) and, on phones with vibration, the <b>📳 Haptics</b> switch.' },
+    { target: '.topinfo', title: '📋 Turn, rules and settings', text: 'The turn counter with the 📅 calendar and, once you own a bank, the ⏱ clock speed (tap to cycle 1×, 2×, 3×, paused) (10 turns = a month, 12 months = a year) and game seed, <b>How to play</b> (the rules and this tour), the <b>Item guide</b> (every item and what it merges into), the <b>🎨 Season</b> theme (Auto follows the calendar; tap to cycle spring, summer, autumn, winter), the 🏞️ <b>lake quest</b> line (tap it to open the shop) and, on phones with vibration, the <b>📳 Haptics</b> switch.' },
     { target: '#undoBtn', title: '↶ Undo', text: 'Takes back your last move. It costs a few coins, and only one move can be undone.' },
     { target: '#previewBtn', title: '👁 Preview', text: 'Shows what a tap would do before you place. Turn it off to place with a single tap.' },
     { target: '#shopBtn', title: '🛒 Shop', text: 'Opens the shop. Everything you can spend coins on is in there.', when: function () { return $('shopBtn').offsetParent !== null; } },
@@ -772,6 +840,7 @@
     { target: '#moveBtn', sheet: true, title: '🚚 Mover', text: 'Picks up one item and drops it on another empty tile, where it merges like a placed item. Bears and foxes cannot be moved.' },
     { target: '#bridgeBtn', sheet: true, title: '🌉 Bridge', text: 'On maps with water: turns a water tile that has land on both sides into a road bears can cross. Glowing tiles show where it can go. Up to 5, dearer each time.', when: function () { return !$('bridgeBtn').hidden; } },
     { target: '.tools.shop .tool[data-tool="22"]', sheet: true, title: '🏦 Bank', text: 'Appears once you have built a village. A bank is placed like an item, is a dead tile that animals cannot cross, and pays <b>coins every month</b> (10 turns = a month, shown as 📅 at the top). At most 3, dearer each time; it cannot go in the reserve. Three connected banks merge into 💵 cash.', when: function () { return !!document.querySelector('.tools.shop .tool[data-tool="22"]'); } },
+    { target: '#speedLink', title: '⏱ Clock speed', text: 'Appears once you own a bank. Each turn adds this many ticks to the calendar (10 ticks = a month): faster means bank income, loan interest and the repayment deadline all come sooner; paused stops the calendar. Tap to cycle 1×, 2×, 3×, paused. <b>Tap a bank</b> on the map to borrow against the dearest building next to it.', when: function () { return !$('speedBox').hidden; } },
     { target: '#pondBtn', sheet: true, title: '💧 Pond', text: 'Digs a pond on an empty tile. It takes the tile for good, but pays <b>points every turn</b>, and dearer ponds pay more in total. Dig a 2×2, then 3×3 and 4×4 block of water for <b>lake quests</b>: each pays coins and points (see the line under the tools, and at the top of the screen).' },
     { target: '.tool.land', sheet: true, title: '⬆️⬇️⬅️➡️ Land', text: 'Adds one more row or column on that side of the map (each side once, dearer every time). Water that touches that edge carries on into it. Handy when the map is nearly full.' },
     { title: '🎉 You are ready', text: 'The <b>Item guide</b> at the top lists every item and what it merges into, and <b>How to play</b> repeats the rules and this tour. Your game is saved automatically. Have fun!' }

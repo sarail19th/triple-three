@@ -25,8 +25,9 @@
   </header>
 
   <div class="topinfo">
-    <div><span id="turn">Turn 0</span> · <span id="seed">seed</span></div>
+    <div><span id="turn">Turn 0</span> · <span id="seed">seed</span><span id="speedBox" hidden> · <a href="#" id="speedLink" aria-label="Game clock speed">⏱ 1×</a></span></div>
     <div><a href="#" id="helpLink">How to play</a> · <a href="#" id="guideLink">Item guide</a> · <a href="#" id="seasonLink" aria-label="Season theme">🎨 Season: auto</a><span class="foot-settings"> · <a href="#" id="hapticLink" role="switch" aria-label="Haptic feedback (vibration)">📳 Haptics: on</a></span></div>
+      <div id="loanLine" class="questline loanline" role="button" tabindex="0" aria-label="Loans: open the bank" hidden></div>
       <div id="questLine" class="questline" role="button" tabindex="0" aria-label="Lake quest: open the shop"></div>
   </div>
 
@@ -123,6 +124,17 @@
   </div>
 </div>
 
+<div id="bankDlg" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Bank">
+  <div class="card">
+    <h2 id="bankTitle">🏦 Bank</h2>
+    <p id="bankInfo" class="gnote"></p>
+    <div id="bankLoans"></div>
+    <button id="bankBorrow" class="btn primary"></button>
+    <p id="bankNote" class="gnote"></p>
+    <button id="bankClose" class="btn">Close</button>
+  </div>
+</div>
+
 <div id="guide" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Item guide">
   <div class="card">
     <h2>Item guide</h2>
@@ -158,7 +170,7 @@
       <li>🗺️ <b>Maps</b> (also in <b>New</b>): Easy is a plain field, Standard starts with a few plants, Medium has a river across the field, Hard has random ponds. Blue tiles are <b>water</b>: nothing can be placed, merged, moved or smashed there, and animals cannot enter it. Use the 🌉 <b>bridge</b> tool (up to 5, dearer each time) on a water tile that has land on both sides, up/down or left/right (never a corner or the middle of wide water): it becomes a road that bears can walk over, but nothing can be built on it.</li>
       <li>💧 <b>Ponds</b> (shop): dig a pond on an empty tile. It stays for the whole game, takes a tile away, and pays <b>points every turn</b> (about 5% of your best building's value each, more with every pond). <b>Lake quests</b>: the pond that completes a 2×2, then a 3×3, then a 4×4 block of water pays a one-off bonus of <b>coins and points</b>. The first pond costs only 60 coins, then each one is dearer (up to 16). Animals cannot cross water, and a bear or fox shut in by ponds is trapped like anywhere else.</li>
       <li>🐺 <b>Animals follow the season</b>: the bear is a 🐗 boar and the fox a 🦝 raccoon in autumn, a 🐺 wolf and a 🐇 rabbit in winter (🐻 and 🦊 in spring and summer). Only the looks change, the rules do not.</li>
-      <li>🏦 <b>Banks</b> (shop, once a village is built): a bank is placed like an item, is a dead tile for animals and the mover (only the hammer breaks it) and cannot go in the reserve. It pays <b>coins every month</b> (10 turns; the 📅 date is at the top). At most 3, each dearer than the last; three connected banks merge into 💵 cash.</li>
+      <li>🏦 <b>Banks</b> (shop, once a village is built): a bank is placed like an item, is a dead tile for animals and the mover (only the hammer breaks it) and cannot go in the reserve. It pays <b>coins every month</b> (10 turns; the 📅 date is at the top). At most 3, each dearer than the last; three connected banks merge into 💵 cash. <b>Loans</b>: tap a bank to borrow half the shop price of the dearest building next to it; that building and the bank are locked until you repay it with simple interest (15% a year, 30% at the second bank, 60% at the third). A year unpaid and the building is lost and its tile seized until you pay the debt, and that bank stops paying. The ⏱ clock speed (tap it: 1×, 2×, 3×, paused) sets how fast the calendar, income and interest run.</li>
       <li>🪤 <b>Free traps</b>: now and then (about 1 turn in 30) the queue brings a free 🪤 trap for your stock, so foxes never pile up for good. 🦊 foxes are rare, and 💎 gems turn up now and then (the shop sells them for about the price of a house).</li>
       <li>🦊 The <b>fox</b> never walks: every turn it <b>warps</b> to a random empty tile (never into a hole it could not get out of). Corner it, though: when walls and items close it in on every side (or you fill the last free tile of its box) it becomes a 🪦, and so does a fox on a full board. The 🪤 trap kills it anywhere.</li>
       <li>💎 The <b>crystal</b> is a wildcard: it turns into whatever earns the most (it plays out every kind including the merges that follow, so it can pull a whole chain together) (any building tier up to 🏬 which makes 💵 cash, 🪦, ⛪ or 🕌 which makes a 💰 treasure). If no tier fits it waits as a wildcard, and <b>three 💎 touching each other merge into a 💰 treasure</b> on the tile you tapped.</li>

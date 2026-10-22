@@ -13,7 +13,7 @@ from playwright.sync_api import sync_playwright
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 DIST = os.path.join(ROOT, 'dist')
-EMOJI = ['', '🌱', '🌿', '🌳', '🏕️', '🛖', '🏠', '🏘️', '🏫', '🏥', '🏬', '💵', '🐻', '🪦', '⛪', '🕌', '💎', '💰', '🦊', '🐻', '🐻', '', '🏦']
+EMOJI = ['', '🌱', '🌿', '🌳', '🏕️', '🛖', '🏠', '🏘️', '🏫', '🏥', '🏬', '💵', '🐻', '🪦', '⛪', '🕌', '💎', '💰', '🦊', '🐻', '🐻', '', '🏦', '🏚️']
 BEAR, TOMB, CHURCH, CRYSTAL, TREASURE, FOX = 12, 13, 14, 16, 17, 18
 LAND_PRICE = [150, 400, 1000, 2500]
 MIN_TURNS = 50   # random turns that must be played
@@ -545,7 +545,46 @@ with sync_playwright() as p:
     income = round(900 * 0.1)
     assert after['coins'] == 3500 + income, f"one month ends: {after['coins']}"
     assert page.locator('#board .cell[data-i="3"]').get_attribute('data-c') == '22'
-    page.tap('#board .cell[data-i="3"]'); assert state(page)['turn'] == 4, 'a bank is a dead tile'
+    page.tap('#board .cell[data-i="3"]'); assert state(page)['turn'] == 4, 'tapping a bank takes no turn'
+    assert page.locator('#bankDlg').is_visible() and 'Nothing' not in page.inner_text('#bankNote') or 'Put a building' in page.inner_text('#bankNote'), page.inner_text('#bankNote')
+    assert 'Put a building next to the bank' in page.inner_text('#bankNote') and page.locator('#bankBorrow').is_hidden(), 'no building next to this bank: nothing to borrow against'
+    page.tap('#bankClose'); assert page.locator('#bankDlg').is_hidden()
+
+    # ---- loans: tap a bank, borrow against the dearest building next to it (locked, padlock), see the debt, repay; the clock speed link cycles
+    g = [0] * 36; g[14] = 22; g[13] = 6; g[8] = 5; g[20] = 5
+    load(g, coins=0, top=7, banksBought=1, bankOrder=[14], tick=0)
+    assert page.locator('#speedBox').is_visible() and '1×' in page.inner_text('#speedLink')
+    page.tap('#speedLink'); assert state(page)['speed'] == 2 and '2×' in page.inner_text('#speedLink')
+    page.tap('#speedLink'); page.tap('#speedLink'); assert state(page)['speed'] == 0 and 'paused' in page.inner_text('#speedLink')
+    page.tap('#speedLink'); assert state(page)['speed'] == 1
+    assert page.locator('#loanLine').is_hidden()
+    page.tap('#board .cell[data-i="14"]')
+    assert page.locator('#bankDlg').is_visible() and 'Bank 1' in page.inner_text('#bankTitle') and '15%' in page.inner_text('#bankInfo')
+    assert 'Borrow 🪙200' in page.inner_text('#bankBorrow'), page.inner_text('#bankBorrow')
+    page.tap('#bankBorrow')
+    ln = check_consistent(page, 'loan')
+    assert ln['coins'] == 200 and len(ln['loans']) == 1 and ln['loans'][0]['at'] == 13 and ln['turn'] == 3, ln['loans']
+    assert page.locator('#board .cell[data-i="13"].locked').count() == 1 and page.locator('#board .cell[data-i="14"].locked').count() == 1, 'the house and the bank carry a padlock'
+    assert page.locator('#bankLoans .loanrow').count() == 1 and 'Repay 🪙200' in page.inner_text('#bankLoans')
+    assert page.locator('#loanLine').is_visible() and '1 loan' in page.inner_text('#loanLine') and 'owe 🪙200' in page.inner_text('#loanLine')
+    page.tap('#bankClose')
+    shop_tap(page, '#hammerBtn'); page.tap('#board .cell[data-i="13"]')   # the hammer does not take a locked building
+    assert state(page)['grid'][13] == 6, state(page)['grid']
+    assert page.locator('#board .cell.target').count() == 0, page.inner_text('#note')
+    page.tap('#shopBtn') if False else None
+    page.tap('#loanLine'); assert page.locator('#bankDlg').is_visible()
+    page.tap('#bankLoans .loanrow .btn'); rp = check_consistent(page, 'repay')
+    assert rp['loans'] == [] and rp['coins'] == 0 and page.locator('#board .cell.locked').count() == 0 and page.locator('#loanLine').is_hidden()
+    page.tap('#bankClose')
+    # a loan that runs out: the building is gone, the tile is a seized lot, and a toast says so
+    g = [0] * 36; g[14] = 22; g[13] = 6
+    load(g, coins=0, top=7, banksBought=1, bankOrder=[14], tick=119, loans=[{'bank': 14, 'at': 13, 'tier': 6, 'principal': 200, 'rate': 0.15, 'since': 0, 'defaulted': False}])
+    assert page.locator('#loanLine').is_visible()
+    tap_cell(page, 0, True)
+    sz = check_consistent(page, 'default')
+    assert sz['grid'][13] == 23 and sz['loans'][0]['defaulted'] is True and page.locator('#board .cell[data-c="23"]').count() == 1
+    assert '🏚️' in page.inner_text('#loanLine') and 'seized' in page.inner_text('#loanLine')
+    page.tap('#board .cell[data-i="13"]'); assert state(page)['turn'] == sz['turn'], 'a seized lot is just a dead tile'
 
     # ---- calm mode: No bears + No foxes. No animals ever show up, no trap tool, own best score, the picks are remembered
     page.tap('#newBtn'); page.tap('.opt[data-bears="off"]'); page.tap('.opt[data-foxes="off"]'); page.tap('#newStart')
