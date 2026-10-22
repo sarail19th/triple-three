@@ -487,7 +487,7 @@ with sync_playwright() as p:
     # ---- seasons: the link cycles auto -> spring -> summer -> autumn -> winter, sets data-season, remembers the pick, the falling bits only exist when
     # there is something to fall, and the natural items (plants, critters) change with the season. The tests start pinned to summer (see add_init_script).
     sea = lambda: page.evaluate("document.documentElement.dataset.season")
-    PLANTS = {'summer': ['🌱', '🌿', '🌳'], 'spring': ['🌱', '🌼', '🌸'], 'autumn': ['🌾', '🍂', '🍁'], 'winter': ['❄️', '🌲', '🎄']}
+    PLANTS = {'summer': ['🌱', '🌿', '🌳'], 'spring': ['🌻', '💐', '🌸'], 'autumn': ['🍂', '🍄', '🪾'], 'winter': ['❄️', '🎁', '🎄']}
     HOME = {'summer': {'🐇', '🐤'}, 'spring': {'🐇', '🐤', '🦋'}, 'autumn': {'🐿️', '🦔'}, 'winter': {'🦌', '🐦'}}
     SKIN = {'summer': ('🐻', 'bear', '🦊', 'fox'), 'spring': ('🐻', 'bear', '🦊', 'fox'), 'autumn': ('🐗', 'boar', '🦝', 'raccoon'), 'winter': ('🐺', 'wolf', '🐇', 'rabbit')}
     WATER = {'summer': {'🦢', '🐟'}, 'spring': {'🦢', '🐸'}, 'autumn': {'🦆', '🐟'}, 'winter': {'🦢', '🦆'}}
@@ -504,9 +504,10 @@ with sync_playwright() as p:
         cur = sea()
         assert (cur == want) if want != 'auto' else ('auto' in page.inner_text('#seasonLink') and cur in PLANTS), (cur, want)
         seen[cur] = page.evaluate("[document.querySelectorAll('#seasonFx i').length, [1, 2, 3].map(c => window.ttDebug.emoji(c))]")
-        assert seen[cur][1] == PLANTS[cur], (cur, seen[cur])
+        tree_ok = {PLANTS[cur][2], '🍁'} if cur == 'autumn' else {PLANTS[cur][2]}   # 🪾 falls back to 🍁 where the font lacks it (as in this headless browser)
+        assert seen[cur][1][:2] == PLANTS[cur][:2] and seen[cur][1][2] in tree_ok, (cur, seen[cur])
         cells = page.evaluate("[30, 31, 32].map(i => document.querySelector('#board .cell[data-i=\"' + i + '\"]').firstChild.textContent)")
-        assert cells == PLANTS[cur], f'the board shows the {cur} plants: {cells}'
+        assert cells == seen[cur][1], f'the board shows the {cur} plants: {cells} vs {seen[cur][1]}'
         assert page.inner_text('#curItem') == page.evaluate('window.ttDebug.emoji(window.ttDebug.state().cur)')
         animals = page.evaluate("[33, 34].map(i => document.querySelector('#board .cell[data-i=\"' + i + '\"]').firstChild.textContent)")
         names = page.evaluate("[12, 19, 20, 18].map(c => window.ttDebug.name(c))")
