@@ -104,10 +104,22 @@
     summer: { home: ['🐇', '🐤'], grave: ['👻', '🐈\u200d⬛'], water: ['🦢', '🐟'] },
     spring: { home: ['🐇', '🐤', '🦋'], grave: ['👻', '🐈\u200d⬛'], water: ['🦢', '🐸'] },
     autumn: { home: ['🐿️', '🦔'], grave: ['👻', '🦇'], water: ['🦆', '🐟'] },
-    winter: { home: ['🐇', '🐦'], grave: ['👻', '🐈\u200d⬛'], water: ['🦢', '🦆'] }
+    winter: { home: ['🦌', '🐦'], grave: ['👻', '🐈\u200d⬛'], water: ['🦢', '🦆'] }
   };
+  // The wild animals change with the season too (display only: the logic still sees BEAR / FOX): [emoji, name] for the bear and the fox.
+  var SKINS = { summer: { bear: ['🐻', 'bear'], fox: ['🦊', 'fox'] }, spring: { bear: ['🐻', 'bear'], fox: ['🦊', 'fox'] },
+    autumn: { bear: ['🐗', 'boar'], fox: ['🦝', 'raccoon'] }, winter: { bear: ['🐺', 'wolf'], fox: ['🐇', 'rabbit'] } };
   var curSeason = 'summer';
-  function em(code) { var p = PLANTS[curSeason]; return (p && p[code]) || TT.EMOJI[code]; } // the emoji to show for an item code
+  function em(code) { // the emoji to show for an item code
+    var p = PLANTS[curSeason];
+    if (p && p[code]) return p[code];
+    if (TT.isBear(code)) return SKINS[curSeason].bear[0];
+    return code === TT.FOX ? SKINS[curSeason].fox[0] : TT.EMOJI[code];
+  }
+  function nm(code) { // the name to show ('wolf' instead of 'bear' in winter; 'angry wolf'...)
+    var n = TT.NAME[code];
+    return TT.isBear(code) ? n.replace('bear', SKINS[curSeason].bear[1]) : code === TT.FOX ? SKINS[curSeason].fox[1] : n;
+  }
   var SEASONS = ['auto', 'spring', 'summer', 'autumn', 'winter'];
   var SEASON_LABEL = { auto: '🎨 Season: auto', spring: '🌸 Spring', summer: '☀️ Summer', autumn: '🍂 Autumn', winter: '❄️ Winter' };
   var SEASON_BITS = { spring: ['🌸', '🌼', '🌸'], autumn: ['🍂', '🍁', '🍂'], winter: ['❄️', '❄', '❄️'] };
@@ -238,7 +250,7 @@
     items.forEach(function (t) {
       var b = document.createElement('button');
       b.className = 'tool' + (fresh && known.indexOf(String(t)) < 0 ? ' fresh' : '');
-      b.dataset.tool = t; b.setAttribute('aria-label', 'Buy ' + TT.NAME[t]);
+      b.dataset.tool = t; b.setAttribute('aria-label', 'Buy ' + nm(t));
       b.innerHTML = '<span class="te">' + em(t) + '</span><span class="tp"></span><span class="tb"></span>';
       b.addEventListener('click', function () {
         var s = TT.buy(state, t);
@@ -263,7 +275,7 @@
       c.classList.toggle('pond', state.ponds.indexOf(i) >= 0);
       c.classList.toggle('bh', isB && col > 0 && col < w - 1 && g[i - 1] !== TT.WATER && g[i + 1] !== TT.WATER);
       c.classList.toggle('bv', isB && !c.classList.contains('bh'));
-      c.setAttribute('aria-label', 'row ' + (((i / w) | 0) + 1) + ' column ' + ((i % w) + 1) + ' ' + (state.bridges.indexOf(i) >= 0 ? 'bridge ' : '') + TT.NAME[code]);
+      c.setAttribute('aria-label', 'row ' + (((i / w) | 0) + 1) + ' column ' + ((i % w) + 1) + ' ' + (state.bridges.indexOf(i) >= 0 ? 'bridge ' : '') + nm(code));
     });
     if (mode === 'bridge') { if (!TT.canBridge(state)) mode = null; }
     else if (mode === 'pond') { if (!TT.canPond(state)) mode = null; }
@@ -277,7 +289,7 @@
     if (state.score > best) { best = state.score; store.set(bestKey(), best); }
     $('best').textContent = best;
     $('curItem').textContent = em(state.cur);
-    $('curName').textContent = TT.NAME[state.cur];
+    $('curName').textContent = nm(state.cur);
     $('nextItem').textContent = em(state.next);
     $('holdItem').textContent = state.hold ? em(state.hold) : '·';
     $('undoBtn').disabled = !TT.canUndo(state);
@@ -356,7 +368,7 @@
         cells[pi].classList.add('target');
         var tr = TT.trap(state, pi);
         var res = tr ? tr.state.grid[pi] : TT.TOMB;
-        note = (sel === pi ? 'Tap again to trap' : 'Trap') + ' the ' + TT.NAME[state.grid[pi]] + ' -> ' + TT.NAME[res] + ' (-' + TT.PRICE.trap + ' coins)';
+        note = (sel === pi ? 'Tap again to trap' : 'Trap') + ' the ' + nm(state.grid[pi]) + ' -> ' + nm(res) + ' (-' + TT.PRICE.trap + ' coins)';
         hot = sel === pi;
       } else note = '🪤 Tap a bear or fox to kill it';
     } else if (mode === 'pond') {
@@ -374,7 +386,7 @@
       } else note = '🌉 Tap a glowing water tile to bridge it (-' + bp + ' coins)';
     } else if (mode === 'move') {
       if (moveFrom < 0) {
-        if (pi >= 0 && TT.isMovable(state.grid[pi])) { cells[pi].classList.add('target'); note = '🚚 Pick up the ' + TT.NAME[state.grid[pi]]; }
+        if (pi >= 0 && TT.isMovable(state.grid[pi])) { cells[pi].classList.add('target'); note = '🚚 Pick up the ' + nm(state.grid[pi]); }
         else note = '🚚 Tap an item to pick it up (-' + TT.PRICE.move + ' coins when you drop it)';
       } else {
         cells[moveFrom].classList.add('pick');
@@ -383,15 +395,15 @@
           p.eaten.forEach(function (i) { cells[i].classList.add('eat'); });
           var mv = sel === pi ? 'Tap again to ' : '';
           note = p.merged
-            ? (mv ? mv + 'move and merge' : 'Moves and merges') + ' into ' + TT.NAME[p.final] + gain(p)
-            : (mv ? mv + 'drop' : 'Drop') + ' the ' + TT.NAME[state.grid[moveFrom]] + ' here (-' + TT.PRICE.move + ' coins)';
+            ? (mv ? mv + 'move and merge' : 'Moves and merges') + ' into ' + nm(p.final) + gain(p)
+            : (mv ? mv + 'drop' : 'Drop') + ' the ' + nm(state.grid[moveFrom]) + ' here (-' + TT.PRICE.move + ' coins)';
           hot = sel === pi;
-        } else note = '🚚 Tap an empty tile to drop the ' + TT.NAME[state.grid[moveFrom]] + ' (tap it again to put it down)';
+        } else note = '🚚 Tap an empty tile to drop the ' + nm(state.grid[moveFrom]) + ' (tap it again to put it down)';
       }
     } else if (mode === 'hammer') {
       if (pi >= 0 && state.grid[pi] !== 0 && state.grid[pi] !== TT.WATER) {
         cells[pi].classList.add('target');
-        note = (lastPointer !== 'mouse' && sel === pi ? 'Tap again to smash ' : 'Smash ') + TT.NAME[state.grid[pi]] + ' (-' + TT.PRICE.hammer + ' coins)';
+        note = (lastPointer !== 'mouse' && sel === pi ? 'Tap again to smash ' : 'Smash ') + nm(state.grid[pi]) + ' (-' + TT.PRICE.hammer + ' coins)';
         hot = sel === pi;
       } else note = '🔨 Tap an item to remove it';
     } else if (pi >= 0 && isCollectible(state.grid[pi])) {
@@ -404,8 +416,8 @@
       p.eaten.forEach(function (i) { cells[i].classList.add('eat'); });
       var verb = sel === pi ? 'Tap again to ' : '';
       note = p.merged
-        ? (verb ? verb + 'merge' : 'Merges') + ' into ' + TT.NAME[p.final] + gain(p)
-        : (verb ? verb + 'place ' : 'Place ') + TT.NAME[state.cur] + ' here';
+        ? (verb ? verb + 'merge' : 'Merges') + ' into ' + nm(p.final) + gain(p)
+        : (verb ? verb + 'place ' : 'Place ') + nm(state.cur) + ' here';
       hot = sel === pi;
     } else if (previewOn) note = 'Tap a tile to preview, tap again to place';
     $('note').textContent = note;
@@ -474,13 +486,13 @@
         floatAt(ev.at, ev.level === 1 ? '💢' : '💢💢');
       } else if (ev.type === 'maul') { // it takes it out on the building next to it
         cells[ev.at].classList.add('shake'); cells[ev.bear].classList.add('shake');
-        floatAt(ev.at, '🐻💢 ' + em(ev.from) + '→' + (ev.to ? em(ev.to) : '💨'));
+        floatAt(ev.at, em(TT.BEAR) + '💢 ' + em(ev.from) + '→' + (ev.to ? em(ev.to) : '💨'));
       } else if (ev.type === 'bonus') {
         toast('🪤 A free trap!', 0.2);
       } else if (ev.type === 'unlock') {
         toast('🛒 Shop restocked!');
       } else if (ev.type === 'tierunlock') {
-        toast(em(ev.tier) + ' ' + TT.NAME[ev.tier] + ' unlocked in the shop!', 0.35);
+        toast(em(ev.tier) + ' ' + nm(ev.tier) + ' unlocked in the shop!', 0.35);
       } else if (ev.type === 'land') {
         toast('🏞️ New land!');
       } else if (ev.type === 'open') {
@@ -620,7 +632,12 @@
     box.textContent = '';
     SAMPLE_SEEDS[dlg.map].forEach(function (seed) { var m = document.createElement('div'); m.className = 'mini'; box.appendChild(miniMap(dlg.map, seed, m)); });
   }
+  function skinLabels() { // the New game buttons show this season's animals
+    var wild = document.querySelector('#newGame .opt[data-bears="wild"]'), fox = document.querySelector('#newGame .opt[data-foxes="on"]');
+    wild.textContent = em(TT.BEAR) + ' Wild bears'; fox.textContent = em(TT.FOX) + ' Foxes';
+  }
   function showDialog() {
+    skinLabels();
     document.querySelectorAll('#newGame .opt[data-map]').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.map === dlg.map); });
     document.querySelectorAll('#newGame .opt[data-bears]').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.bears === dlg.bears); });
     document.querySelectorAll('#newGame .opt[data-foxes]').forEach(function (b) { b.setAttribute('aria-pressed', (b.dataset.foxes === 'on') === dlg.foxes); });
@@ -662,7 +679,7 @@
   $('againBtn').addEventListener('click', function () { startNew(0, { wild: state.wild, map: state.map, bears: state.bears, foxes: state.foxes }); });
   // item guide: built from the logic tables so it can never drift from the real merge chains
   function chip(code, label) {
-    return '<div class="chip"><span class="ce">' + em(code) + '</span><small>' + (label || TT.NAME[code]) + '</small></div>';
+    return '<div class="chip"><span class="ce">' + em(code) + '</span><small>' + (label || nm(code)) + '</small></div>';
   }
   function chain(start, firstLabel, finalLabel) {
     var out = [], c = start, first = true;
@@ -683,6 +700,7 @@
     '<p class="gnote">👻🐈‍⬛ haunt the tombstones and churches. <b>Wild bears</b> mode: a bear that cannot step but is not sealed in gets angry (💢, then 💢💢) and on the third turn mauls a 🌱🌿🌳🏕️🛖 next to it, one tier down (a 🌱 is destroyed), then starts over. In a small pen (4 to 6 tiles) with 2 bears and 2 free tiles, a cub is sometimes born (🍼). Blue tiles are <b>water</b>: nothing can be placed, merged, moved or smashed there, and animals cannot cross it. A 🌉 <b>bridge</b> (up to 5, dearer each time) turns a water tile that has land on both sides into a road bears can walk over; nothing can be built on it.</p>' +
     '<h3>Special</h3><div class="chain">' + chip(TT.CRYSTAL, 'wildcard') + chip(TT.FOX, 'warps, walls trap it') + '</div>' +
     '<p class="gnote">💎 stands in for any tier, including 🏬 (making 💵 cash) and 🕌 (making a 💰 treasure). Three or more 💎 touching each other merge into a 💰 treasure. 🚚 moves one item to an empty tile for coins.</p>' +
+    '<p class="gnote">🍂 The animals follow the season: bear and fox are ' + SKINS.autumn.bear[0] + ' ' + SKINS.autumn.fox[0] + ' in autumn and ' + SKINS.winter.bear[0] + ' ' + SKINS.winter.fox[0] + ' in winter (now: ' + em(TT.BEAR) + ' ' + em(TT.FOX) + '). Only the looks change.</p>' +
     '<p class="gnote">Three or more connected items of the same kind merge into the next one. Bigger groups pay more points and coins.</p>' +
     '<p class="gnote">🍀 <b>Lucky drops</b>: once you have built a higher tier, the next item is sometimes a free 🏕️ 🛖 or 🏠 (a tier below your best, never above a house). Most often on Easy, rarer on Standard and Medium, never on Hard.</p>';
   }
@@ -789,6 +807,7 @@
     state: function () { return JSON.parse(JSON.stringify(state)); },
     validate: function () { return TT.validate(state); },
     emoji: function (code) { return em(code); },
+    name: function (code) { return nm(code); },
     critters: function () { return critters.map(function (c) { return c.kind; }); },
     critterHomes: function () { return critters.map(function (c) { return { kind: c.kind, cell: c.cell, code: state.grid[c.cell] }; }); }
   };
