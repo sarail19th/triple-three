@@ -1308,7 +1308,8 @@ t('bank: pays coins every turn (more at a higher clock speed, nothing paused); t
   let s = withGrid({ [I(0, 0)]: TT.BANK, [I(0, 5)]: TT.BANK, [I(5, 5)]: 7 }, { coins: 0, top: 7, cur: 1, next: 1, tick: 9, banksBought: 2, bankOrder: [I(0, 0), I(0, 5)] });
   assert.deepStrictEqual(TT.validate(s), []);
   const r = TT.place(s, I(3, 3)), ev = r.events.find((e) => e.type === 'bankpay');
-  assert(ev && ev.coins === 2 * income && ev.ticks === 1 && ev.banks === 2, JSON.stringify(ev)); assert.strictEqual(r.state.coins, 2 * income);
+  assert(ev && ev.coins === 2 * income && ev.each === income && ev.ticks === 1 && ev.banks === 2, JSON.stringify(ev)); assert.strictEqual(r.state.coins, 2 * income);
+  assert.deepStrictEqual(ev.at, [I(0, 0), I(0, 5)], 'one entry per paying bank, so the UI can float each one');
   assert.strictEqual(TT.place(Object.assign({}, s, { tick: 3 }), I(3, 3)).state.coins, 2 * income, 'not only at a month end: every turn');
   assert.strictEqual(TT.place(Object.assign({}, s, { speed: 3 }), I(3, 3)).state.coins, 2 * income * 3, 'x3 speed: three ticks of income a turn');
   assert(!TT.place(Object.assign({}, s, { speed: 0 }), I(3, 3)).events.some((e) => e.type === 'bankpay'), 'paused clock, no pay');

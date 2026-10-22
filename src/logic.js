@@ -436,8 +436,10 @@
       if (!l.defaulted && s.tick - l.since >= LOAN_TICKS) { l.defaulted = true; s.grid[l.at] = SEIZED; events.push({ type: 'default', bank: l.bank, at: l.at, tier: l.tier }); }
     });
     if (s.speed > 0) { // every turn each paying bank earns its income for the ticks that passed (a bank with a defaulted loan earns nothing)
-      var banks = bankCount(s) - Object.keys(s.loans.reduce(function (o, l) { if (l.defaulted) o[l.bank] = 1; return o; }, {})).length, pay = banks * bankIncome(s) * s.speed;
-      if (pay) { s.coins += pay; events.push({ type: 'bankpay', coins: pay, ticks: s.speed, banks: banks }); }
+      var inDefault = {}, paying = [], each = bankIncome(s) * s.speed;
+      s.loans.forEach(function (l) { if (l.defaulted) inDefault[l.bank] = true; });
+      for (var bi = 0; bi < s.grid.length; bi++) if (s.grid[bi] === BANK && !inDefault[bi]) paying.push(bi);
+      if (paying.length) { s.coins += each * paying.length; events.push({ type: 'bankpay', coins: each * paying.length, each: each, ticks: s.speed, banks: paying.length, at: paying }); }
     }
     grantMilestones(s, events);
     s.cur = s.next; s.next = drawItem(s, events); s.turn++;

@@ -521,7 +521,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       </section>
     </div>
     <div class="pager"><button id="helpPrev" class="btn" aria-label="Previous page">‹ Back</button><span id="helpPageLabel" aria-live="polite"></span><button id="helpNext" class="btn" aria-label="Next page">Next ›</button></div>
-    <p class="gnote">Version <b id="buildId">eebdc4ba</b> · <a href="#" id="updateLink">↻ Get the latest version</a><br>(keeps your saved game and best scores)</p>
+    <p class="gnote">Version <b id="buildId">7d051319</b> · <a href="#" id="updateLink">↻ Get the latest version</a><br>(keeps your saved game and best scores)</p>
     <div class="helpbtns"><button id="helpTour" class="btn">▶ Quick tour</button><button id="helpClose" class="btn primary">Got it</button></div>
   </div>
 </div>
@@ -964,8 +964,10 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       if (!l.defaulted && s.tick - l.since >= LOAN_TICKS) { l.defaulted = true; s.grid[l.at] = SEIZED; events.push({ type: 'default', bank: l.bank, at: l.at, tier: l.tier }); }
     });
     if (s.speed > 0) { // every turn each paying bank earns its income for the ticks that passed (a bank with a defaulted loan earns nothing)
-      var banks = bankCount(s) - Object.keys(s.loans.reduce(function (o, l) { if (l.defaulted) o[l.bank] = 1; return o; }, {})).length, pay = banks * bankIncome(s) * s.speed;
-      if (pay) { s.coins += pay; events.push({ type: 'bankpay', coins: pay, ticks: s.speed, banks: banks }); }
+      var inDefault = {}, paying = [], each = bankIncome(s) * s.speed;
+      s.loans.forEach(function (l) { if (l.defaulted) inDefault[l.bank] = true; });
+      for (var bi = 0; bi < s.grid.length; bi++) if (s.grid[bi] === BANK && !inDefault[bi]) paying.push(bi);
+      if (paying.length) { s.coins += each * paying.length; events.push({ type: 'bankpay', coins: each * paying.length, each: each, ticks: s.speed, banks: paying.length, at: paying }); }
     }
     grantMilestones(s, events);
     s.cur = s.next; s.next = drawItem(s, events); s.turn++;
@@ -2005,8 +2007,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
         cells[ev.at].classList.add('shake'); floatAt(ev.at, '🏚️');
         toast('🏚️ A loan ran out: the ' + em(ev.tier) + ' and its tile were seized!', 0.25);
       } else if (ev.type === 'bankpay') {
-        var bk = state.grid.indexOf(TT.BANK);
-        if (bk >= 0) { floatAt(bk, '🏦 +' + fmt(ev.coins) + '🪙'); cells[bk].classList.add('drop'); }
+        ev.at.forEach(function (bk) { floatAt(bk, '🏦 +' + fmt(ev.each) + '🪙'); cells[bk].classList.add('drop'); }); // each bank shows its own income
       } else if (ev.type === 'bonus') {
         toast('🪤 A free trap!', 0.2);
       } else if (ev.type === 'unlock') {
