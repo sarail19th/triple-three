@@ -407,7 +407,7 @@
     $('landNote').textContent = 'Land ' + state.land.length + '/' + TT.MAX_LAND + (lp ? ' · next side 🪙' + lp : ' · all bought');
     var nextAt = TT.milestoneScore(state.milestone), gifts = [];
     [1, 2, 3, TT.CRYSTAL].forEach(function (c) { gifts.push('+' + TT.RESTOCK[c] + em(c)); });
-    $('unlock').textContent = 'Shop restocks at score ' + nextAt + ' (' + (nextAt - state.score) + ' to go): ' + gifts.join(' ') +
+    $('unlock').textContent = 'Shop restocks in ' + (nextAt - TT.milestoneProgress(state)) + ' more points from merges (pond income and lake bonuses do not count): ' + gifts.join(' ') +
       (TT.unlockedTop(state) > 3 ? ' +1 each higher tier' : '') + ' +1🪤 +1🔨';
     $('undoBtn').textContent = '↶ Undo 🪙' + TT.UNDO_COST;
     var cal = TT.calendar(state);
@@ -803,6 +803,15 @@
   $('loanLine').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openFirstLoanBank(); } });
   $('questLine').addEventListener('click', openShop);
   $('questLine').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openShop(); } });
+  // "Get the latest version": drop the service worker and its caches, then reload. The saved game lives in localStorage, which is not touched.
+  $('updateLink').addEventListener('click', function (e) {
+    e.preventDefault();
+    this.textContent = 'Updating…';
+    var jobs = [];
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); }));
+    if (window.caches && caches.keys) jobs.push(caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); }));
+    Promise.all(jobs).catch(function () {}).then(function () { location.reload(); });
+  });
   $('guideLink').addEventListener('click', function (e) { e.preventDefault(); $('guide').classList.remove('hidden'); });
   $('guideClose').addEventListener('click', function () { $('guide').classList.add('hidden'); });
   $('hapticLink').addEventListener('click', function (e) {

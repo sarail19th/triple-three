@@ -82,6 +82,8 @@
   var START_STOCK = { 1: 3, 2: 2, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1, 10: 1, 16: 0, hammer: 2, trap: 2, move: 1 };
   var MILESTONES = [400, 1200, 3000, 7000, 15000, 30000]; // after the last one a restock comes every 30000 more points
   var RESTOCK = { 1: 2, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1, 10: 1, 16: 1, hammer: 1, trap: 1, move: 1 };
+  // Score that counts towards shop restocks: pond income and lake bonuses (state.bonusScore) add to the score but never trigger restocks.
+  function milestoneProgress(s) { return s.score - (s.bonusScore || 0); }
   function milestoneScore(n) { return n < MILESTONES.length ? MILESTONES[n] : MILESTONES[MILESTONES.length - 1] * (n - MILESTONES.length + 2); }
   // Land: one extra row/column per side, each side once, dearer every time.
   var SIDES = ['top', 'bottom', 'left', 'right'];
@@ -127,14 +129,14 @@
 
   function clone(s) {
     return { ver: s.ver, wild: s.wild, bears: s.bears, foxes: s.foxes, map: s.map, bridges: s.bridges.slice(), ponds: s.ponds.slice(), lake: s.lake, tick: s.tick, speed: s.speed, banksBought: s.banksBought, bankOrder: s.bankOrder.slice(), loans: s.loans.map(function (l) { return Object.assign({}, l); }), w: s.w, h: s.h, land: s.land.slice(), top: s.top, grid: s.grid.slice(), cur: s.cur, next: s.next, hold: s.hold, score: s.score, coins: s.coins,
-      stock: Object.assign({}, s.stock), milestone: s.milestone, turn: s.turn, over: s.over, rng: s.rng, seed: s.seed, undo: s.undo };
+      stock: Object.assign({}, s.stock), milestone: s.milestone, bonusScore: s.bonusScore, turn: s.turn, over: s.over, rng: s.rng, seed: s.seed, undo: s.undo };
   }
 
   function newGame(seed, opts) {
     seed = (seed >>> 0) || 1;
     var bears = !(opts && opts.bears === false), foxes = !(opts && opts.foxes === false);
     var s = { ver: VERSION, wild: bears && !!(opts && opts.wild), bears: bears, foxes: foxes, map: opts && MAPS.indexOf(opts.map) >= 0 ? opts.map : 'easy', bridges: [], ponds: [], lake: 0, tick: 0, speed: 1, banksBought: 0, bankOrder: [], loans: [], w: DEFAULT_W, h: DEFAULT_H, land: [], top: 1, grid: new Array(DEFAULT_W * DEFAULT_H).fill(EMPTY), cur: 1, next: 1, hold: 0, score: 0, coins: START_COINS,
-      stock: Object.assign({}, START_STOCK), milestone: 0, turn: 0, over: false, rng: seed, seed: seed, undo: null };
+      stock: Object.assign({}, START_STOCK), milestone: 0, bonusScore: 0, turn: 0, over: false, rng: seed, seed: seed, undo: null };
     dim(s);
     genMap(s);
     s.next = drawItem(s); // always open with grass
@@ -405,7 +407,7 @@
   function isOver(s) { return freeCount(s) === 0 && !canHammer(s) && !canLand(s) && !loanEscape(s); }
   // Score milestones restock the shop (only tiers that are unlocked). Mutates s.
   function grantMilestones(s, events) {
-    while (s.score >= milestoneScore(s.milestone)) {
+    while (milestoneProgress(s) >= milestoneScore(s.milestone)) {
       s.milestone++;
       for (var k in RESTOCK) {
         if (+k <= LAST_BUILDING && +k > unlockedTop(s)) continue;
@@ -428,7 +430,7 @@
     settleCrystals(s, events); // new tombstones / churches may complete a group for a waiting crystal
     noteTop(s, events);
     var pp = pondPoints(s);
-    if (pp) { s.score += pp; events.push({ type: 'pondpts', points: pp }); }
+    if (pp) { s.score += pp; s.bonusScore += pp; events.push({ type: 'pondpts', points: pp }); }
     s.tick += s.speed;
     s.loans.forEach(function (l) { // a year without repaying: the building is gone and its tile seized
       if (!l.defaulted && s.tick - l.since >= LOAN_TICKS) { l.defaulted = true; s.grid[l.at] = SEIZED; events.push({ type: 'default', bank: l.bank, at: l.at, tier: l.tier }); }
@@ -669,7 +671,7 @@
     s.grid[idx] = WATER; s.ponds.push(idx); s.ponds.sort(function (a, b) { return a - b; });
     while (s.lake < LAKE_SIZES.length && squareAt(s.grid, idx, LAKE_SIZES[s.lake])) {
       var bonus = BASE[s.top] * LAKE_BONUS[s.lake];
-      s.score += bonus; s.coins += LAKE_COINS[s.lake];
+      s.score += bonus; s.bonusScore += bonus; s.coins += LAKE_COINS[s.lake];
       events.push({ type: 'lake', size: LAKE_SIZES[s.lake], points: bonus, coins: LAKE_COINS[s.lake] });
       s.lake++;
     }
@@ -786,7 +788,8 @@
       if (typeof x.bears !== 'boolean') x.bears = true; // bears and foxes can be switched off per game; every older game has both
       if (typeof x.foxes !== 'boolean') x.foxes = true;
       if (typeof x.wild !== 'boolean') x.wild = false; // Wild bears is chosen per game; every older game is a classic one
-      if (typeof x.milestone !== 'number') { x.milestone = 0; while (x.score >= milestoneScore(x.milestone)) x.milestone++; }
+      if (typeof x.bonusScore !== 'number') x.bonusScore = 0; // pond income / lake bonuses (they do not count towards restocks)
+      if (typeof x.milestone !== 'number') { x.milestone = 0; while (milestoneProgress(x) >= milestoneScore(x.milestone)) x.milestone++; }
       if (Array.isArray(x.grid) && x.grid.length === (x.w || DEFAULT_W) * (x.h || DEFAULT_H)) {
         dim(x);
         settleBanks(x);
@@ -875,7 +878,8 @@
       if (typeof n !== 'number' || n !== (n | 0) || ((sk === 'hammer' || sk === 'trap' || sk === 'move') && n < 0)) p.push('bad stock ' + sk + ': ' + n);
     }
     if (!(s.milestone >= 0) || s.milestone !== (s.milestone | 0)) p.push('bad milestone ' + s.milestone);
-    else if (s.score < (s.milestone ? milestoneScore(s.milestone - 1) : 0) || s.score >= milestoneScore(s.milestone)) p.push('milestone ' + s.milestone + ' inconsistent with score ' + s.score);
+    else if (milestoneProgress(s) < (s.milestone ? milestoneScore(s.milestone - 1) : 0) || milestoneProgress(s) >= milestoneScore(s.milestone)) p.push('milestone ' + s.milestone + ' inconsistent with score ' + s.score);
+    if (!(s.bonusScore >= 0) || s.bonusScore !== (s.bonusScore | 0) || s.bonusScore > s.score) p.push('bad bonus score ' + s.bonusScore);
     if (p.length) return p;
     if (s.over !== isOver(s)) p.push('over flag inconsistent with grid/coins');
     // after a resolved turn no mergeable group of 3+ may remain
@@ -900,7 +904,7 @@
     TREASURE_COINS: TREASURE_COINS, CASH_COINS: CASH_COINS,
     EMOJI: EMOJI, NAME: NAME, NEXT: NEXT, BASE: BASE, WEIGHTS: WEIGHTS, TRAP_DROP: TRAP_DROP,
     START_COINS: START_COINS, COIN: COIN, PRICE: PRICE, BUYABLE: BUYABLE, UNDO_COST: UNDO_COST, START_STOCK: START_STOCK,
-    RESTOCK: RESTOCK, MILESTONES: MILESTONES, milestoneScore: milestoneScore, canUndo: canUndo, canHammer: canHammer, migrate: migrate,
+    RESTOCK: RESTOCK, MILESTONES: MILESTONES, milestoneScore: milestoneScore, milestoneProgress: milestoneProgress, canUndo: canUndo, canHammer: canHammer, migrate: migrate,
     rand: rand, drawItem: drawItem, newGame: newGame, neighbors: neighbors, group: group,
     place: place, swap: swap, swapNext: swapNext, undo: undo, validate: validate, emptyCount: emptyCount,
     buy: buy, hammer: hammer, trap: trap, move: move, open: open, buyLand: buyLand, buyBridge: buyBridge, borrow: borrow, repay: repay, setSpeed: setSpeed, lockedCells: lockedCells, loanOptions: loanOptions, loanOwed: loanOwed, loanMonthsLeft: loanMonthsLeft, bankRate: bankRate, SEIZED: SEIZED, LOAN_RATE: LOAN_RATE, LOAN_TICKS: LOAN_TICKS, MAX_SPEED: MAX_SPEED, buyBank: buyBank, bankPrice: bankPrice, bankCount: bankCount, bankSlots: bankSlots, bankIncome: bankIncome, canBuyBank: canBuyBank, isBankAvailable: isBankAvailable, calendar: calendar, BANK: BANK, MAX_BANKS: MAX_BANKS, BANK_PRICE: BANK_PRICE, BANK_MIN_TIER: BANK_MIN_TIER, TICKS_PER_MONTH: TICKS_PER_MONTH, MONTHS_PER_YEAR: MONTHS_PER_YEAR, buyPond: buyPond, pondPrice: pondPrice, pondPoints: pondPoints, canPond: canPond, bestLake: bestLake, MAX_PONDS: MAX_PONDS, POND_PRICE: POND_PRICE, LAKE_SIZES: LAKE_SIZES, LAKE_BONUS: LAKE_BONUS, LAKE_COINS: LAKE_COINS, bridgeSpots: bridgeSpots, bridgePrice: bridgePrice, canBridge: canBridge, freeCount: freeCount, MAX_BRIDGES: MAX_BRIDGES, BRIDGE_PRICE: BRIDGE_PRICE, preview: preview, previewMove: previewMove, isOver: isOver,

@@ -1406,6 +1406,27 @@ t('loans: a stuck board is not over while a defaulted lot can be paid for or a l
   const mg = TT.migrate(legacy); assert.deepStrictEqual(mg.loans, []); assert.deepStrictEqual(mg.bankOrder, []); assert.deepStrictEqual(TT.validate(mg), []);
 });
 
+t('pond income and lake bonuses add to the score but never trigger shop restocks', () => {
+  const g = {}; for (let i = 0; i < 6; i++) g[i] = TT.WATER;
+  const rich = withGrid(g, { top: 10, ponds: [0, 1, 2, 3, 4, 5], score: 399, cur: 1, next: 1 });
+  assert.deepStrictEqual(TT.validate(rich), []);
+  const r = TT.place(rich, I(5, 5));
+  assert(r.state.score - rich.score === TT.pondPoints(rich) && TT.pondPoints(rich) > 10000, 'the ponds paid a lot');
+  assert.strictEqual(r.state.milestone, 0, 'but no restock'); assert(!r.events.some((e) => e.type === 'unlock'));
+  assert.strictEqual(TT.milestoneProgress(r.state), 399); assert.strictEqual(r.state.bonusScore, TT.pondPoints(rich));
+  assert.deepStrictEqual(TT.validate(r.state), []);
+  // a real merge still crosses the milestone (3 grass = 30 points from 399)
+  const m = TT.place(withGrid({ [I(2, 1)]: 1, [I(2, 3)]: 1 }, { score: 399, cur: 1, next: 1 }), I(2, 2));
+  assert.strictEqual(m.state.milestone, 1); assert(m.events.some((e) => e.type === 'unlock'));
+  // lake bonuses are bonus score too
+  let s = withGrid({}, { coins: 10 ** 7, top: 5 });
+  for (const [a2, b2] of [[0, 0], [0, 1], [1, 0], [1, 1]]) s = TT.buyPond(s, I(a2, b2)).state;
+  assert.strictEqual(s.lake, 1); assert(s.score >= TT.BASE[5] * TT.LAKE_BONUS[0]); assert.strictEqual(s.milestone, 0, 'the quest bonus gives no restock'); assert.strictEqual(TT.milestoneProgress(s), 0);
+  // old saves (no bonusScore) count their whole score, as before
+  const legacy = JSON.parse(JSON.stringify(withGrid({}, { score: 500, milestone: 1 }))); delete legacy.bonusScore;
+  const mg = TT.migrate(legacy); assert.strictEqual(mg.bonusScore, 0); assert.strictEqual(TT.milestoneProgress(mg), 500); assert.deepStrictEqual(TT.validate(mg), []);
+});
+
 t('animals can be switched off per game: no bears, no foxes, or calm (neither)', () => {
   for (const [bears, foxes] of [[false, true], [true, false], [false, false]]) {
     for (let seed = 1; seed <= 40; seed++) {

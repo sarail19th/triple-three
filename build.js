@@ -4,10 +4,13 @@ const path = require('path');
 const crypto = require('crypto');
 const read = (f) => fs.readFileSync(path.join(__dirname, f), 'utf8');
 // function replacers so "$&"-style sequences in the source are never interpreted
-const html = read('src/index.html')
+const template = read('src/index.html')
   .replace('/*INLINE_CSS*/', () => read('src/style.css'))
   .replace('/*INLINE_LOGIC*/', () => read('src/logic.js'))
   .replace('/*INLINE_GAME*/', () => read('src/game.js'));
+// the version id (shown in How to play, also the service-worker cache name) is a hash of the game's content
+const v = crypto.createHash('md5').update(template).digest('hex').slice(0, 8);
+const html = template.replace('__BUILD__', v);
 fs.mkdirSync(path.join(__dirname, 'dist'), { recursive: true });
 fs.writeFileSync(path.join(__dirname, 'dist/index.html'), html);
 
@@ -21,8 +24,7 @@ fs.writeFileSync(path.join(__dirname, 'dist/manifest.webmanifest'), JSON.stringi
   ]
 }, null, 2));
 
-// cache name derives from the content, so the cache only rolls over when the game actually changes
-const v = crypto.createHash('md5').update(html).digest('hex').slice(0, 8);
+// cache name derives from the content (the same id as the version shown in the game), so the cache only rolls over when the game actually changes
 fs.writeFileSync(path.join(__dirname, 'dist/sw.js'), `const C='triple-three-${v}';
 const FILES=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png','./icon-maskable-512.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(FILES)).then(()=>self.skipWaiting()))});
