@@ -66,10 +66,10 @@ def check_consistent(page, where):
     assert dom['hold'] == (EMOJI[st['hold']] if st['hold'] else '·'), f'{where}: hold display'
     assert dom['undoDisabled'] == (st['undo'] is None or st['undo']['coins'] < 5), f'{where}: undo button state'
     tools = page.evaluate("[...document.querySelectorAll('.tool[data-tool]')].map(b => b.dataset.tool)")
-    assert tools[:3] == ['1', '2', '3'] and tools[-5:] == ['16', 'trap', 'hammer', 'move', 'bridge'], f'{where}: shop items {tools}'
-    assert len(tools) == max(3, st['top']) + 5, f'{where}: one button per unlocked tier + crystal + trap + hammer + mover + bridge, got {tools}'
+    assert tools[:3] == ['1', '2', '3'] and tools[-6:] == ['16', 'trap', 'hammer', 'move', 'bridge', 'pond'], f'{where}: shop items {tools}'
+    assert len(tools) == max(3, st['top']) + 6, f'{where}: one button per unlocked tier + crystal + trap + hammer + mover + bridge + pond, got {tools}'
     for tool in tools:
-        want = f"×{5 - len(st['bridges'])}" if tool == 'bridge' else f"×{max(0, st['stock'][tool])}"
+        want = f"×{5 - len(st['bridges'])}" if tool == 'bridge' else f"×{16 - len(st['ponds'])}" if tool == 'pond' else f"×{max(0, st['stock'][tool])}"
         assert page.inner_text(f'.tool[data-tool="{tool}"] .tb') == want, f'{where}: badge {tool}'
     return st
 
@@ -119,7 +119,7 @@ with sync_playwright() as p:
     assert page.locator('#tour').is_visible() and page.locator('#help').is_hidden(), 'the guided tour shows on first launch'
     assert page.evaluate("localStorage.getItem('tt-seen-help')") is None
     steps = []
-    sheet_steps = {'🏠 Buy an item', '🪤 Trap', '🔨 Hammer', '🚚 Mover', '⬆️⬇️⬅️➡️ Land'}
+    sheet_steps = {'🏠 Buy an item', '🪤 Trap', '🔨 Hammer', '🚚 Mover', '💧 Pond', '⬆️⬇️⬅️➡️ Land'}
     while page.locator('#tour').is_visible():
         page.wait_for_timeout(380)
         title = page.inner_text('#tourTitle'); steps.append(title)
@@ -134,7 +134,7 @@ with sync_playwright() as p:
             page.tap('#tourNext'); page.wait_for_timeout(100); assert page.inner_text('#tourStep').lower().startswith('step 3 of')
         page.tap('#tourNext')
     assert len(steps) >= 15, steps
-    for need in ['🗺️ The map', '🌱 Place and Next', '📦 Reserve', '↶ Undo', '👁 Preview', '⟳ New game', '📋 Turn, rules and settings', '🛒 Shop', '🪤 Trap', '🔨 Hammer', '🚚 Mover', '⬆️⬇️⬅️➡️ Land']:
+    for need in ['🗺️ The map', '🌱 Place and Next', '📦 Reserve', '↶ Undo', '👁 Preview', '⟳ New game', '📋 Turn, rules and settings', '🛒 Shop', '🪤 Trap', '🔨 Hammer', '🚚 Mover', '💧 Pond', '⬆️⬇️⬅️➡️ Land']:
         assert need in steps, f'the tour misses {need}: {steps}'
     assert page.locator('#shopSheet').is_hidden() and page.evaluate("localStorage.getItem('tt-seen-help')") == '1', 'the tour ends with the shop closed and remembered'
     page.evaluate('navigator.serviceWorker.ready')
@@ -202,7 +202,7 @@ with sync_playwright() as p:
             assert after['undo'] is None and page.locator('#undoBtn').is_disabled(), 'single-level undo'
             continue
         if roll < 0.20:  # shop: buy grass / bush / tree if enabled
-            tool = rng.choice([t for t in page.evaluate("[...document.querySelectorAll('.tool[data-tool]')].map(b => b.dataset.tool)") if t not in ('trap', 'hammer', 'move', 'bridge')])
+            tool = rng.choice([t for t in page.evaluate("[...document.querySelectorAll('.tool[data-tool]')].map(b => b.dataset.tool)") if t not in ('trap', 'hammer', 'move', 'bridge', 'pond')])
             btn = page.locator(f'.tool[data-tool="{tool}"]')
             price = page.evaluate('([s, t]) => TT.priceOf(s, +t)', [st, tool])
             if btn.is_enabled():
@@ -576,6 +576,33 @@ with sync_playwright() as p:
     page.tap('#board .cell[data-i="8"]'); page.tap('#board .cell[data-i="8"]')   # nothing can be built on a bridge
     assert state(page)['grid'][8] == 0 and state(page)['turn'] == 3
     assert page.inner_text('#bridgeBtn .tp') == '🪙700' and page.inner_text('#bridgeBtn .tb') == '×4', 'the next bridge costs more'
+
+
+    # ---- ponds: dug on any empty tile, a free action; permanent, pay points each turn, lake quest shown in the shop
+    g = [0] * 36; g[0] = 5
+    load(g, coins=1000, top=4, score=0, milestone=0)
+    open_shop(page)
+    assert page.locator('#pondBtn').is_visible() and page.inner_text('#pondBtn .tp') == '🪙300' and page.inner_text('#pondBtn .tb') == '×16'
+    assert 'Ponds 0/16' in page.inner_text('#pondNote') and '2×2' in page.inner_text('#pondNote')
+    shop_tap(page, '#pondBtn')
+    assert page.get_attribute('#pondBtn', 'aria-pressed') == 'true', page.get_attribute('#pondBtn', 'aria-pressed')
+    assert 'pond' in page.inner_text('#note'), page.inner_text('#note')
+    page.tap('#board .cell[data-i="0"]')                       # an occupied tile is not a target
+    assert state(page)['ponds'] == [] and state(page)['coins'] == 1000
+    tap_cell(page, 14, True)
+    after = check_consistent(page, 'pond')
+    assert after['ponds'] == [14] and after['grid'][14] == 21 and after['coins'] == 700 and after['turn'] == 3, 'a free action that costs the first price'
+    assert page.locator('#board .cell.pond').count() == 1 and page.get_attribute('#board .cell[data-i="14"]', 'aria-label').endswith('water')
+    assert page.get_attribute('#pondBtn', 'aria-pressed') == 'false' and page.locator('#board svg.water').count() == 1
+    page.tap('#board .cell[data-i="14"]'); assert state(page)['turn'] == 3, 'nothing happens on a pond'
+    open_shop(page); assert page.inner_text('#pondBtn .tp') == '🪙440' and page.inner_text('#pondBtn .tb') == '×15' and 'Ponds 1/16' in page.inner_text('#pondNote')
+    page.tap('#shopClose')
+    before = state(page)['score']
+    tap_cell(page, 20, True)
+    assert state(page)['score'] - before >= 4 * 0 + 14, 'the pond pays points every turn'   # ceil(BASE[4] / 20) = 14
+    # a poor player cannot dig
+    load(g, coins=100, top=4)
+    open_shop(page); assert page.locator('#pondBtn').is_disabled(); page.tap('#shopClose')
 
     page.tap('#newBtn'); page.tap('.opt[data-map="easy"]'); page.tap('.opt[data-bears="classic"]'); page.tap('#newStart')
     easy = check_consistent(page, 'easy map')

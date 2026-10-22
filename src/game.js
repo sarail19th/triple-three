@@ -128,11 +128,12 @@
     var v = state.grid[idx];
     if (mode === 'move') return TT.isMovable(v) || (v === 0 && moveFrom >= 0 && !isBridgeTile(idx)); // pick something up, then an empty tile to drop it on
     if (mode === 'bridge') return TT.bridgeSpots(state).indexOf(idx) >= 0;
+    if (mode === 'pond') return v === 0 && !isBridgeTile(idx);
     return mode === 'hammer' ? v !== 0 && v !== TT.WATER : mode === 'trap' ? isAnimal(v) : ((v === 0 && !isBridgeTile(idx)) || isCollectible(v));
   }
   function isBridgeTile(i) { return state.bridges.indexOf(i) >= 0; }
   function doAction(idx) {
-    return mode === 'hammer' ? TT.hammer(state, idx) : mode === 'trap' ? TT.trap(state, idx) : mode === 'bridge' ? TT.buyBridge(state, idx) : TT.place(state, idx);
+    return mode === 'hammer' ? TT.hammer(state, idx) : mode === 'trap' ? TT.trap(state, idx) : mode === 'bridge' ? TT.buyBridge(state, idx) : mode === 'pond' ? TT.buyPond(state, idx) : TT.place(state, idx);
   }
 
   // Mouse: hover already showed the preview, so one click commits. Touch: the first tap selects and previews
@@ -248,11 +249,13 @@
       c.classList.toggle('empty', code === 0);
       var isB = state.bridges.indexOf(i) >= 0, col = i % w; // a bridge tile is walkable water: planks along the way across
       c.classList.toggle('bridge', isB);
+      c.classList.toggle('pond', state.ponds.indexOf(i) >= 0);
       c.classList.toggle('bh', isB && col > 0 && col < w - 1 && g[i - 1] !== TT.WATER && g[i + 1] !== TT.WATER);
       c.classList.toggle('bv', isB && !c.classList.contains('bh'));
       c.setAttribute('aria-label', 'row ' + (((i / w) | 0) + 1) + ' column ' + ((i % w) + 1) + ' ' + (state.bridges.indexOf(i) >= 0 ? 'bridge ' : '') + TT.NAME[code]);
     });
     if (mode === 'bridge') { if (!TT.canBridge(state)) mode = null; }
+    else if (mode === 'pond') { if (!TT.canPond(state)) mode = null; }
     else if (mode && (state.over || state.coins < TT.PRICE[mode] || !(state.stock[mode] > 0))) mode = null;
     if (mode !== 'move' || (moveFrom >= 0 && !TT.isMovable(g[moveFrom]))) moveFrom = -1;
     if (sel >= 0 && (state.over || !targetOk(sel))) sel = -1;
@@ -277,6 +280,12 @@
       } else if (t === 'move') {
         b.disabled = state.over || !TT.canMove(state) || !g.some(TT.isMovable) || TT.freeCount(state) === 0;
         b.setAttribute('aria-pressed', mode === 'move');
+      } else if (t === 'pond') {
+        b.disabled = !TT.canPond(state);
+        b.setAttribute('aria-pressed', mode === 'pond');
+        b.querySelector('.tp').textContent = TT.pondPrice(state) === null ? 'max' : '🪙' + fmt(TT.pondPrice(state));
+        b.querySelector('.tb').textContent = '×' + (TT.MAX_PONDS - state.ponds.length);
+        return;
       } else if (t === 'bridge') {
         b.hidden = !g.some(function (v) { return v === TT.WATER; }) && !state.bridges.length; // only on maps with water
         b.disabled = state.over || !TT.canBridge(state);
@@ -295,17 +304,20 @@
       }
       b.querySelector('.tb').textContent = '×' + Math.max(0, state.stock[t] || 0);
     });
-    var TOOL_NAMES = { hammer: '🔨 Hammer', trap: '🪤 Trap', move: '🚚 Mover', bridge: '🌉 Bridge' };
+    var TOOL_NAMES = { hammer: '🔨 Hammer', trap: '🪤 Trap', move: '🚚 Mover', bridge: '🌉 Bridge', pond: '💧 Pond' };
     $('toolCancel').hidden = !mode; // a tool is armed: the Shop sheet is closed, so offer a way to put it away
     if (mode) $('toolCancelName').textContent = TOOL_NAMES[mode];
     var util = document.querySelector('.tools.util');
-    util.style.setProperty('--tools', 7 + ($('bridgeBtn').hidden ? 0 : 1) - ($('trapBtn').hidden ? 1 : 0));
+    util.style.setProperty('--tools', 8 + ($('bridgeBtn').hidden ? 0 : 1) - ($('trapBtn').hidden ? 1 : 0));
     var lp = TT.landPrice(state);
     document.querySelectorAll('.land').forEach(function (b) {
       var owned = state.land.indexOf(b.dataset.land) >= 0;
       b.disabled = state.over || owned || !TT.canLand(state);
       b.querySelector('.tp').textContent = owned ? '✓' : '🪙' + fmt(lp);
     });
+    var nq = state.lake < TT.LAKE_SIZES.length ? TT.LAKE_SIZES[state.lake] : 0, bl = TT.bestLake(state);
+    $('pondNote').textContent = 'Ponds ' + state.ponds.length + '/' + TT.MAX_PONDS + (state.ponds.length ? ' · +' + fmt(TT.pondPoints(state)) + ' pts per turn' : '') +
+      (nq ? ' · 🏞️ quest: a ' + nq + '×' + nq + ' lake (biggest now ' + bl + '×' + bl + ')' : ' · 🏞️ all lakes built');
     $('landNote').textContent = 'Land ' + state.land.length + '/' + TT.MAX_LAND + (lp ? ' · next side 🪙' + lp : ' · all bought');
     var nextAt = TT.milestoneScore(state.milestone), gifts = [];
     [1, 2, 3, TT.CRYSTAL].forEach(function (c) { gifts.push('+' + TT.RESTOCK[c] + TT.EMOJI[c]); });
@@ -336,6 +348,12 @@
         note = (sel === pi ? 'Tap again to trap' : 'Trap') + ' the ' + TT.NAME[state.grid[pi]] + ' -> ' + TT.NAME[res] + ' (-' + TT.PRICE.trap + ' coins)';
         hot = sel === pi;
       } else note = '🪤 Tap a bear or fox to kill it';
+    } else if (mode === 'pond') {
+      var pp = TT.pondPrice(state);
+      if (pi >= 0 && targetOk(pi)) {
+        cells[pi].classList.add('target');
+        note = (sel === pi ? 'Tap again to dig' : 'Dig') + ' a pond here (-' + pp + ' coins, +' + TT.pondPoints(Object.assign({}, state, { ponds: state.ponds.concat([pi]) })) + ' pts per turn)'; hot = sel === pi;
+      } else note = '💧 Tap an empty tile to dig a pond (-' + pp + ' coins)';
     } else if (mode === 'bridge') {
       var spots = TT.bridgeSpots(state), bp = TT.bridgePrice(state);
       spots.forEach(function (i) { cells[i].classList.add('spot'); });
@@ -430,6 +448,13 @@
       } else if (ev.type === 'bridge') { // planks slide in; the price just paid is the one before the current next price
         cells[ev.at].classList.add('built');
         floatAt(ev.at, '🌉 -' + TT.BRIDGE_PRICE[state.bridges.length - 1] + '🪙');
+      } else if (ev.type === 'pond') {
+        cells[ev.at].classList.add('drop');
+        floatAt(ev.at, '💧 -' + fmt(ev.price) + '🪙');
+      } else if (ev.type === 'lake') {
+        toast('🏞️ ' + ev.size + '×' + ev.size + ' lake! +' + fmt(ev.points) + ' points', 0.3);
+      } else if (ev.type === 'pondpts') {
+        if (state.ponds.length) floatAt(state.ponds[0], '💧 +' + fmt(ev.points));
       } else if (ev.type === 'cub') { // a bear cub is born in the pen
         cells[ev.at].classList.add('drop');
         floatAt(ev.at, '🍼');
@@ -543,7 +568,7 @@
   });
   document.querySelectorAll('.tool[data-tool]').forEach(function (b) { // trap, hammer and mover (the item shop is built in buildShop)
     var t = b.dataset.tool;
-    if (t !== 'bridge') b.querySelector('.tp').textContent = '🪙' + TT.PRICE[t];
+    if (t !== 'bridge' && t !== 'pond') b.querySelector('.tp').textContent = '🪙' + TT.PRICE[t];
     b.addEventListener('click', function () { mode = mode === t ? null : t; sel = -1; moveFrom = -1; render([]); closeShop(); });
   });
   document.querySelectorAll('.land').forEach(function (b) {
@@ -661,6 +686,7 @@
     { target: '#hammerBtn', sheet: true, title: '🔨 Hammer', text: 'Smashes any item you have placed, to make room. Tap the tool, then the item.' },
     { target: '#moveBtn', sheet: true, title: '🚚 Mover', text: 'Picks up one item and drops it on another empty tile, where it merges like a placed item. Bears and foxes cannot be moved.' },
     { target: '#bridgeBtn', sheet: true, title: '🌉 Bridge', text: 'On maps with water: turns a water tile that has land on both sides into a road bears can cross. Glowing tiles show where it can go. Up to 5, dearer each time.', when: function () { return !$('bridgeBtn').hidden; } },
+    { target: '#pondBtn', sheet: true, title: '💧 Pond', text: 'Digs a pond on an empty tile. It takes the tile for good, but pays <b>points every turn</b>, and dearer ponds pay more in total. Dig a 2×2, then 3×3 and 4×4 block of water for big <b>lake quest</b> bonuses (see the line under the tools).' },
     { target: '.tool.land', sheet: true, title: '⬆️⬇️⬅️➡️ Land', text: 'Adds one more row or column on that side of the map (each side once, dearer every time). Water that touches that edge carries on into it. Handy when the map is nearly full.' },
     { title: '🎉 You are ready', text: 'The <b>Item guide</b> at the top lists every item and what it merges into, and <b>How to play</b> repeats the rules and this tour. Your game is saved automatically. Have fun!' }
   ];

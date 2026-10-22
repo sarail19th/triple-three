@@ -19,6 +19,11 @@
   // river across the field, hard = random ponds. Water tiles are fixed for the whole game.
   var MAPS = ['easy', 'standard', 'medium', 'hard'];
   var STANDARD_ITEMS = 5;
+  // Ponds: a shop tool (any map). Turns one empty tile into permanent water (state.ponds) that pays points every turn, scaled to your best
+  // building tier; dearer every time. Lake quests: the first pond that completes a 2x2 / 3x3 / 4x4 block of water pays a one-off bonus (state.lake).
+  var MAX_PONDS = 16;
+  var POND_PRICE = []; (function () { for (var n = 0, p = 300; n < MAX_PONDS; n++, p *= 1.45) POND_PRICE.push(Math.round(p / 10) * 10); })();
+  var LAKE_SIZES = [2, 3, 4], LAKE_BONUS = [30, 100, 300]; // bonus points = BASE[top] * LAKE_BONUS
   // Bridges: a shop tool for maps with water. A bridge turns one water tile into a walkable tile (bears and foxes cross it, nothing can
   // be built on it) and is remembered in state.bridges. At most MAX_BRIDGES per game, dearer every time.
   var MAX_BRIDGES = 5;
@@ -104,14 +109,14 @@
   }
 
   function clone(s) {
-    return { ver: s.ver, wild: s.wild, bears: s.bears, foxes: s.foxes, map: s.map, bridges: s.bridges.slice(), w: s.w, h: s.h, land: s.land.slice(), top: s.top, grid: s.grid.slice(), cur: s.cur, next: s.next, hold: s.hold, score: s.score, coins: s.coins,
+    return { ver: s.ver, wild: s.wild, bears: s.bears, foxes: s.foxes, map: s.map, bridges: s.bridges.slice(), ponds: s.ponds.slice(), lake: s.lake, w: s.w, h: s.h, land: s.land.slice(), top: s.top, grid: s.grid.slice(), cur: s.cur, next: s.next, hold: s.hold, score: s.score, coins: s.coins,
       stock: Object.assign({}, s.stock), milestone: s.milestone, turn: s.turn, over: s.over, rng: s.rng, seed: s.seed, undo: s.undo };
   }
 
   function newGame(seed, opts) {
     seed = (seed >>> 0) || 1;
     var bears = !(opts && opts.bears === false), foxes = !(opts && opts.foxes === false);
-    var s = { ver: VERSION, wild: bears && !!(opts && opts.wild), bears: bears, foxes: foxes, map: opts && MAPS.indexOf(opts.map) >= 0 ? opts.map : 'easy', bridges: [], w: DEFAULT_W, h: DEFAULT_H, land: [], top: 1, grid: new Array(DEFAULT_W * DEFAULT_H).fill(EMPTY), cur: 1, next: 1, hold: 0, score: 0, coins: START_COINS,
+    var s = { ver: VERSION, wild: bears && !!(opts && opts.wild), bears: bears, foxes: foxes, map: opts && MAPS.indexOf(opts.map) >= 0 ? opts.map : 'easy', bridges: [], ponds: [], lake: 0, w: DEFAULT_W, h: DEFAULT_H, land: [], top: 1, grid: new Array(DEFAULT_W * DEFAULT_H).fill(EMPTY), cur: 1, next: 1, hold: 0, score: 0, coins: START_COINS,
       stock: Object.assign({}, START_STOCK), milestone: 0, turn: 0, over: false, rng: seed, seed: seed, undo: null };
     dim(s);
     genMap(s);
@@ -404,6 +409,8 @@
     moveBears(s, events, idx);
     settleCrystals(s, events); // new tombstones / churches may complete a group for a waiting crystal
     noteTop(s, events);
+    var pp = pondPoints(s);
+    if (pp) { s.score += pp; events.push({ type: 'pondpts', points: pp }); }
     grantMilestones(s, events);
     s.cur = s.next; s.next = drawItem(s, events); s.turn++;
     if (isOver(s)) { s.over = true; events.push({ type: 'over', score: s.score }); }
@@ -499,7 +506,7 @@
     var out = [];
     if (state.over || state.bridges.length >= MAX_BRIDGES) return out;
     for (var i = 0; i < N; i++) {
-      if (state.grid[i] !== WATER) continue;
+      if (state.grid[i] !== WATER || state.ponds.indexOf(i) >= 0) continue; // a dug pond is a pond, not a river to cross
       var r = (i / W) | 0, c = i % W;
       var vertical = r > 0 && r < H - 1 && state.grid[i - W] !== WATER && state.grid[i + W] !== WATER;
       var horizontal = c > 0 && c < W - 1 && state.grid[i - 1] !== WATER && state.grid[i + 1] !== WATER;
@@ -518,6 +525,43 @@
     s.grid[idx] = EMPTY; s.bridges.push(idx); s.bridges.sort(function (a, b) { return a - b; });
     s.over = isOver(s);
     return s.over ? null : { state: s, events: [{ type: 'bridge', at: idx }] };
+  }
+
+  function pondPrice(s) { return s.ponds.length < MAX_PONDS ? POND_PRICE[s.ponds.length] : null; }
+  function pondPoints(s) { return s.ponds.length ? s.ponds.length * Math.ceil(BASE[s.top] / 20) : 0; } // per turn
+  function canPond(s) { dim(s); return !s.over && s.ponds.length < MAX_PONDS && s.coins >= POND_PRICE[s.ponds.length] && freeCount(s) >= 2; }
+  // Is there a k x k block of water containing idx?
+  function squareAt(grid, idx, k) {
+    var r = (idx / W) | 0, c = idx % W;
+    for (var r0 = Math.max(0, r - k + 1); r0 <= Math.min(r, H - k); r0++) for (var c0 = Math.max(0, c - k + 1); c0 <= Math.min(c, W - k); c0++) {
+      var all = true;
+      for (var a = 0; a < k && all; a++) for (var b = 0; b < k; b++) if (grid[(r0 + a) * W + c0 + b] !== WATER) { all = false; break; }
+      if (all) return true;
+    }
+    return false;
+  }
+  // The biggest square lake on the board (0 when there is no water), for the quest progress line.
+  function bestLake(state) {
+    dim(state);
+    var best = 0;
+    for (var i = 0; i < N; i++) if (state.grid[i] === WATER) for (var k = best + 1; k <= Math.min(W, H) && squareAt(state.grid, i, k); k++) best = k;
+    return best;
+  }
+  // Shop: dig a pond on the empty tile idx (free action, always leaves one free tile). Returns {state, events} or null.
+  function buyPond(state, idx) {
+    dim(state);
+    if (!canPond(state) || !(idx >= 0 && idx < N) || state.grid[idx] !== EMPTY || state.bridges.indexOf(idx) >= 0) return null;
+    var s = clone(state), price = POND_PRICE[state.ponds.length], events = [{ type: 'pond', at: idx, price: price }];
+    s.coins -= price;
+    s.grid[idx] = WATER; s.ponds.push(idx); s.ponds.sort(function (a, b) { return a - b; });
+    while (s.lake < LAKE_SIZES.length && squareAt(s.grid, idx, LAKE_SIZES[s.lake])) {
+      var bonus = BASE[s.top] * LAKE_BONUS[s.lake];
+      s.score += bonus;
+      events.push({ type: 'lake', size: LAKE_SIZES[s.lake], points: bonus });
+      s.lake++;
+    }
+    grantMilestones(s, events);
+    return { state: s, events: events };
   }
 
   // Shop: buy one more row (top/bottom) or column (left/right) of land; each side once, dearer every time. Free action.
@@ -543,10 +587,11 @@
       if (isW(src)) g[dst] = WATER;
     }
     s.grid = g;
-    s.bridges = state.bridges.map(function (i) { // the new row / column moves every index
+    var remap = function (i) { // the new row / column moves every index
       var r = (i / w) | 0, c = i % w;
       return side === 'top' ? i + w : side === 'bottom' ? i : side === 'left' ? r * (w + 1) + c + 1 : r * (w + 1) + c;
-    });
+    };
+    s.bridges = state.bridges.map(remap); s.ponds = state.ponds.map(remap);
     dim(s);
     s.over = isOver(s); // a strip that is all water adds no free tile
     return { state: s, events: [{ type: 'land', side: side, w: s.w, h: s.h }] };
@@ -616,6 +661,8 @@
       if (!x.stock || typeof x.stock !== 'object') x.stock = Object.assign({}, START_STOCK);
       for (var sk in START_STOCK) if (typeof x.stock[sk] !== 'number') x.stock[sk] = START_STOCK[sk]; // items added since the save was made
       if (!Array.isArray(x.bridges)) x.bridges = [];
+      if (!Array.isArray(x.ponds)) x.ponds = []; // dug ponds and lake quests came later
+      if (typeof x.lake !== 'number') x.lake = 0;
       if (MAPS.indexOf(x.map) < 0) x.map = 'easy'; // every older game was played on the plain field
       if (typeof x.bears !== 'boolean') x.bears = true; // bears and foxes can be switched off per game; every older game has both
       if (typeof x.foxes !== 'boolean') x.foxes = true;
@@ -651,6 +698,13 @@
       var bi = s.bridges[i];
       if (bi !== (bi | 0) || bi < 0 || bi >= N || seenB[bi] || s.grid[bi] === WATER) return ['bad bridge at ' + bi];
       seenB[bi] = true;
+    }
+    if (!Array.isArray(s.ponds) || s.ponds.length > MAX_PONDS || !(s.lake >= 0 && s.lake <= LAKE_SIZES.length) || s.lake !== (s.lake | 0)) return ['bad ponds'];
+    var seenP = {};
+    for (i = 0; i < s.ponds.length; i++) {
+      var pi = s.ponds[i];
+      if (pi !== (pi | 0) || pi < 0 || pi >= N || seenP[pi] || s.grid[pi] !== WATER) return ['bad pond at ' + pi];
+      seenP[pi] = true;
     }
     var lr = 0, tb = 0;
     s.land.forEach(function (side, k) {
@@ -710,7 +764,7 @@
     RESTOCK: RESTOCK, MILESTONES: MILESTONES, milestoneScore: milestoneScore, canUndo: canUndo, canHammer: canHammer, migrate: migrate,
     rand: rand, drawItem: drawItem, newGame: newGame, neighbors: neighbors, group: group,
     place: place, swap: swap, swapNext: swapNext, undo: undo, validate: validate, emptyCount: emptyCount,
-    buy: buy, hammer: hammer, trap: trap, move: move, open: open, buyLand: buyLand, buyBridge: buyBridge, bridgeSpots: bridgeSpots, bridgePrice: bridgePrice, canBridge: canBridge, freeCount: freeCount, MAX_BRIDGES: MAX_BRIDGES, BRIDGE_PRICE: BRIDGE_PRICE, preview: preview, previewMove: previewMove, isOver: isOver,
+    buy: buy, hammer: hammer, trap: trap, move: move, open: open, buyLand: buyLand, buyBridge: buyBridge, buyPond: buyPond, pondPrice: pondPrice, pondPoints: pondPoints, canPond: canPond, bestLake: bestLake, MAX_PONDS: MAX_PONDS, POND_PRICE: POND_PRICE, LAKE_SIZES: LAKE_SIZES, LAKE_BONUS: LAKE_BONUS, bridgeSpots: bridgeSpots, bridgePrice: bridgePrice, canBridge: canBridge, freeCount: freeCount, MAX_BRIDGES: MAX_BRIDGES, BRIDGE_PRICE: BRIDGE_PRICE, preview: preview, previewMove: previewMove, isOver: isOver,
     priceOf: priceOf, isMovable: isMovable, canMove: canMove, isAvailable: isAvailable, unlockedTop: unlockedTop, landPrice: landPrice, canLand: canLand
   };
 });
