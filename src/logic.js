@@ -54,8 +54,10 @@
   var LAKE_SIZES = [2, 3, 4], LAKE_BONUS = [30, 100, 300], LAKE_COINS = [200, 1200, 8000]; // a quest pays points (BASE[top] * LAKE_BONUS) AND coins
   // Bridges: a shop tool for maps with water. A bridge turns one water tile into a walkable tile (bears and foxes cross it, nothing can
   // be built on it) and is remembered in state.bridges. At most MAX_BRIDGES per game, dearer every time.
-  var MAX_BRIDGES = 5;
-  var BRIDGE_PRICE = [300, 700, 1500, 3200, 6500];
+  var BRIDGE_PRICE = [300, 700, 1500, 3200, 6500, 9000, 12000, 16000], MAX_BRIDGES = BRIDGE_PRICE.length;
+  // Long bridge: LONG_BRIDGE_MIN or more bridged tiles in one straight row / column (bridges joined end to end) pay coins every turn,
+  // each tile max(1, round(PRICE[top] / LONG_BRIDGE_DIV)) per tick, like a bank (nothing while the clock is paused).
+  var LONG_BRIDGE_MIN = 3, LONG_BRIDGE_DIV = 400;
   var MEDIUM_WATER = [2, 8, 14, 15, 21, 27, 33]; // a winding river from the top edge to the bottom edge (6x6 indices)
   function isBear(v) { return v === BEAR || v === BEAR_GROWL || v === BEAR_ANGRY; }
 
@@ -474,6 +476,10 @@
       for (var bi = 0; bi < s.grid.length; bi++) if (s.grid[bi] === BANK && !inDefault[bi]) paying.push(bi);
       if (paying.length) { s.coins += each * paying.length; events.push({ type: 'bankpay', coins: each * paying.length, each: each, ticks: s.speed, banks: paying.length, at: paying }); }
     }
+    if (s.speed > 0) { // a long bridge (3+ bridged tiles in a line) earns every turn
+      var lb = longBridgeCells(s);
+      if (lb.length) { var lbe = longBridgeIncome(s) * s.speed; s.coins += lbe * lb.length; events.push({ type: 'bridgepay', coins: lbe * lb.length, each: lbe, ticks: s.speed, tiles: lb.length, at: lb }); }
+    }
     grantMilestones(s, events);
     s.cur = s.next; s.next = drawItem(s, events); s.turn++;
     if (isOver(s)) { s.over = true; events.push({ type: 'over', score: s.score }); }
@@ -582,6 +588,16 @@
     }
     return out;
   }
+  // the bridged tiles that sit in a straight run of LONG_BRIDGE_MIN or more (a long bridge), in index order
+  function longBridgeCells(s) {
+    dim(s);
+    var isB = {}, out = {}, r, c, run, mark = function (j) { out[j] = true; };
+    s.bridges.forEach(function (b) { isB[b] = true; });
+    for (r = 0; r < H; r++) { run = []; for (c = 0; c <= W; c++) { var j = r * W + c; if (c < W && isB[j]) run.push(j); else { if (run.length >= LONG_BRIDGE_MIN) run.forEach(mark); run = []; } } }
+    for (c = 0; c < W; c++) { run = []; for (r = 0; r <= H; r++) { var k = r * W + c; if (r < H && isB[k]) run.push(k); else { if (run.length >= LONG_BRIDGE_MIN) run.forEach(mark); run = []; } } }
+    return Object.keys(out).map(Number).sort(function (a, b) { return a - b; });
+  }
+  function longBridgeIncome(s) { return Math.max(1, Math.round(PRICE[Math.min(s.top || 1, LAST_BUILDING)] / LONG_BRIDGE_DIV)); } // coins per long-bridge tile per tick
   function bridgePrice(s) { return s.bridges.length < MAX_BRIDGES ? BRIDGE_PRICE[s.bridges.length] : null; }
   function canBridge(s) { return s.bridges.length < MAX_BRIDGES && s.coins >= BRIDGE_PRICE[s.bridges.length] && bridgeSpots(s).length > 0; }
   // Shop: build a bridge on water tile idx (free action, limited, dearer every time). Returns {state, events} or null.
@@ -1002,7 +1018,7 @@
     RESTOCK: RESTOCK, MILESTONES: MILESTONES, milestoneScore: milestoneScore, milestoneProgress: milestoneProgress, canUndo: canUndo, canHammer: canHammer, migrate: migrate,
     rand: rand, drawItem: drawItem, newGame: newGame, neighbors: neighbors, group: group,
     place: place, swap: swap, swapNext: swapNext, undo: undo, validate: validate, emptyCount: emptyCount,
-    buy: buy, hammer: hammer, trap: trap, move: move, open: open, buyLand: buyLand, buyBridge: buyBridge, borrow: borrow, repay: repay, setSpeed: setSpeed, lockedCells: lockedCells, loanOptions: loanOptions, loanOwed: loanOwed, loanMonthsLeft: loanMonthsLeft, bankRate: bankRate, SEIZED: SEIZED, LOAN_RATE: LOAN_RATE, LOAN_TICKS: LOAN_TICKS, MAX_SPEED: MAX_SPEED, buyBank: buyBank, bankPrice: bankPrice, bankCount: bankCount, bankSlots: bankSlots, bankIncome: bankIncome, canBuyBank: canBuyBank, isBankAvailable: isBankAvailable, calendar: calendar, BANK: BANK, MAX_BANKS: MAX_BANKS, BANK_PRICE: BANK_PRICE, BANK_MIN_TIER: BANK_MIN_TIER, TICKS_PER_MONTH: TICKS_PER_MONTH, MONTHS_PER_YEAR: MONTHS_PER_YEAR, buyPond: buyPond, pondPrice: pondPrice, pondPoints: pondPoints, pondCoins: pondCoins, payingPonds: payingPonds, pondPriceAt: pondPriceAt, reclaimSpots: reclaimSpots, reclaimPrice: reclaimPrice, canReclaim: canReclaim, buyReclaim: buyReclaim, MAX_RECLAIM: MAX_RECLAIM, RECLAIM_PRICE: RECLAIM_PRICE, ISLAND_SIZE: ISLAND_SIZE, TITLES: TITLES, treasuryGain: treasuryGain, treasuryAfter: treasuryAfter, TREASURY_SHARE: TREASURY_SHARE, TREASURY_CAP: TREASURY_CAP, canPond: canPond, bestLake: bestLake, POND_PRICE: POND_PRICE, LAKE_SIZES: LAKE_SIZES, LAKE_BONUS: LAKE_BONUS, LAKE_COINS: LAKE_COINS, bridgeSpots: bridgeSpots, bridgePrice: bridgePrice, canBridge: canBridge, freeCount: freeCount, MAX_BRIDGES: MAX_BRIDGES, BRIDGE_PRICE: BRIDGE_PRICE, preview: preview, previewMove: previewMove, isOver: isOver,
+    buy: buy, hammer: hammer, trap: trap, move: move, open: open, buyLand: buyLand, buyBridge: buyBridge, borrow: borrow, repay: repay, setSpeed: setSpeed, lockedCells: lockedCells, loanOptions: loanOptions, loanOwed: loanOwed, loanMonthsLeft: loanMonthsLeft, bankRate: bankRate, SEIZED: SEIZED, LOAN_RATE: LOAN_RATE, LOAN_TICKS: LOAN_TICKS, MAX_SPEED: MAX_SPEED, buyBank: buyBank, bankPrice: bankPrice, bankCount: bankCount, bankSlots: bankSlots, bankIncome: bankIncome, canBuyBank: canBuyBank, isBankAvailable: isBankAvailable, calendar: calendar, BANK: BANK, MAX_BANKS: MAX_BANKS, BANK_PRICE: BANK_PRICE, BANK_MIN_TIER: BANK_MIN_TIER, TICKS_PER_MONTH: TICKS_PER_MONTH, MONTHS_PER_YEAR: MONTHS_PER_YEAR, buyPond: buyPond, pondPrice: pondPrice, pondPoints: pondPoints, pondCoins: pondCoins, payingPonds: payingPonds, pondPriceAt: pondPriceAt, longBridgeCells: longBridgeCells, longBridgeIncome: longBridgeIncome, LONG_BRIDGE_MIN: LONG_BRIDGE_MIN, reclaimSpots: reclaimSpots, reclaimPrice: reclaimPrice, canReclaim: canReclaim, buyReclaim: buyReclaim, MAX_RECLAIM: MAX_RECLAIM, RECLAIM_PRICE: RECLAIM_PRICE, ISLAND_SIZE: ISLAND_SIZE, TITLES: TITLES, treasuryGain: treasuryGain, treasuryAfter: treasuryAfter, TREASURY_SHARE: TREASURY_SHARE, TREASURY_CAP: TREASURY_CAP, canPond: canPond, bestLake: bestLake, POND_PRICE: POND_PRICE, LAKE_SIZES: LAKE_SIZES, LAKE_BONUS: LAKE_BONUS, LAKE_COINS: LAKE_COINS, bridgeSpots: bridgeSpots, bridgePrice: bridgePrice, canBridge: canBridge, freeCount: freeCount, MAX_BRIDGES: MAX_BRIDGES, BRIDGE_PRICE: BRIDGE_PRICE, preview: preview, previewMove: previewMove, isOver: isOver,
     priceOf: priceOf, isMovable: isMovable, canMove: canMove, isAvailable: isAvailable, unlockedTop: unlockedTop, landPrice: landPrice, canLand: canLand
   };
 });

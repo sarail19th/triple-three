@@ -348,6 +348,7 @@
     clearAnim();
     var g = state.grid, w = state.w;
     lockedNow = {}; TT.lockedCells(state).forEach(function (i) { lockedNow[i] = true; });
+    var longNow = {}; TT.longBridgeCells(state).forEach(function (i) { longNow[i] = true; });
     drawWater();
     cells.forEach(function (c, i) {
       var code = g[i];
@@ -356,6 +357,7 @@
       c.classList.toggle('empty', code === 0);
       var isB = state.bridges.indexOf(i) >= 0, col = i % w; // a bridge tile is walkable water: planks along the way across
       c.classList.toggle('bridge', isB);
+      c.classList.toggle('long', longNow[i] === true);
       c.classList.toggle('pond', state.ponds.indexOf(i) >= 0);
       c.classList.toggle('locked', !!lockedNow[i]);
       c.classList.toggle('bh', isB && col > 0 && col < w - 1 && g[i - 1] !== TT.WATER && g[i + 1] !== TT.WATER);
@@ -438,6 +440,11 @@
       b.querySelector('.tp').textContent = owned ? '✓' : '🪙' + fmt(lp);
     });
     var nq = state.lake < TT.LAKE_SIZES.length ? TT.LAKE_SIZES[state.lake] : 0, bl = TT.bestLake(state);
+    var lbc = TT.longBridgeCells(state);
+    $('bridgeNote').hidden = $('bridgeBtn').hidden;
+    $('bridgeNote').textContent = '🌉 Bridges ' + state.bridges.length + '/' + TT.MAX_BRIDGES + ' · ' + (lbc.length
+      ? 'long bridge of ' + lbc.length + ' tiles pays +🪙' + fmt(lbc.length * TT.longBridgeIncome(state)) + ' per turn'
+      : TT.LONG_BRIDGE_MIN + '+ bridged tiles in a line make a long bridge (+🪙' + TT.longBridgeIncome(state) + ' per tile per turn)');
     var paying = TT.payingPonds(state);
     $('pondNote').textContent = 'Ponds ' + state.ponds.length + ' · ' + (paying ? paying + ' pay +' + fmt(TT.pondPoints(state)) + ' pts + 🪙' + fmt(TT.pondCoins(state)) + ' per turn' : 'none pay yet: dug ponds pay once they fill a 3×3 block') +
       (nq ? ' · 🏞️ quest: a ' + nq + '×' + nq + ' lake (biggest now ' + bl + '×' + bl + ') pays 🪙' + fmt(TT.LAKE_COINS[state.lake]) + ' + points' : ' · 🏞️ all lakes built');
@@ -613,6 +620,8 @@
       } else if (ev.type === 'default') {
         cells[ev.at].classList.add('shake'); floatAt(ev.at, '🏚️');
         toast('🏚️ A loan ran out: the ' + em(ev.tier) + ' and its tile were seized!', 0.25);
+      } else if (ev.type === 'bridgepay') { // a long bridge pays each of its tiles
+        ev.at.forEach(function (bt) { floatAt(bt, '🌉 +' + fmt(ev.each) + '🪙'); });
       } else if (ev.type === 'bankpay') {
         ev.at.forEach(function (bk) { floatAt(bk, '🏦 +' + fmt(ev.each) + '🪙'); cells[bk].classList.add('drop'); }); // each bank shows its own income
       } else if (ev.type === 'bonus') {
@@ -936,7 +945,7 @@
     { target: '#trapBtn', sheet: true, title: '🪤 Trap', text: 'Kills a bear or fox on the spot: it turns into a 🪦 right away. Tap the tool, then the animal.', when: function () { return !$('trapBtn').hidden; } },
     { target: '#hammerBtn', sheet: true, title: '🔨 Hammer', text: 'Smashes any item you have placed, to make room. Tap the tool, then the item.' },
     { target: '#moveBtn', sheet: true, title: '🚚 Mover', text: 'Picks up one item and drops it on another empty tile, where it merges like a placed item. Bears and foxes cannot be moved.' },
-    { target: '#bridgeBtn', sheet: true, title: '🌉 Bridge', text: 'On maps with water: turns a water tile that has land on both sides into a road bears can cross. Glowing tiles show where it can go. Up to 5, dearer each time.', when: function () { return !$('bridgeBtn').hidden; } },
+    { target: '#bridgeBtn', sheet: true, title: '🌉 Bridge', text: 'On maps with water: turns a water tile that has land on both sides into a road bears can cross. Glowing tiles show where it can go. Up to 8, dearer each time. Three or more bridged tiles in a straight line make a <b>long bridge</b> that pays coins every turn.', when: function () { return !$('bridgeBtn').hidden; } },
     { target: '.tools.shop .tool[data-tool="22"]', sheet: true, title: '🏦 Bank', text: 'Appears once you have built a village. A bank is placed like an item, is a dead tile that animals cannot cross, and pays <b>coins every turn</b> (the 📅 calendar at the top counts 10 turns to a month). At most 3, dearer each time; it cannot go in the reserve. Three connected banks merge into 💵 cash.', when: function () { return !!document.querySelector('.tools.shop .tool[data-tool="22"]'); } },
     { target: '#speedLink', title: '⏱ Clock speed', text: 'Appears once you own a bank. Each turn adds this many ticks to the calendar (10 ticks = a month): faster means bank income per turn, loan interest and the repayment deadline all come sooner; paused stops them all. Tap to cycle 1×, 2×, 3×, paused. <b>Tap a bank</b> on the map to borrow against the dearest building next to it.', when: function () { return !$('speedBox').hidden; } },
     { target: '#pondBtn', sheet: true, title: '💧 Pond', text: 'Digs a pond on an empty tile. It takes the tile for good and there is no limit, but a pond only pays <b>points and coins every turn</b> once it sits inside a <b>3×3 block of dug ponds</b> (the map\'s own water never pays). Dig a 2×2, then 3×3 and 4×4 block of water for <b>lake quests</b>: each pays coins and points (see the line under the tools, and at the top of the screen).' },

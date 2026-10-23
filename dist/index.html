@@ -104,6 +104,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   background: repeating-linear-gradient(90deg, #c4955a 0 11%, #8a6236 11% 13%); }
 .cell.bridge.bv::before { top: -1px; bottom: -1px; left: 20%; right: 20%; border-left: 3px solid #6b4723; border-right: 3px solid #6b4723;
   background: repeating-linear-gradient(0deg, #c4955a 0 11%, #8a6236 11% 13%); }
+.cell.bridge.long::before { box-shadow: 0 0 7px 1px var(--accent), 0 2px 5px #0005; } /* 3+ bridged tiles in a line: a long bridge that pays */
 .cell.bridge.built::before { animation: planks .45s ease-out; }
 @keyframes planks { from { transform: scale(0.2); opacity: 0; } to { transform: none; opacity: 1; } }
 .cell.spot { box-shadow: inset 0 0 0 3px var(--accent); animation: spotpulse 1s ease-in-out infinite alternate; }
@@ -391,6 +392,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
         </section>
         <p id="landNote" class="unlock"></p>
         <p id="pondNote" class="unlock"></p>
+        <p id="bridgeNote" class="unlock"></p>
         <p id="unlock" class="unlock"></p>
       </div>
     </div>
@@ -529,7 +531,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       <section class="helppage" data-title="Maps and water" hidden>
         <h3>Maps and water</h3>
         <ul>
-        <li>🗺️ <b>Maps</b> (also in <b>New</b>): Easy is a plain field, Standard starts with a few plants, Medium has a river across the field, Hard has random ponds, Island is the biggest board, mostly sea (see below). Blue tiles are <b>water</b>: nothing can be placed, merged, moved or smashed there, and animals cannot enter it. Use the 🌉 <b>bridge</b> tool (up to 5, dearer each time) on a water tile that has land on both sides, up/down or left/right (never a corner or the middle of wide water): it becomes a road that bears can walk over, but nothing can be built on it.</li>
+        <li>🗺️ <b>Maps</b> (also in <b>New</b>): Easy is a plain field, Standard starts with a few plants, Medium has a river across the field, Hard has random ponds, Island is the biggest board, mostly sea (see below). Blue tiles are <b>water</b>: nothing can be placed, merged, moved or smashed there, and animals cannot enter it. Use the 🌉 <b>bridge</b> tool (up to 8, dearer each time) on a water tile that has land on both sides, up/down or left/right (never a corner or the middle of wide water; a bridge counts as land, so wide water opens up one tile at a time): it becomes a road that bears can walk over, but nothing can be built on it. <b>Three or more bridged tiles in a straight line are a long bridge</b>: it glows gold and pays coins every turn (about 1/400 of your best building's shop price per tile).</li>
         <li>💧 <b>Ponds</b> (shop): dig a pond on an empty tile. It stays for the whole game, takes a tile away, and pays <b>points and coins every turn</b>, but only while it is inside a <b>3×3 block of dug ponds</b> (a 4×4 pays all 16; the map's own water never pays): points about 5% of your best building's value per paying pond, coins about 1/400 of its shop price. <b>Lake quests</b>: the pond that completes a 2×2, then a 3×3, then a 4×4 block of water pays a one-off bonus of <b>coins and points</b>. The first pond costs only 60 coins, then each one is dearer; there is no limit once the lakes are built, only your coins and free tiles. Animals cannot cross water, and a bear or fox shut in by ponds is trapped like anywhere else.</li>
         <li>🏝️ <b>Island</b>: the biggest board (8×8), all sea except a small island of 16 to 20 tiles (a new shape every game). Land cannot be bought and the sea cannot be bridged, but the <b>Reclaim</b> tool (shop) turns a sea tile next to the land into new ground: glowing tiles show where, each one dearer than the last (🪙60, then ×1.1). Only the ponds you dig count for lake quests there, not the sea.</li>
         </ul>
@@ -542,7 +544,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       </section>
     </div>
     <div class="pager"><button id="helpPrev" class="btn" aria-label="Previous page">‹ Back</button><span id="helpPageLabel" aria-live="polite"></span><button id="helpNext" class="btn" aria-label="Next page">Next ›</button></div>
-    <p class="gnote">Version <b id="buildId">b61316af</b> · <a href="#" id="updateLink">↻ Get the latest version</a><br>(keeps your saved game and best scores)</p>
+    <p class="gnote">Version <b id="buildId">d3a108dd</b> · <a href="#" id="updateLink">↻ Get the latest version</a><br>(keeps your saved game and best scores)</p>
     <div class="helpbtns"><button id="helpTour" class="btn">▶ Quick tour</button><button id="helpClose" class="btn primary">Got it</button></div>
   </div>
 </div>
@@ -603,8 +605,10 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   var LAKE_SIZES = [2, 3, 4], LAKE_BONUS = [30, 100, 300], LAKE_COINS = [200, 1200, 8000]; // a quest pays points (BASE[top] * LAKE_BONUS) AND coins
   // Bridges: a shop tool for maps with water. A bridge turns one water tile into a walkable tile (bears and foxes cross it, nothing can
   // be built on it) and is remembered in state.bridges. At most MAX_BRIDGES per game, dearer every time.
-  var MAX_BRIDGES = 5;
-  var BRIDGE_PRICE = [300, 700, 1500, 3200, 6500];
+  var BRIDGE_PRICE = [300, 700, 1500, 3200, 6500, 9000, 12000, 16000], MAX_BRIDGES = BRIDGE_PRICE.length;
+  // Long bridge: LONG_BRIDGE_MIN or more bridged tiles in one straight row / column (bridges joined end to end) pay coins every turn,
+  // each tile max(1, round(PRICE[top] / LONG_BRIDGE_DIV)) per tick, like a bank (nothing while the clock is paused).
+  var LONG_BRIDGE_MIN = 3, LONG_BRIDGE_DIV = 400;
   var MEDIUM_WATER = [2, 8, 14, 15, 21, 27, 33]; // a winding river from the top edge to the bottom edge (6x6 indices)
   function isBear(v) { return v === BEAR || v === BEAR_GROWL || v === BEAR_ANGRY; }
 
@@ -1023,6 +1027,10 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       for (var bi = 0; bi < s.grid.length; bi++) if (s.grid[bi] === BANK && !inDefault[bi]) paying.push(bi);
       if (paying.length) { s.coins += each * paying.length; events.push({ type: 'bankpay', coins: each * paying.length, each: each, ticks: s.speed, banks: paying.length, at: paying }); }
     }
+    if (s.speed > 0) { // a long bridge (3+ bridged tiles in a line) earns every turn
+      var lb = longBridgeCells(s);
+      if (lb.length) { var lbe = longBridgeIncome(s) * s.speed; s.coins += lbe * lb.length; events.push({ type: 'bridgepay', coins: lbe * lb.length, each: lbe, ticks: s.speed, tiles: lb.length, at: lb }); }
+    }
     grantMilestones(s, events);
     s.cur = s.next; s.next = drawItem(s, events); s.turn++;
     if (isOver(s)) { s.over = true; events.push({ type: 'over', score: s.score }); }
@@ -1131,6 +1139,16 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     }
     return out;
   }
+  // the bridged tiles that sit in a straight run of LONG_BRIDGE_MIN or more (a long bridge), in index order
+  function longBridgeCells(s) {
+    dim(s);
+    var isB = {}, out = {}, r, c, run, mark = function (j) { out[j] = true; };
+    s.bridges.forEach(function (b) { isB[b] = true; });
+    for (r = 0; r < H; r++) { run = []; for (c = 0; c <= W; c++) { var j = r * W + c; if (c < W && isB[j]) run.push(j); else { if (run.length >= LONG_BRIDGE_MIN) run.forEach(mark); run = []; } } }
+    for (c = 0; c < W; c++) { run = []; for (r = 0; r <= H; r++) { var k = r * W + c; if (r < H && isB[k]) run.push(k); else { if (run.length >= LONG_BRIDGE_MIN) run.forEach(mark); run = []; } } }
+    return Object.keys(out).map(Number).sort(function (a, b) { return a - b; });
+  }
+  function longBridgeIncome(s) { return Math.max(1, Math.round(PRICE[Math.min(s.top || 1, LAST_BUILDING)] / LONG_BRIDGE_DIV)); } // coins per long-bridge tile per tick
   function bridgePrice(s) { return s.bridges.length < MAX_BRIDGES ? BRIDGE_PRICE[s.bridges.length] : null; }
   function canBridge(s) { return s.bridges.length < MAX_BRIDGES && s.coins >= BRIDGE_PRICE[s.bridges.length] && bridgeSpots(s).length > 0; }
   // Shop: build a bridge on water tile idx (free action, limited, dearer every time). Returns {state, events} or null.
@@ -1551,7 +1569,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     RESTOCK: RESTOCK, MILESTONES: MILESTONES, milestoneScore: milestoneScore, milestoneProgress: milestoneProgress, canUndo: canUndo, canHammer: canHammer, migrate: migrate,
     rand: rand, drawItem: drawItem, newGame: newGame, neighbors: neighbors, group: group,
     place: place, swap: swap, swapNext: swapNext, undo: undo, validate: validate, emptyCount: emptyCount,
-    buy: buy, hammer: hammer, trap: trap, move: move, open: open, buyLand: buyLand, buyBridge: buyBridge, borrow: borrow, repay: repay, setSpeed: setSpeed, lockedCells: lockedCells, loanOptions: loanOptions, loanOwed: loanOwed, loanMonthsLeft: loanMonthsLeft, bankRate: bankRate, SEIZED: SEIZED, LOAN_RATE: LOAN_RATE, LOAN_TICKS: LOAN_TICKS, MAX_SPEED: MAX_SPEED, buyBank: buyBank, bankPrice: bankPrice, bankCount: bankCount, bankSlots: bankSlots, bankIncome: bankIncome, canBuyBank: canBuyBank, isBankAvailable: isBankAvailable, calendar: calendar, BANK: BANK, MAX_BANKS: MAX_BANKS, BANK_PRICE: BANK_PRICE, BANK_MIN_TIER: BANK_MIN_TIER, TICKS_PER_MONTH: TICKS_PER_MONTH, MONTHS_PER_YEAR: MONTHS_PER_YEAR, buyPond: buyPond, pondPrice: pondPrice, pondPoints: pondPoints, pondCoins: pondCoins, payingPonds: payingPonds, pondPriceAt: pondPriceAt, reclaimSpots: reclaimSpots, reclaimPrice: reclaimPrice, canReclaim: canReclaim, buyReclaim: buyReclaim, MAX_RECLAIM: MAX_RECLAIM, RECLAIM_PRICE: RECLAIM_PRICE, ISLAND_SIZE: ISLAND_SIZE, TITLES: TITLES, treasuryGain: treasuryGain, treasuryAfter: treasuryAfter, TREASURY_SHARE: TREASURY_SHARE, TREASURY_CAP: TREASURY_CAP, canPond: canPond, bestLake: bestLake, POND_PRICE: POND_PRICE, LAKE_SIZES: LAKE_SIZES, LAKE_BONUS: LAKE_BONUS, LAKE_COINS: LAKE_COINS, bridgeSpots: bridgeSpots, bridgePrice: bridgePrice, canBridge: canBridge, freeCount: freeCount, MAX_BRIDGES: MAX_BRIDGES, BRIDGE_PRICE: BRIDGE_PRICE, preview: preview, previewMove: previewMove, isOver: isOver,
+    buy: buy, hammer: hammer, trap: trap, move: move, open: open, buyLand: buyLand, buyBridge: buyBridge, borrow: borrow, repay: repay, setSpeed: setSpeed, lockedCells: lockedCells, loanOptions: loanOptions, loanOwed: loanOwed, loanMonthsLeft: loanMonthsLeft, bankRate: bankRate, SEIZED: SEIZED, LOAN_RATE: LOAN_RATE, LOAN_TICKS: LOAN_TICKS, MAX_SPEED: MAX_SPEED, buyBank: buyBank, bankPrice: bankPrice, bankCount: bankCount, bankSlots: bankSlots, bankIncome: bankIncome, canBuyBank: canBuyBank, isBankAvailable: isBankAvailable, calendar: calendar, BANK: BANK, MAX_BANKS: MAX_BANKS, BANK_PRICE: BANK_PRICE, BANK_MIN_TIER: BANK_MIN_TIER, TICKS_PER_MONTH: TICKS_PER_MONTH, MONTHS_PER_YEAR: MONTHS_PER_YEAR, buyPond: buyPond, pondPrice: pondPrice, pondPoints: pondPoints, pondCoins: pondCoins, payingPonds: payingPonds, pondPriceAt: pondPriceAt, longBridgeCells: longBridgeCells, longBridgeIncome: longBridgeIncome, LONG_BRIDGE_MIN: LONG_BRIDGE_MIN, reclaimSpots: reclaimSpots, reclaimPrice: reclaimPrice, canReclaim: canReclaim, buyReclaim: buyReclaim, MAX_RECLAIM: MAX_RECLAIM, RECLAIM_PRICE: RECLAIM_PRICE, ISLAND_SIZE: ISLAND_SIZE, TITLES: TITLES, treasuryGain: treasuryGain, treasuryAfter: treasuryAfter, TREASURY_SHARE: TREASURY_SHARE, TREASURY_CAP: TREASURY_CAP, canPond: canPond, bestLake: bestLake, POND_PRICE: POND_PRICE, LAKE_SIZES: LAKE_SIZES, LAKE_BONUS: LAKE_BONUS, LAKE_COINS: LAKE_COINS, bridgeSpots: bridgeSpots, bridgePrice: bridgePrice, canBridge: canBridge, freeCount: freeCount, MAX_BRIDGES: MAX_BRIDGES, BRIDGE_PRICE: BRIDGE_PRICE, preview: preview, previewMove: previewMove, isOver: isOver,
     priceOf: priceOf, isMovable: isMovable, canMove: canMove, isAvailable: isAvailable, unlockedTop: unlockedTop, landPrice: landPrice, canLand: canLand
   };
 });
@@ -1906,6 +1924,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     clearAnim();
     var g = state.grid, w = state.w;
     lockedNow = {}; TT.lockedCells(state).forEach(function (i) { lockedNow[i] = true; });
+    var longNow = {}; TT.longBridgeCells(state).forEach(function (i) { longNow[i] = true; });
     drawWater();
     cells.forEach(function (c, i) {
       var code = g[i];
@@ -1914,6 +1933,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       c.classList.toggle('empty', code === 0);
       var isB = state.bridges.indexOf(i) >= 0, col = i % w; // a bridge tile is walkable water: planks along the way across
       c.classList.toggle('bridge', isB);
+      c.classList.toggle('long', longNow[i] === true);
       c.classList.toggle('pond', state.ponds.indexOf(i) >= 0);
       c.classList.toggle('locked', !!lockedNow[i]);
       c.classList.toggle('bh', isB && col > 0 && col < w - 1 && g[i - 1] !== TT.WATER && g[i + 1] !== TT.WATER);
@@ -1996,6 +2016,11 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       b.querySelector('.tp').textContent = owned ? '✓' : '🪙' + fmt(lp);
     });
     var nq = state.lake < TT.LAKE_SIZES.length ? TT.LAKE_SIZES[state.lake] : 0, bl = TT.bestLake(state);
+    var lbc = TT.longBridgeCells(state);
+    $('bridgeNote').hidden = $('bridgeBtn').hidden;
+    $('bridgeNote').textContent = '🌉 Bridges ' + state.bridges.length + '/' + TT.MAX_BRIDGES + ' · ' + (lbc.length
+      ? 'long bridge of ' + lbc.length + ' tiles pays +🪙' + fmt(lbc.length * TT.longBridgeIncome(state)) + ' per turn'
+      : TT.LONG_BRIDGE_MIN + '+ bridged tiles in a line make a long bridge (+🪙' + TT.longBridgeIncome(state) + ' per tile per turn)');
     var paying = TT.payingPonds(state);
     $('pondNote').textContent = 'Ponds ' + state.ponds.length + ' · ' + (paying ? paying + ' pay +' + fmt(TT.pondPoints(state)) + ' pts + 🪙' + fmt(TT.pondCoins(state)) + ' per turn' : 'none pay yet: dug ponds pay once they fill a 3×3 block') +
       (nq ? ' · 🏞️ quest: a ' + nq + '×' + nq + ' lake (biggest now ' + bl + '×' + bl + ') pays 🪙' + fmt(TT.LAKE_COINS[state.lake]) + ' + points' : ' · 🏞️ all lakes built');
@@ -2171,6 +2196,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       } else if (ev.type === 'default') {
         cells[ev.at].classList.add('shake'); floatAt(ev.at, '🏚️');
         toast('🏚️ A loan ran out: the ' + em(ev.tier) + ' and its tile were seized!', 0.25);
+      } else if (ev.type === 'bridgepay') { // a long bridge pays each of its tiles
+        ev.at.forEach(function (bt) { floatAt(bt, '🌉 +' + fmt(ev.each) + '🪙'); });
       } else if (ev.type === 'bankpay') {
         ev.at.forEach(function (bk) { floatAt(bk, '🏦 +' + fmt(ev.each) + '🪙'); cells[bk].classList.add('drop'); }); // each bank shows its own income
       } else if (ev.type === 'bonus') {
@@ -2494,7 +2521,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     { target: '#trapBtn', sheet: true, title: '🪤 Trap', text: 'Kills a bear or fox on the spot: it turns into a 🪦 right away. Tap the tool, then the animal.', when: function () { return !$('trapBtn').hidden; } },
     { target: '#hammerBtn', sheet: true, title: '🔨 Hammer', text: 'Smashes any item you have placed, to make room. Tap the tool, then the item.' },
     { target: '#moveBtn', sheet: true, title: '🚚 Mover', text: 'Picks up one item and drops it on another empty tile, where it merges like a placed item. Bears and foxes cannot be moved.' },
-    { target: '#bridgeBtn', sheet: true, title: '🌉 Bridge', text: 'On maps with water: turns a water tile that has land on both sides into a road bears can cross. Glowing tiles show where it can go. Up to 5, dearer each time.', when: function () { return !$('bridgeBtn').hidden; } },
+    { target: '#bridgeBtn', sheet: true, title: '🌉 Bridge', text: 'On maps with water: turns a water tile that has land on both sides into a road bears can cross. Glowing tiles show where it can go. Up to 8, dearer each time. Three or more bridged tiles in a straight line make a <b>long bridge</b> that pays coins every turn.', when: function () { return !$('bridgeBtn').hidden; } },
     { target: '.tools.shop .tool[data-tool="22"]', sheet: true, title: '🏦 Bank', text: 'Appears once you have built a village. A bank is placed like an item, is a dead tile that animals cannot cross, and pays <b>coins every turn</b> (the 📅 calendar at the top counts 10 turns to a month). At most 3, dearer each time; it cannot go in the reserve. Three connected banks merge into 💵 cash.', when: function () { return !!document.querySelector('.tools.shop .tool[data-tool="22"]'); } },
     { target: '#speedLink', title: '⏱ Clock speed', text: 'Appears once you own a bank. Each turn adds this many ticks to the calendar (10 ticks = a month): faster means bank income per turn, loan interest and the repayment deadline all come sooner; paused stops them all. Tap to cycle 1×, 2×, 3×, paused. <b>Tap a bank</b> on the map to borrow against the dearest building next to it.', when: function () { return !$('speedBox').hidden; } },
     { target: '#pondBtn', sheet: true, title: '💧 Pond', text: 'Digs a pond on an empty tile. It takes the tile for good and there is no limit, but a pond only pays <b>points and coins every turn</b> once it sits inside a <b>3×3 block of dug ponds</b> (the map\'s own water never pays). Dig a 2×2, then 3×3 and 4×4 block of water for <b>lake quests</b>: each pays coins and points (see the line under the tools, and at the top of the screen).' },
