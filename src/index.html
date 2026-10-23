@@ -91,6 +91,7 @@
     <h2 id="overTitle">Town full!</h2>
     <p id="overText"></p>
     <p id="overTreasury" class="gnote"></p>
+    <p id="overStats" class="gnote"></p>
     <button id="againBtn" class="btn primary">Play again</button>
   </div>
 </div>
@@ -121,6 +122,9 @@
       <button class="opt" data-foxes="off" aria-pressed="false">No foxes</button>
     </div>
     <p id="foxNote" class="gnote"></p>
+    <h3>Title</h3>
+    <div id="titleOpts" class="opts two"></div>
+    <p id="titleNote" class="gnote"></p>
     <h3>Treasury</h3>
     <div class="opts three">
       <button class="opt" data-take="none" aria-pressed="false">None</button>
@@ -129,8 +133,10 @@
     </div>
     <p id="treasuryNote" class="gnote"></p>
     <div id="newWarn" class="warn hidden" role="alert"></div>
-    <button id="newStart" class="btn primary">Start</button>
-    <button id="newCancel" class="btn">Cancel</button>
+    <div class="dlgbtns">
+      <button id="newStart" class="btn primary">Start</button>
+      <button id="newCancel" class="btn">Cancel</button>
+    </div>
   </div>
 </div>
 
@@ -190,6 +196,7 @@
         <li>🌿 <b>Calm mode</b> (pick <b>No bears</b> and/or <b>No foxes</b> in <b>New</b>): the switched-off animals never appear. With both off there is nothing to interrupt you, and no trap tool. These games keep their own best score.</li>
         <li>🐻💢 <b>Wild bears</b> (pick it in <b>New</b>): a bear that cannot step but is not sealed in gets angry (💢, then 💢💢) and on the third turn <b>mauls</b> a 🌱🌿🌳🏕️🛖 next to it one tier down (a 🌱 is destroyed, which opens an escape hole), then starts over. Houses and everything above are safe. In a small pen (4 to 6 tiles) holding 2 bears and 2 free tiles, a cub is sometimes born 🍼.</li>
         <li>🐺 <b>Animals follow the season</b>: the bear is a 🐗 boar and the fox a 🦝 raccoon in autumn, a 🐺 wolf and a 🐇 rabbit in winter (🐻 and 🦊 in spring and summer). Only the looks change, the rules do not.</li>
+        <li>🏹 <b>Titles</b>: your quests run across games. Trap <b>100 bears</b> in total (the trap tool or a full pen, in any mode) and you earn <b>Bears Hunter</b>: pick it in <b>New</b> and 30% of the bears in the queue turn into grass. A game with a title has its own best score.</li>
         </ul>
       </section>
       <section class="helppage" data-title="Shop and items" hidden>

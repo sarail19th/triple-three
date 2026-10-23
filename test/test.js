@@ -1614,6 +1614,32 @@ t('island: old saves and other maps gain reclaimed / boost = 0, and validate gua
   assert(TT.validate(Object.assign({}, TT.newGame(2), { boost: -1 })).length); assert(TT.validate(Object.assign({}, TT.newGame(2), { boost: 1001 })).length);
 });
 
+t('titles: the bears-trapped counter lives in the state, and the Bears Hunter title turns some bears into grass', () => {
+  // a full checkerboard with one bear at 0 and one empty tile at 1: filling it traps the bear
+  const board = (over = {}) => { const g = {}; for (let i = 0; i < 36; i++) g[i] = (((i / 6) | 0) + (i % 6)) % 2 ? 5 : 6; g[0] = TT.BEAR; g[1] = 0; return withGrid(g, Object.assign({ cur: 1, next: 1, coins: 100 }, over)); };
+  const r = TT.place(board(), 1);
+  assert(r.events.some((e) => e.type === 'trapped')); assert.strictEqual(r.state.grid[0], TT.TOMB); assert.strictEqual(r.state.bearsTrapped, 1);
+  assert.strictEqual(TT.undo(r.state).bearsTrapped, 0, 'undo takes the count back with the move');
+  // the trap tool counts a bear, not a fox
+  const withBear = withGrid({ [I(2, 2)]: TT.BEAR, [I(4, 4)]: TT.FOX }, { coins: 100 });
+  assert.strictEqual(TT.trap(withBear, I(2, 2)).state.bearsTrapped, 1); assert.strictEqual(TT.trap(withBear, I(4, 4)).state.bearsTrapped, 0);
+  assert.strictEqual(TT.trap(withGrid({ [I(2, 2)]: TT.BEAR_ANGRY }, { coins: 100, wild: true }), I(2, 2)).state.bearsTrapped, 1, 'an angry bear counts too');
+  // titles: unknown names are ignored, a title is kept in the state and validated
+  assert.strictEqual(TT.TITLES.hunter.goal, 100); assert.strictEqual(TT.TITLES.hunter.bearCut, 0.3);
+  assert.strictEqual(TT.newGame(4, { title: 'nonsense' }).title, ''); assert.strictEqual(TT.newGame(4).title, ''); assert.strictEqual(TT.newGame(4, { title: 'hunter' }).title, 'hunter');
+  assert.deepStrictEqual(TT.validate(TT.newGame(4, { title: 'hunter' })), []); assert(TT.validate(Object.assign({}, TT.newGame(4), { title: 'x' })).length);
+  assert(TT.validate(Object.assign({}, TT.newGame(4), { bearsTrapped: -1 })).length);
+  // no title: the very same queue as ever. With the title: about 30% fewer bears in the queue, and a bear is still a bear when it stays
+  const count = (title, seeds) => { let bears = 0, total = 0; for (let seed = 1; seed <= seeds; seed++) { let g = TT.newGame(seed, { title }); for (let k = 0; k < 40; k++) { const r2 = TT.place(Object.assign(g, { grid: new Array(36).fill(0) }), 0); g = r2.state; total++; if (TT.isBear(g.next)) bears++; if (g.over) break; } } return bears / total; };
+  const plain = count('', 120), hunted = count('hunter', 120);
+  assert(plain > 0.09 && plain < 0.15, 'about 12% bears: ' + plain); assert(hunted < plain * 0.85 && hunted > plain * 0.55, 'about 30% fewer: ' + plain + ' -> ' + hunted);
+  // old saves have no title and no count
+  const legacy = JSON.parse(JSON.stringify(TT.newGame(2))); delete legacy.title; delete legacy.bearsTrapped;
+  const mg = TT.migrate(legacy); assert.strictEqual(mg.title, ''); assert.strictEqual(mg.bearsTrapped, 0); assert.deepStrictEqual(TT.validate(mg), []);
+  // a game without a title replays exactly as before (no extra random draw)
+  assert.strictEqual(JSON.stringify(TT.newGame(9, { title: '' })), JSON.stringify(TT.newGame(9)));
+});
+
 t('treasury: 2% of the coins a game ended with, at most 1000 saved; a game can start with some of it', () => {
   assert.strictEqual(TT.TREASURY_SHARE, 0.02); assert.strictEqual(TT.TREASURY_CAP, 1000);
   assert.strictEqual(TT.treasuryGain(35284), 705); assert.strictEqual(TT.treasuryGain(49), 0); assert.strictEqual(TT.treasuryGain(0), 0); assert.strictEqual(TT.treasuryGain(-5), 0);

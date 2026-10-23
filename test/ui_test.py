@@ -856,6 +856,29 @@ with sync_playwright() as p:
     assert 'empty' in page.inner_text('#treasuryNote') and page.is_disabled('.opt[data-take="half"]') and page.is_disabled('.opt[data-take="all"]') and page.get_attribute('.opt[data-take="none"]', 'aria-pressed') == 'true'
     page.tap('#newCancel')
 
+    # ---- titles: 100 bears trapped across games earn Bears Hunter (counted when a game is left), picked per game in New game
+    page.evaluate("localStorage.setItem('tt-stats', JSON.stringify({ bears: 70 }))")
+    load([0] * 36, coins=50, top=4, bearsTrapped=20)
+    page.tap('#newBtn')
+    assert page.is_disabled('.opt[data-title="hunter"]') and '90/100' in page.inner_text('#titleNote') and '🔒' in page.inner_text('.opt[data-title="hunter"]'), page.inner_text('#titleNote')
+    assert page.get_attribute('.opt[data-title=""]', 'aria-pressed') == 'true'
+    page.tap('#newCancel')
+    load([0] * 36, coins=50, top=4, bearsTrapped=30)         # 70 + 30 = 100: earned the moment this game is left
+    page.tap('#newBtn')
+    assert not page.is_disabled('.opt[data-title="hunter"]') and '🏹' in page.inner_text('.opt[data-title="hunter"]')
+    page.tap('.opt[data-title="hunter"]'); assert page.get_attribute('.opt[data-title="hunter"]', 'aria-pressed') == 'true'
+    page.tap('#newStart')
+    hunter = check_consistent(page, 'bears hunter')
+    assert hunter['title'] == 'hunter' and hunter['bearsTrapped'] == 0 and 'Bears Hunter' in page.inner_text('#seed'), page.inner_text('#seed')
+    assert page.evaluate("JSON.parse(localStorage.getItem('tt-stats')).bears") == 100 and page.evaluate("JSON.parse(localStorage.getItem('tt-title'))") == 'hunter'
+    assert 'Title earned' in page.inner_text('#fx'), 'a toast tells the title was earned'
+    page.tap('#newBtn'); page.tap('.opt[data-title=""]'); page.tap('#newStart')
+    assert state(page)['title'] == '' and page.evaluate("JSON.parse(localStorage.getItem('tt-stats')).bears") == 100
+    page.evaluate("localStorage.setItem('tt-stats', JSON.stringify({ bears: 0 }))")
+    page.evaluate("localStorage.setItem('tt-title', JSON.stringify('hunter'))")
+    page.tap('#newBtn'); page.tap('#newStart')
+    assert state(page)['title'] == '', 'a remembered title that is locked again is not applied'
+
     # ---- shop: higher tiers unlock once built; stock runs out -> price doubles (shown on the button)
     load([0] * 36, coins=500)
     assert page.locator('.tool[data-tool="4"]').count() == 0, 'camp is locked at the start'

@@ -219,6 +219,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 .foot-settings:has(a[hidden]) { display: none; }
 
 .overlay { position: fixed; inset: 0; background: #000b; display: flex; align-items: center; justify-content: center; z-index: 10; padding: 16px; }
+.dlgbtns { position: sticky; bottom: -20px; margin: 8px -20px -20px; padding: 10px 20px 20px; background: #14301f; } /* New game: Start stays in reach while the long dialog scrolls */
 .card { background: #14301f; border: 2px solid var(--accent); border-radius: 18px; padding: 20px; max-width: 380px; width: 100%; text-align: center; max-height: 100%; overflow: auto; }
 .card h2 { margin: 0 0 8px; font-size: 24px; }
 .card ul { text-align: left; padding-left: 18px; margin: 0 0 14px; }
@@ -408,6 +409,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     <h2 id="overTitle">Town full!</h2>
     <p id="overText"></p>
     <p id="overTreasury" class="gnote"></p>
+    <p id="overStats" class="gnote"></p>
     <button id="againBtn" class="btn primary">Play again</button>
   </div>
 </div>
@@ -438,6 +440,9 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       <button class="opt" data-foxes="off" aria-pressed="false">No foxes</button>
     </div>
     <p id="foxNote" class="gnote"></p>
+    <h3>Title</h3>
+    <div id="titleOpts" class="opts two"></div>
+    <p id="titleNote" class="gnote"></p>
     <h3>Treasury</h3>
     <div class="opts three">
       <button class="opt" data-take="none" aria-pressed="false">None</button>
@@ -446,8 +451,10 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     </div>
     <p id="treasuryNote" class="gnote"></p>
     <div id="newWarn" class="warn hidden" role="alert"></div>
-    <button id="newStart" class="btn primary">Start</button>
-    <button id="newCancel" class="btn">Cancel</button>
+    <div class="dlgbtns">
+      <button id="newStart" class="btn primary">Start</button>
+      <button id="newCancel" class="btn">Cancel</button>
+    </div>
   </div>
 </div>
 
@@ -507,6 +514,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
         <li>🌿 <b>Calm mode</b> (pick <b>No bears</b> and/or <b>No foxes</b> in <b>New</b>): the switched-off animals never appear. With both off there is nothing to interrupt you, and no trap tool. These games keep their own best score.</li>
         <li>🐻💢 <b>Wild bears</b> (pick it in <b>New</b>): a bear that cannot step but is not sealed in gets angry (💢, then 💢💢) and on the third turn <b>mauls</b> a 🌱🌿🌳🏕️🛖 next to it one tier down (a 🌱 is destroyed, which opens an escape hole), then starts over. Houses and everything above are safe. In a small pen (4 to 6 tiles) holding 2 bears and 2 free tiles, a cub is sometimes born 🍼.</li>
         <li>🐺 <b>Animals follow the season</b>: the bear is a 🐗 boar and the fox a 🦝 raccoon in autumn, a 🐺 wolf and a 🐇 rabbit in winter (🐻 and 🦊 in spring and summer). Only the looks change, the rules do not.</li>
+        <li>🏹 <b>Titles</b>: your quests run across games. Trap <b>100 bears</b> in total (the trap tool or a full pen, in any mode) and you earn <b>Bears Hunter</b>: pick it in <b>New</b> and 30% of the bears in the queue turn into grass. A game with a title has its own best score.</li>
         </ul>
       </section>
       <section class="helppage" data-title="Shop and items" hidden>
@@ -534,7 +542,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       </section>
     </div>
     <div class="pager"><button id="helpPrev" class="btn" aria-label="Previous page">‹ Back</button><span id="helpPageLabel" aria-live="polite"></span><button id="helpNext" class="btn" aria-label="Next page">Next ›</button></div>
-    <p class="gnote">Version <b id="buildId">480ea463</b> · <a href="#" id="updateLink">↻ Get the latest version</a><br>(keeps your saved game and best scores)</p>
+    <p class="gnote">Version <b id="buildId">b61316af</b> · <a href="#" id="updateLink">↻ Get the latest version</a><br>(keeps your saved game and best scores)</p>
     <div class="helpbtns"><button id="helpTour" class="btn">▶ Quick tour</button><button id="helpClose" class="btn primary">Got it</button></div>
   </div>
 </div>
@@ -569,6 +577,10 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   // inside the middle 6x6. Land cannot be bought, but the shop reclaims a sea tile next to the land (state.reclaimed counts them), dearer
   // every time; at most MAX_RECLAIM = the whole board minus the smallest island.
   var ISLAND_SIZE = DEFAULT_W + 2, ISLAND_MIN = 16, ISLAND_MAX = 20, MAX_RECLAIM = ISLAND_SIZE * ISLAND_SIZE - ISLAND_MIN, RECLAIM_PRICE = []; (function () { for (var n = 0, p = 60; n < MAX_RECLAIM; n++, p *= 1.1) RECLAIM_PRICE.push(Math.round(p / 10) * 10); })();
+  // Titles (sobriquets): earned over many games by a quest counter that the page keeps (state.bearsTrapped is this game's share), chosen per
+  // game in the New game dialog (state.title) and applied by the logic: hunter = after BEARS trapped in total, a share of the bears in the
+  // queue turn into grass. The extra random number is only drawn when the title is on, so games without one replay exactly as before.
+  var TITLES = { hunter: { stat: 'bears', goal: 100, bearCut: 0.3 } };
   // Treasury: when a game is left, TREASURY_SHARE of its coins go into a saved treasury (at most TREASURY_CAP), which can be spent as
   // the starting coins of the next game (state.boost; those games have their own best-score board).
   var TREASURY_SHARE = 0.02, TREASURY_CAP = 1000;
@@ -671,21 +683,23 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       if (r < acc) {
         var it = WEIGHTS[i][0];
         // a switched-off animal turns into plain grass (the draw is the same, so games with both animals on replay exactly as ever)
-        return (it === BEAR && s.bears === false) || (it === FOX && s.foxes === false) ? 1 : it;
+        if ((it === BEAR && s.bears === false) || (it === FOX && s.foxes === false)) return 1;
+        if (it === BEAR && s.title && rand(s) < TITLES[s.title].bearCut) return 1; // the Bears Hunter title: some bears turn into grass
+        return it;
       }
     }
     return 1;
   }
 
   function clone(s) {
-    return { ver: s.ver, wild: s.wild, bears: s.bears, foxes: s.foxes, map: s.map, bridges: s.bridges.slice(), ponds: s.ponds.slice(), reclaimed: s.reclaimed, boost: s.boost, lake: s.lake, tick: s.tick, speed: s.speed, banksBought: s.banksBought, bankOrder: s.bankOrder.slice(), loans: s.loans.map(function (l) { return Object.assign({}, l); }), w: s.w, h: s.h, land: s.land.slice(), top: s.top, grid: s.grid.slice(), cur: s.cur, next: s.next, hold: s.hold, score: s.score, coins: s.coins,
+    return { ver: s.ver, wild: s.wild, bears: s.bears, foxes: s.foxes, map: s.map, bridges: s.bridges.slice(), ponds: s.ponds.slice(), reclaimed: s.reclaimed, boost: s.boost, title: s.title, bearsTrapped: s.bearsTrapped, lake: s.lake, tick: s.tick, speed: s.speed, banksBought: s.banksBought, bankOrder: s.bankOrder.slice(), loans: s.loans.map(function (l) { return Object.assign({}, l); }), w: s.w, h: s.h, land: s.land.slice(), top: s.top, grid: s.grid.slice(), cur: s.cur, next: s.next, hold: s.hold, score: s.score, coins: s.coins,
       stock: Object.assign({}, s.stock), milestone: s.milestone, bonusScore: s.bonusScore, turn: s.turn, over: s.over, rng: s.rng, seed: s.seed, undo: s.undo };
   }
 
   function newGame(seed, opts) {
     seed = (seed >>> 0) || 1;
     var bears = !(opts && opts.bears === false), foxes = !(opts && opts.foxes === false);
-    var s = { ver: VERSION, wild: bears && !!(opts && opts.wild), bears: bears, foxes: foxes, map: opts && MAPS.indexOf(opts.map) >= 0 ? opts.map : 'easy', bridges: [], ponds: [], reclaimed: 0, boost: 0, lake: 0, tick: 0, speed: 1, banksBought: 0, bankOrder: [], loans: [], w: DEFAULT_W, h: DEFAULT_H, land: [], top: 1, grid: new Array(DEFAULT_W * DEFAULT_H).fill(EMPTY), cur: 1, next: 1, hold: 0, score: 0, coins: START_COINS,
+    var s = { ver: VERSION, wild: bears && !!(opts && opts.wild), bears: bears, foxes: foxes, map: opts && MAPS.indexOf(opts.map) >= 0 ? opts.map : 'easy', bridges: [], ponds: [], reclaimed: 0, boost: 0, title: opts && TITLES[opts.title] ? opts.title : '', bearsTrapped: 0, lake: 0, tick: 0, speed: 1, banksBought: 0, bankOrder: [], loans: [], w: DEFAULT_W, h: DEFAULT_H, land: [], top: 1, grid: new Array(DEFAULT_W * DEFAULT_H).fill(EMPTY), cur: 1, next: 1, hold: 0, score: 0, coins: START_COINS,
       stock: Object.assign({}, START_STOCK), milestone: 0, bonusScore: 0, turn: 0, over: false, rng: seed, seed: seed, undo: null };
     if (s.map === 'island') { s.w = s.h = ISLAND_SIZE; s.land = SIDES.slice(); s.grid = new Array(ISLAND_SIZE * ISLAND_SIZE).fill(EMPTY); } // the biggest board, all land bought
     var start = opts && opts.start >= 0 ? Math.min(TREASURY_CAP, Math.floor(opts.start)) : 0; // coins taken from the saved treasury
@@ -881,7 +895,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       if (!room) pocket.forEach(function (c) { if (s.grid[c] !== EMPTY) trapped.push(c); });
     }
     trapped.sort(function (a, b) { return (b === last) - (a === last) || a - b; });
-    trapped.forEach(function (at) { s.grid[at] = TOMB; events.push({ type: 'trapped', at: at }); });
+    trapped.forEach(function (at) { if (isBear(s.grid[at])) s.bearsTrapped++; s.grid[at] = TOMB; events.push({ type: 'trapped', at: at }); });
     for (i = 0; i < N; i++) if (isBear(s.grid[i])) bears.push(i);
     var mauled = [];
     bears.forEach(function (from) {
@@ -1069,7 +1083,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     if (state.over || !(idx >= 0 && idx < N) || (!isBear(state.grid[idx]) && state.grid[idx] !== FOX) || state.coins < PRICE.trap || !(state.stock.trap > 0)) return null;
     var s = clone(state), events = [{ type: 'trap', at: idx }];
     s.undo = snapshot(state); // a tool use can be undone by itself
-    s.coins -= PRICE.trap; s.stock.trap--; s.grid[idx] = TOMB;
+    s.coins -= PRICE.trap; s.stock.trap--; if (isBear(s.grid[idx])) s.bearsTrapped++; s.grid[idx] = TOMB;
     resolveAt(s, idx, events);
     settleCrystals(s, events);
     noteTop(s, events);
@@ -1402,6 +1416,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       if (typeof x.lake !== 'number') x.lake = 0;
       if (typeof x.reclaimed !== 'number') x.reclaimed = 0; // island sea reclaimed and treasury coins taken at the start came later
       if (typeof x.boost !== 'number') x.boost = 0;
+      if (typeof x.title !== 'string') x.title = ''; // titles and the trapped-bears counter came later
+      if (typeof x.bearsTrapped !== 'number') x.bearsTrapped = 0;
       if (typeof x.tick !== 'number') x.tick = 0; // the calendar and banks came later
       if (typeof x.speed !== 'number') x.speed = 1;
       if (!Array.isArray(x.loans)) x.loans = [];
@@ -1454,6 +1470,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     }
     if (s.reclaimed !== (s.reclaimed | 0) || s.reclaimed < 0 || s.reclaimed > MAX_RECLAIM || (s.map !== 'island' && s.reclaimed)) return ['bad reclaimed count'];
     if (s.boost !== (s.boost | 0) || s.boost < 0 || s.boost > TREASURY_CAP) return ['bad boost'];
+    if (s.title !== '' && !TITLES[s.title]) return ['bad title'];
+    if (s.bearsTrapped !== (s.bearsTrapped | 0) || s.bearsTrapped < 0) return ['bad bears trapped count'];
     if (s.map === 'island' && (s.w !== ISLAND_SIZE || s.h !== ISLAND_SIZE)) return ['an island is the biggest board'];
     var lr = 0, tb = 0;
     s.land.forEach(function (side, k) {
@@ -1533,7 +1551,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     RESTOCK: RESTOCK, MILESTONES: MILESTONES, milestoneScore: milestoneScore, milestoneProgress: milestoneProgress, canUndo: canUndo, canHammer: canHammer, migrate: migrate,
     rand: rand, drawItem: drawItem, newGame: newGame, neighbors: neighbors, group: group,
     place: place, swap: swap, swapNext: swapNext, undo: undo, validate: validate, emptyCount: emptyCount,
-    buy: buy, hammer: hammer, trap: trap, move: move, open: open, buyLand: buyLand, buyBridge: buyBridge, borrow: borrow, repay: repay, setSpeed: setSpeed, lockedCells: lockedCells, loanOptions: loanOptions, loanOwed: loanOwed, loanMonthsLeft: loanMonthsLeft, bankRate: bankRate, SEIZED: SEIZED, LOAN_RATE: LOAN_RATE, LOAN_TICKS: LOAN_TICKS, MAX_SPEED: MAX_SPEED, buyBank: buyBank, bankPrice: bankPrice, bankCount: bankCount, bankSlots: bankSlots, bankIncome: bankIncome, canBuyBank: canBuyBank, isBankAvailable: isBankAvailable, calendar: calendar, BANK: BANK, MAX_BANKS: MAX_BANKS, BANK_PRICE: BANK_PRICE, BANK_MIN_TIER: BANK_MIN_TIER, TICKS_PER_MONTH: TICKS_PER_MONTH, MONTHS_PER_YEAR: MONTHS_PER_YEAR, buyPond: buyPond, pondPrice: pondPrice, pondPoints: pondPoints, pondCoins: pondCoins, payingPonds: payingPonds, pondPriceAt: pondPriceAt, reclaimSpots: reclaimSpots, reclaimPrice: reclaimPrice, canReclaim: canReclaim, buyReclaim: buyReclaim, MAX_RECLAIM: MAX_RECLAIM, RECLAIM_PRICE: RECLAIM_PRICE, ISLAND_SIZE: ISLAND_SIZE, treasuryGain: treasuryGain, treasuryAfter: treasuryAfter, TREASURY_SHARE: TREASURY_SHARE, TREASURY_CAP: TREASURY_CAP, canPond: canPond, bestLake: bestLake, POND_PRICE: POND_PRICE, LAKE_SIZES: LAKE_SIZES, LAKE_BONUS: LAKE_BONUS, LAKE_COINS: LAKE_COINS, bridgeSpots: bridgeSpots, bridgePrice: bridgePrice, canBridge: canBridge, freeCount: freeCount, MAX_BRIDGES: MAX_BRIDGES, BRIDGE_PRICE: BRIDGE_PRICE, preview: preview, previewMove: previewMove, isOver: isOver,
+    buy: buy, hammer: hammer, trap: trap, move: move, open: open, buyLand: buyLand, buyBridge: buyBridge, borrow: borrow, repay: repay, setSpeed: setSpeed, lockedCells: lockedCells, loanOptions: loanOptions, loanOwed: loanOwed, loanMonthsLeft: loanMonthsLeft, bankRate: bankRate, SEIZED: SEIZED, LOAN_RATE: LOAN_RATE, LOAN_TICKS: LOAN_TICKS, MAX_SPEED: MAX_SPEED, buyBank: buyBank, bankPrice: bankPrice, bankCount: bankCount, bankSlots: bankSlots, bankIncome: bankIncome, canBuyBank: canBuyBank, isBankAvailable: isBankAvailable, calendar: calendar, BANK: BANK, MAX_BANKS: MAX_BANKS, BANK_PRICE: BANK_PRICE, BANK_MIN_TIER: BANK_MIN_TIER, TICKS_PER_MONTH: TICKS_PER_MONTH, MONTHS_PER_YEAR: MONTHS_PER_YEAR, buyPond: buyPond, pondPrice: pondPrice, pondPoints: pondPoints, pondCoins: pondCoins, payingPonds: payingPonds, pondPriceAt: pondPriceAt, reclaimSpots: reclaimSpots, reclaimPrice: reclaimPrice, canReclaim: canReclaim, buyReclaim: buyReclaim, MAX_RECLAIM: MAX_RECLAIM, RECLAIM_PRICE: RECLAIM_PRICE, ISLAND_SIZE: ISLAND_SIZE, TITLES: TITLES, treasuryGain: treasuryGain, treasuryAfter: treasuryAfter, TREASURY_SHARE: TREASURY_SHARE, TREASURY_CAP: TREASURY_CAP, canPond: canPond, bestLake: bestLake, POND_PRICE: POND_PRICE, LAKE_SIZES: LAKE_SIZES, LAKE_BONUS: LAKE_BONUS, LAKE_COINS: LAKE_COINS, bridgeSpots: bridgeSpots, bridgePrice: bridgePrice, canBridge: canBridge, freeCount: freeCount, MAX_BRIDGES: MAX_BRIDGES, BRIDGE_PRICE: BRIDGE_PRICE, preview: preview, previewMove: previewMove, isOver: isOver,
     priceOf: priceOf, isMovable: isMovable, canMove: canMove, isAvailable: isAvailable, unlockedTop: unlockedTop, landPrice: landPrice, canLand: canLand
   };
 });
@@ -1564,7 +1582,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   // best scores are kept per map and bear mode: harder games get their own board (easy + classic keeps the original key)
   function bestKey() {
     return (state && state.map && state.map !== 'easy' ? 'tt-best-' + state.map : 'tt-best') + (state && state.wild ? '-wild' : '') +
-      (state && state.bears === false ? '-nobears' : '') + (state && state.foxes === false ? '-nofox' : '') + (state && state.boost > 0 ? '-boost' : '');
+      (state && state.bears === false ? '-nobears' : '') + (state && state.foxes === false ? '-nofox' : '') + (state && state.boost > 0 ? '-boost' : '') + (state && state.title ? '-' + state.title : '');
   }
   function wildPref() { return store.get('tt-wild', false) === true; } // the mode picked last in the New game dialog
   function bearsPref() { return store.get('tt-bears', true) !== false; }
@@ -1572,7 +1590,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   function mapPref() { var m = store.get('tt-map', 'easy'); return TT.MAPS.indexOf(m) >= 0 ? m : 'easy'; }
   // ' · wild bears', ' · calm' ... for the seed line and the erase warning
   function modeLabel(st) {
-    return (st.wild ? ' · wild bears' : '') + (st.bears === false && st.foxes === false ? ' · calm' : (st.bears === false ? ' · no bears' : '') + (st.foxes === false ? ' · no foxes' : '')) + (st.boost > 0 ? ' · 🏛️ treasury start' : '');
+    return (st.wild ? ' · wild bears' : '') + (st.bears === false && st.foxes === false ? ' · calm' : (st.bears === false ? ' · no bears' : '') + (st.foxes === false ? ' · no foxes' : '')) + (st.boost > 0 ? ' · 🏛️ treasury start' : '') + (st.title ? ' · ' + TITLE_ICON[st.title] + ' ' + TITLE_NAMES[st.title] : '');
   }
   // Treasury: 2% of the coins of a game you leave are saved (tt-treasury, at most 1000); the New game dialog spends None / Half / All of it as starting coins.
   function treasury() { var v = store.get('tt-treasury', 0); return v > 0 ? Math.min(TT.TREASURY_CAP, Math.floor(v)) : 0; }
@@ -1584,17 +1602,28 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     if (!state) return t;
     return state.turn > 0 ? TT.treasuryAfter(t, state.coins) : Math.min(TT.TREASURY_CAP, t + (state.boost || 0));
   }
+  // Titles: quest counters are saved across games (tt-stats); the game on screen adds its own count when it is left (state.bearsTrapped is in the
+  // state, so undo takes it back too). A title is earned at its goal and picked per game in the New game dialog (tt-title).
+  var TITLE_NAMES = { hunter: 'Bears Hunter' }, TITLE_ICON = { hunter: '🏹' };
+  function stats() { var v = store.get('tt-stats', null); return { bears: v && v.bears > 0 ? Math.floor(v.bears) : 0 }; }
+  function statsNow() { return { bears: stats().bears + (state ? state.bearsTrapped || 0 : 0) }; } // the totals once the game on screen is left
+  function titleUnlocked(id, st) { return !!TT.TITLES[id] && st[TT.TITLES[id].stat] >= TT.TITLES[id].goal; }
+  function titlePref() { var v = store.get('tt-title', ''); return TT.TITLES[v] ? v : ''; }
   function startNew(seed, o) {
     o = o || {};
     var t = treasuryNow(), start = takeAmount(o.take === undefined ? takePref() : o.take, t);
     store.set('tt-treasury', t - start);
+    var was = stats(), now = statsNow(), want = o.title === undefined ? titlePref() : o.title;
+    store.set('tt-stats', now);
     state = TT.newGame(seed || randomSeed(), {
       wild: o.wild === undefined ? wildPref() : o.wild, map: o.map === undefined ? mapPref() : o.map,
-      bears: o.bears === undefined ? bearsPref() : o.bears, foxes: o.foxes === undefined ? foxesPref() : o.foxes, start: start });
+      bears: o.bears === undefined ? bearsPref() : o.bears, foxes: o.foxes === undefined ? foxesPref() : o.foxes, start: start,
+      title: titleUnlocked(want, now) ? want : '' });
     sel = -1; hover = -1; mode = null; moveFrom = -1;
     $('overlay').classList.add('hidden');
     save();
     render([]);
+    Object.keys(TT.TITLES).forEach(function (id) { if (!titleUnlocked(id, was) && titleUnlocked(id, now)) toast(TITLE_ICON[id] + ' Title earned: ' + TITLE_NAMES[id] + '! Pick it in New game.', 0.4); });
   }
   function save() { store.set('tt-save', state); }
 
@@ -2231,6 +2260,9 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     $('overText').textContent = 'Score ' + state.score + ' in ' + state.turn + ' turns' + (newBest ? '' : ' · best ' + best);
     var gain = TT.treasuryGain(state.coins), tr = TT.treasuryAfter(treasury(), state.coins);
     $('overTreasury').textContent = '🏛️ ' + (gain ? '+' + gain + ' saved to your treasury · ' : 'Treasury ') + '🪙' + tr + ' for your next game (choose how much in New).';
+    var tst = statsNow(), q = TT.TITLES.hunter;
+    $('overStats').textContent = state.bearsTrapped || tst.bears < q.goal
+      ? TITLE_ICON.hunter + ' ' + state.bearsTrapped + ' bears trapped this game · ' + Math.min(tst.bears, q.goal) + '/' + q.goal + ' for ' + TITLE_NAMES.hunter : TITLE_ICON.hunter + ' ' + TITLE_NAMES.hunter + ' earned: pick it in New game.';
     $('overlay').classList.remove('hidden');
   }
 
@@ -2272,7 +2304,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     if (s) { state = s; save(); render([]); }
   });
   // New game: pick the map and the bear mode in a small dialog (the last picks are remembered); Play again repeats both
-  var dlg = { map: 'easy', bears: 'classic', foxes: true, take: 'all' };
+  var dlg = { map: 'easy', bears: 'classic', foxes: true, take: 'all', title: '' };
   // sample maps: the real generator with fixed seeds, drawn as tiny boards (water blue, plants as emoji). Easy and Medium are the same every game.
   var SAMPLE_SEEDS = { easy: [1], standard: [3, 8, 21], medium: [1], hard: [4, 9, 17], island: [1, 5, 9] }, CARD_SEED = { easy: 1, standard: 3, medium: 1, hard: 4, island: 1 };
   function miniMap(map, seed, into) {
@@ -2303,6 +2335,20 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     document.querySelectorAll('#newGame .opt[data-bears]').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.bears === dlg.bears); });
     document.querySelectorAll('#newGame .opt[data-foxes]').forEach(function (b) { b.setAttribute('aria-pressed', (b.dataset.foxes === 'on') === dlg.foxes); });
     $('mapNote').textContent = MAP_NOTES[dlg.map];
+    var tst = statsNow(), tbox = $('titleOpts');
+    tbox.textContent = '';
+    [''].concat(Object.keys(TT.TITLES)).forEach(function (id) {
+      var ok = !id || titleUnlocked(id, tst), b = document.createElement('button');
+      b.className = 'opt'; b.dataset.title = id; b.disabled = !ok;
+      b.textContent = !id ? 'None' : (ok ? TITLE_ICON[id] + ' ' : '🔒 ') + TITLE_NAMES[id];
+      b.setAttribute('aria-pressed', (titleUnlocked(dlg.title, tst) ? dlg.title : '') === id);
+      b.addEventListener('click', function () { dlg.title = id; showDialog(); });
+      tbox.appendChild(b);
+    });
+    $('titleNote').textContent = Object.keys(TT.TITLES).map(function (id) {
+      var q = TT.TITLES[id], have = Math.min(tst[q.stat], q.goal), mine = state && state.bearsTrapped ? ' (' + state.bearsTrapped + ' in the game you are leaving)' : '';
+      return TITLE_ICON[id] + ' ' + TITLE_NAMES[id] + ': trap ' + q.goal + ' bears in total (' + have + '/' + q.goal + (have < q.goal ? mine : '') + ') for ' + Math.round(q.bearCut * 100) + '% fewer bears in the queue. A game with a title has its own best score.';
+    }).join(' ');
     var tr = treasuryNow(), st = takeAmount(dlg.take, tr), pend = state && state.turn > 0 ? TT.treasuryGain(state.coins) : 0;
     document.querySelectorAll('#newGame .opt[data-take]').forEach(function (b) { b.setAttribute('aria-pressed', tr > 0 ? b.dataset.take === dlg.take : b.dataset.take === 'none'); b.disabled = tr === 0 && b.dataset.take !== 'none'; });
     $('treasuryNote').textContent = tr === 0
@@ -2314,7 +2360,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   }
   var MAP_NOTES = { easy: 'A plain grass field.', standard: 'A plain field with a few grass, bushes and trees already growing (different every game, e.g. these).', medium: 'A river runs across the field and splits it in two (the same map every game).', hard: 'Random ponds eat into the field (different every game, e.g. these).', island: 'The biggest board, all sea except a small island (a different shape every game, e.g. these). You cannot buy land, but you can reclaim sea tiles next to it (dearer each time) to grow it.' };
   function openNewGame() {
-    dlg.map = mapPref(); dlg.bears = !bearsPref() ? 'off' : wildPref() ? 'wild' : 'classic'; dlg.foxes = foxesPref(); dlg.take = takePref();
+    dlg.map = mapPref(); dlg.bears = !bearsPref() ? 'off' : wildPref() ? 'wild' : 'classic'; dlg.foxes = foxesPref(); dlg.take = takePref(); dlg.title = titlePref();
     // a game in progress would be erased: say so loudly, with what is at stake, and make the button say it too
     var inProgress = !state.over && state.turn > 0, warn = $('newWarn');
     warn.classList.toggle('hidden', !inProgress);
@@ -2329,9 +2375,9 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   document.querySelectorAll('#newGame .opt[data-foxes]').forEach(function (b) { b.addEventListener('click', function () { dlg.foxes = b.dataset.foxes === 'on'; showDialog(); }); });
   document.querySelectorAll('#newGame .opt[data-take]').forEach(function (b) { b.addEventListener('click', function () { dlg.take = b.dataset.take; showDialog(); }); });
   $('newStart').addEventListener('click', function () {
-    store.set('tt-map', dlg.map); store.set('tt-wild', dlg.bears === 'wild'); store.set('tt-bears', dlg.bears !== 'off'); store.set('tt-foxes', dlg.foxes); store.set('tt-take', dlg.take);
+    store.set('tt-map', dlg.map); store.set('tt-wild', dlg.bears === 'wild'); store.set('tt-bears', dlg.bears !== 'off'); store.set('tt-foxes', dlg.foxes); store.set('tt-take', dlg.take); store.set('tt-title', dlg.title);
     $('newGame').classList.add('hidden');
-    startNew(0, { wild: dlg.bears === 'wild', map: dlg.map, bears: dlg.bears !== 'off', foxes: dlg.foxes, take: dlg.take });
+    startNew(0, { wild: dlg.bears === 'wild', map: dlg.map, bears: dlg.bears !== 'off', foxes: dlg.foxes, take: dlg.take, title: dlg.title });
   });
   $('shopBtn').addEventListener('click', openShop);
   $('shopClose').addEventListener('click', closeShop);
@@ -2506,7 +2552,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 
   // ---- start: ?#seed=N forces a reproducible game, otherwise resume the saved one
   var forced = seedFromHash();
-  if (forced) startNew(forced, { take: 'none' }); // a shared seed is the same game for everybody: no treasury coins
+  if (forced) startNew(forced, { take: 'none', title: '' }); // a shared seed is the same game for everybody: no treasury coins
   else {
     state = loadSaved();
     if (state) render([]); else startNew();
