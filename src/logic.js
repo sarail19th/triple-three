@@ -23,7 +23,10 @@
   var BREED_MIN_BEARS = 2, BREED_MIN_EMPTY = 2, BREED_MAX_POCKET = 6, BREED_MAX_BEARS = 8, BREED_CHANCE = 0.1;
   // Maps (chosen when a game starts, kept in state.map): easy = plain field, standard = a few random grass/bush/tree, medium = a
   // river across the field, hard = random ponds. Water tiles are fixed for the whole game.
-  var MAPS = ['easy', 'standard', 'medium', 'hard', 'island'];
+  var MAPS = ['easy', 'standard', 'medium', 'hard', 'highlands', 'island'];
+  // Highlands: mountains (walls until levelled with the Level tool for coins, dearer each time, state.leveled counts them) and holes (walls for
+  // animals, but a placed item falls in: it is used up and the tile becomes flat) scattered over the field.
+  var LEVEL_BASE = 150, LEVEL_GROWTH = 1.25;
   // Island: the biggest board (every side of land already bought), all sea except a small random island of ISLAND_MIN..ISLAND_MAX tiles
   // inside the middle 6x6. Land cannot be bought, but the shop reclaims a sea tile next to the land (state.reclaimed counts them), dearer
   // every time; at most MAX_RECLAIM = the whole board minus the smallest island.
@@ -68,9 +71,9 @@
   // 21 water (map tiles that never change: nothing can be placed, merged, moved or smashed there, and animals cannot enter it),
   // 23 seized lot (a tile lost to an unpaid loan: a dead tile until the debt is paid, then empty again),
   // 22 bank (a shop item placed like a building: a dead tile for animals and movers that pays coins every turn; three connected banks merge into cash).
-  var EMPTY = 0, LAST_BUILDING = 10, CASH = 11, BEAR = 12, TOMB = 13, CHURCH = 14, CATHEDRAL = 15, CRYSTAL = 16, TREASURE = 17, FOX = 18, BEAR_GROWL = 19, BEAR_ANGRY = 20, WATER = 21, BANK = 22, SEIZED = 23;
-  var EMOJI = ['', '🌱', '🌿', '🌳', '🏕️', '🛖', '🏠', '🏘️', '🏫', '🏥', '🏬', '💵', '🐻', '🪦', '⛪', '🕌', '💎', '💰', '🦊', '🐻', '🐻', '', '🏦', '🏚️'];
-  var NAME = ['empty', 'grass', 'bush', 'tree', 'camp', 'hut', 'house', 'village', 'school', 'hospital', 'mall', 'cash', 'bear', 'tombstone', 'church', 'cathedral', 'crystal', 'treasure', 'fox', 'growling bear', 'angry bear', 'water', 'bank', 'seized lot'];
+  var EMPTY = 0, LAST_BUILDING = 10, CASH = 11, BEAR = 12, TOMB = 13, CHURCH = 14, CATHEDRAL = 15, CRYSTAL = 16, TREASURE = 17, FOX = 18, BEAR_GROWL = 19, BEAR_ANGRY = 20, WATER = 21, BANK = 22, SEIZED = 23, MOUNTAIN = 24, HOLE = 25, LAST_CODE = HOLE;
+  var EMOJI = ['', '🌱', '🌿', '🌳', '🏕️', '🛖', '🏠', '🏘️', '🏫', '🏥', '🏬', '💵', '🐻', '🪦', '⛪', '🕌', '💎', '💰', '🦊', '🐻', '🐻', '', '🏦', '🏚️', '⛰️', '🕳️'];
+  var NAME = ['empty', 'grass', 'bush', 'tree', 'camp', 'hut', 'house', 'village', 'school', 'hospital', 'mall', 'cash', 'bear', 'tombstone', 'church', 'cathedral', 'crystal', 'treasure', 'fox', 'growling bear', 'angry bear', 'water', 'bank', 'seized lot', 'mountain', 'hole'];
   // code -> code it becomes when 3+ connect. Final tiers (11 cash, 15->17 treasure), bear, fox and crystal are absent / collectible.
   var NEXT = { 1: 2, 2: 3, 3: 4, 4: 5, 5: 6, 6: 7, 7: 8, 8: 9, 9: 10, 10: 11, 13: 14, 14: 15, 15: 17, 22: 11 };
   // points per item consumed by a merge, keyed by the consumed code (buildings x3 per tier)
@@ -83,7 +86,7 @@
   // Lucky drops: once you have built a tier, the next item is now and then a camp / hut / house (never above a house, and only tiers
   // below the best one you have built), more often on the easier maps. The extra random numbers are drawn only when a drop is
   // possible, so early games (and the whole Hard map) draw exactly the sequence they always did.
-  var LUCKY_RATE = { easy: 0.06, standard: 0.04, medium: 0.03, hard: 0, island: 0.05 };
+  var LUCKY_RATE = { easy: 0.06, standard: 0.04, medium: 0.03, hard: 0, island: 0.05, highlands: 0.04 };
   var LUCKY_MIN_TIER = 4, LUCKY_MAX_TIER = 6;
   var QUEUE_ITEMS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, BEAR, CRYSTAL, FOX, BANK]; // BANK only ever comes from the shop
   // coins: earned per merge (COIN[consumed code] * (group size - 2)), spent in the shop (free actions, no turn passes)
@@ -146,14 +149,14 @@
   }
 
   function clone(s) {
-    return { ver: s.ver, wild: s.wild, bears: s.bears, foxes: s.foxes, map: s.map, bridges: s.bridges.slice(), ponds: s.ponds.slice(), reclaimed: s.reclaimed, boost: s.boost, title: s.title, bearsTrapped: s.bearsTrapped, lake: s.lake, tick: s.tick, speed: s.speed, banksBought: s.banksBought, bankOrder: s.bankOrder.slice(), loans: s.loans.map(function (l) { return Object.assign({}, l); }), w: s.w, h: s.h, land: s.land.slice(), top: s.top, grid: s.grid.slice(), cur: s.cur, next: s.next, hold: s.hold, score: s.score, coins: s.coins,
+    return { ver: s.ver, wild: s.wild, bears: s.bears, foxes: s.foxes, map: s.map, bridges: s.bridges.slice(), ponds: s.ponds.slice(), reclaimed: s.reclaimed, leveled: s.leveled, boost: s.boost, title: s.title, bearsTrapped: s.bearsTrapped, lake: s.lake, tick: s.tick, speed: s.speed, banksBought: s.banksBought, bankOrder: s.bankOrder.slice(), loans: s.loans.map(function (l) { return Object.assign({}, l); }), w: s.w, h: s.h, land: s.land.slice(), top: s.top, grid: s.grid.slice(), cur: s.cur, next: s.next, hold: s.hold, score: s.score, coins: s.coins,
       stock: Object.assign({}, s.stock), milestone: s.milestone, bonusScore: s.bonusScore, turn: s.turn, over: s.over, rng: s.rng, seed: s.seed, undo: s.undo };
   }
 
   function newGame(seed, opts) {
     seed = (seed >>> 0) || 1;
     var bears = !(opts && opts.bears === false), foxes = !(opts && opts.foxes === false);
-    var s = { ver: VERSION, wild: bears && !!(opts && opts.wild), bears: bears, foxes: foxes, map: opts && MAPS.indexOf(opts.map) >= 0 ? opts.map : 'easy', bridges: [], ponds: [], reclaimed: 0, boost: 0, title: opts && TITLES[opts.title] ? opts.title : '', bearsTrapped: 0, lake: 0, tick: 0, speed: 1, banksBought: 0, bankOrder: [], loans: [], w: DEFAULT_W, h: DEFAULT_H, land: [], top: 1, grid: new Array(DEFAULT_W * DEFAULT_H).fill(EMPTY), cur: 1, next: 1, hold: 0, score: 0, coins: START_COINS,
+    var s = { ver: VERSION, wild: bears && !!(opts && opts.wild), bears: bears, foxes: foxes, map: opts && MAPS.indexOf(opts.map) >= 0 ? opts.map : 'easy', bridges: [], ponds: [], reclaimed: 0, leveled: 0, boost: 0, title: opts && TITLES[opts.title] ? opts.title : '', bearsTrapped: 0, lake: 0, tick: 0, speed: 1, banksBought: 0, bankOrder: [], loans: [], w: DEFAULT_W, h: DEFAULT_H, land: [], top: 1, grid: new Array(DEFAULT_W * DEFAULT_H).fill(EMPTY), cur: 1, next: 1, hold: 0, score: 0, coins: START_COINS,
       stock: Object.assign({}, START_STOCK), milestone: 0, bonusScore: 0, turn: 0, over: false, rng: seed, seed: seed, undo: null };
     if (s.map === 'island') { s.w = s.h = ISLAND_SIZE; s.land = SIDES.slice(); s.grid = new Array(ISLAND_SIZE * ISLAND_SIZE).fill(EMPTY); } // the biggest board, all land bought
     dim(s);
@@ -168,7 +171,14 @@
     if (s.map === 'standard') scatter(s, STANDARD_ITEMS);
     else if (s.map === 'medium') for (i = 0; i < MEDIUM_WATER.length; i++) s.grid[MEDIUM_WATER[i]] = WATER;
     else if (s.map === 'hard') ponds(s);
+    else if (s.map === 'highlands') highlands(s);
     else if (s.map === 'island') island(s);
+  }
+  // a few mountains and holes on random tiles (4..6 mountains, 3..5 holes)
+  function highlands(s) {
+    [[MOUNTAIN, 4 + randInt(s, 3)], [HOLE, 3 + randInt(s, 3)]].forEach(function (kind) {
+      for (var placed = 0; placed < kind[1];) { var at = randInt(s, N); if (s.grid[at] === EMPTY) { s.grid[at] = kind[0]; placed++; } }
+    });
   }
   // all sea, then a connected random island of ISLAND_MIN..ISLAND_MAX tiles that keeps one tile of sea around the middle 6x6
   function island(s) {
@@ -437,7 +447,7 @@
   function canLand(s) { return s.land.length < SIDES.length && s.coins >= LAND_PRICE[s.land.length]; }
   // empty tiles an item can actually be placed on (a bridge tile is empty but nothing is built on it)
   function freeCount(s) { var n = 0; for (var i = 0; i < s.grid.length; i++) if (s.grid[i] === EMPTY && s.bridges.indexOf(i) < 0) n++; return n; }
-  function isOver(s) { return freeCount(s) === 0 && !canHammer(s) && !canLand(s) && !canReclaim(s) && !loanEscape(s); }
+  function isOver(s) { return freeCount(s) === 0 && fillCount(s) === 0 && !canHammer(s) && !canLand(s) && !canReclaim(s) && !canLevel(s) && !loanEscape(s); }
   // Score milestones restock the shop (only tiers that are unlocked). Mutates s.
   function grantMilestones(s, events) {
     while (milestoneProgress(s) >= milestoneScore(s.milestone)) {
@@ -453,11 +463,12 @@
   // Play one turn: put s.cur on empty cell idx. Returns {state, events}, or null if the move is illegal.
   function place(state, idx) {
     dim(state);
-    if (state.over || !(idx >= 0 && idx < N) || state.grid[idx] !== EMPTY || state.bridges.indexOf(idx) >= 0) return null;
+    if (state.over || !(idx >= 0 && idx < N) || (state.grid[idx] !== EMPTY && state.grid[idx] !== HOLE) || state.bridges.indexOf(idx) >= 0) return null;
     var s = clone(state), events = [], item = s.cur;
     s.undo = clone(state); s.undo.undo = null; // one level of undo, no nesting
     events.push({ type: 'place', at: idx, item: item });
-    applyItem(s, idx, item, events);
+    if (state.grid[idx] === HOLE) { s.grid[idx] = EMPTY; events.push({ type: 'fill', at: idx, item: item }); } // the hole swallows the item and the tile is flat now
+    else applyItem(s, idx, item, events);
     settleBanks(s);
     moveBears(s, events, idx);
     settleCrystals(s, events); // new tombstones / churches may complete a group for a waiting crystal
@@ -515,7 +526,7 @@
   // Shop: the hammer removes whatever stands on cell idx (free action, costs coins). Returns {state, events} or null.
   function hammer(state, idx) {
     dim(state);
-    if (state.over || !(idx >= 0 && idx < N) || state.grid[idx] === EMPTY || state.grid[idx] === WATER || state.grid[idx] === SEIZED || LOCK[idx] || !canHammer(state)) return null; // a loan locks its building and its bank
+    if (state.over || !(idx >= 0 && idx < N) || state.grid[idx] === EMPTY || isTerrain(state.grid[idx]) || LOCK[idx] || !canHammer(state)) return null; // a loan locks its building and its bank
     var s = clone(state), item = s.grid[idx];
     s.undo = snapshot(state);
     s.grid[idx] = EMPTY; s.coins -= PRICE.hammer; s.stock.hammer--; settleBanks(s); s.over = isOver(s);
@@ -551,7 +562,8 @@
   // Shop: the mover picks up the item on `from` and drops it on the empty cell `to` (free action, costs coins, limited stock).
   // It merges there exactly as a placed item would. Bears and foxes cannot be moved (only the trap deals with them).
   // Returns {state, events} or null.
-  function isMovable(code) { return code !== EMPTY && code !== WATER && code !== SEIZED && !isBear(code) && code !== FOX; } // a bank can be carried too (unless a loan locks it: moveLegal)
+  function isTerrain(code) { return code === WATER || code === SEIZED || code === MOUNTAIN || code === HOLE; } // walls the hammer and the mover leave alone
+  function isMovable(code) { return code !== EMPTY && !isTerrain(code) && !isBear(code) && code !== FOX; } // a bank can be carried too (unless a loan locks it: moveLegal)
   function canMove(s) { return s.coins >= PRICE.move && s.stock.move > 0; }
   function moveLegal(state, from, to) {
     return !state.over && from >= 0 && from < N && to >= 0 && to < N && from !== to && isMovable(state.grid[from]) && !LOCK[from] && state.grid[to] === EMPTY && state.bridges.indexOf(to) < 0;
@@ -755,6 +767,18 @@
     return { state: s, events: events };
   }
 
+  // Highlands: levelling a mountain (free action, coins, dearer every time) turns it into an empty tile.
+  function levelSpots(state) { var out = []; if (state.over) return out; for (var i = 0; i < state.grid.length; i++) if (state.grid[i] === MOUNTAIN) out.push(i); return out; }
+  function levelPrice(s) { return Math.round(LEVEL_BASE * Math.pow(LEVEL_GROWTH, s.leveled || 0) / 10) * 10; }
+  function canLevel(s) { return !s.over && s.coins >= levelPrice(s) && levelSpots(s).length > 0; }
+  function buyLevel(state, idx) {
+    dim(state);
+    if (!canLevel(state) || state.grid[idx] !== MOUNTAIN) return null;
+    var s = clone(state), price = levelPrice(state);
+    s.coins -= price; s.leveled++; s.grid[idx] = EMPTY;
+    return { state: s, events: [{ type: 'level', at: idx, price: price }] };
+  }
+  function fillCount(s) { var n = 0; for (var i = 0; i < s.grid.length; i++) if (s.grid[i] === HOLE) n++; return n; } // holes still swallow an item: a place to play
   // Island: sea tiles that can be reclaimed = natural sea (not a dug pond) with a land tile (not water, a bridge or a seized lot) on one side.
   function reclaimSpots(state) {
     dim(state);
@@ -833,7 +857,8 @@
   // else {item, final (code left on idx), eaten (other cells emptied by merges), points, coins, merged}.
   function preview(state, idx) {
     dim(state);
-    if (state.over || !(idx >= 0 && idx < N) || state.grid[idx] !== EMPTY || state.bridges.indexOf(idx) >= 0) return null;
+    if (state.over || !(idx >= 0 && idx < N) || (state.grid[idx] !== EMPTY && state.grid[idx] !== HOLE) || state.bridges.indexOf(idx) >= 0) return null;
+    if (state.grid[idx] === HOLE) return { item: state.cur, final: EMPTY, eaten: [], points: 0, coins: 0, merged: false, fill: true };
     var s = clone(state), events = [], eaten = [], pts = 0, coins = 0;
     applyItem(s, idx, s.cur, events);
     for (var i = 0; i < N; i++) if (i !== idx && state.grid[i] !== EMPTY && s.grid[i] === EMPTY) eaten.push(i);
@@ -899,6 +924,7 @@
       if (typeof x.lake !== 'number') x.lake = 0;
       if (typeof x.reclaimed !== 'number') x.reclaimed = 0; // island sea reclaimed and treasury coins withdrawn came later
       if (typeof x.boost !== 'number') x.boost = 0;
+      if (typeof x.leveled !== 'number') x.leveled = 0; // mountains levelled (Highlands)
       if (typeof x.title !== 'string') x.title = ''; // titles and the trapped-bears counter came later
       if (typeof x.bearsTrapped !== 'number') x.bearsTrapped = 0;
       if (typeof x.tick !== 'number') x.tick = 0; // the calendar and banks came later
@@ -953,6 +979,7 @@
     }
     if (s.reclaimed !== (s.reclaimed | 0) || s.reclaimed < 0 || s.reclaimed > MAX_RECLAIM || (s.map !== 'island' && s.reclaimed)) return ['bad reclaimed count'];
     if (s.boost !== (s.boost | 0) || s.boost < 0) return ['bad boost'];
+    if (s.leveled !== (s.leveled | 0) || s.leveled < 0) return ['bad leveled count'];
     if (s.title !== '' && !TITLES[s.title]) return ['bad title'];
     if (s.bearsTrapped !== (s.bearsTrapped | 0) || s.bearsTrapped < 0) return ['bad bears trapped count'];
     if (s.map === 'island' && (s.w !== ISLAND_SIZE || s.h !== ISLAND_SIZE)) return ['an island is the biggest board'];
@@ -964,7 +991,7 @@
     if (s.w !== DEFAULT_W + lr || s.h !== DEFAULT_H + tb) p.push('board size does not match the land bought');
     for (i = 0; i < N; i++) {
       var v = s.grid[i];
-      if (v !== (v | 0) || v < 0 || v > SEIZED) p.push('bad code at ' + i + ': ' + v);
+      if (v !== (v | 0) || v < 0 || v > LAST_CODE) p.push('bad code at ' + i + ': ' + v);
       else if (!s.bears && !s.foxes && (v === TOMB || v === CHURCH || v === CATHEDRAL)) p.push('graves in a calm game at ' + i);
       else if (!s.bears && isBear(v)) p.push('bear in a no-bears game at ' + i);
       else if (!s.foxes && v === FOX) p.push('fox in a no-foxes game at ' + i);
@@ -1034,7 +1061,7 @@
     RESTOCK: RESTOCK, MILESTONES: MILESTONES, milestoneScore: milestoneScore, milestoneProgress: milestoneProgress, canUndo: canUndo, canHammer: canHammer, migrate: migrate,
     rand: rand, drawItem: drawItem, newGame: newGame, neighbors: neighbors, group: group,
     place: place, swap: swap, swapNext: swapNext, undo: undo, validate: validate, emptyCount: emptyCount,
-    buy: buy, hammer: hammer, trap: trap, move: move, open: open, buyLand: buyLand, buyBridge: buyBridge, borrow: borrow, repay: repay, setSpeed: setSpeed, lockedCells: lockedCells, loanOptions: loanOptions, loanOwed: loanOwed, loanMonthsLeft: loanMonthsLeft, bankRate: bankRate, SEIZED: SEIZED, LOAN_RATE: LOAN_RATE, LOAN_TICKS: LOAN_TICKS, MAX_SPEED: MAX_SPEED, buyBank: buyBank, bankPrice: bankPrice, bankCount: bankCount, bankSlots: bankSlots, bankIncome: bankIncome, canBuyBank: canBuyBank, isBankAvailable: isBankAvailable, calendar: calendar, BANK: BANK, MAX_BANKS: MAX_BANKS, BANK_PRICE: BANK_PRICE, BANK_MIN_TIER: BANK_MIN_TIER, TICKS_PER_MONTH: TICKS_PER_MONTH, MONTHS_PER_YEAR: MONTHS_PER_YEAR, buyPond: buyPond, pondPrice: pondPrice, pondPoints: pondPoints, pondCoins: pondCoins, payingPonds: payingPonds, pondPriceAt: pondPriceAt, longBridgeCells: longBridgeCells, longBridgeIncome: longBridgeIncome, LONG_BRIDGE_MIN: LONG_BRIDGE_MIN, reclaimSpots: reclaimSpots, reclaimPrice: reclaimPrice, canReclaim: canReclaim, buyReclaim: buyReclaim, MAX_RECLAIM: MAX_RECLAIM, RECLAIM_PRICE: RECLAIM_PRICE, ISLAND_SIZE: ISLAND_SIZE, TITLES: TITLES, deposit: deposit, withdraw: withdraw, treasuryNet: treasuryNet, TREASURY_FEE: TREASURY_FEE, TREASURY_CAP: TREASURY_CAP, canPond: canPond, bestLake: bestLake, POND_PRICE: POND_PRICE, LAKE_SIZES: LAKE_SIZES, LAKE_BONUS: LAKE_BONUS, LAKE_COINS: LAKE_COINS, bridgeSpots: bridgeSpots, bridgePrice: bridgePrice, canBridge: canBridge, freeCount: freeCount, MAX_BRIDGES: MAX_BRIDGES, BRIDGE_PRICE: BRIDGE_PRICE, preview: preview, previewMove: previewMove, isOver: isOver,
+    buy: buy, hammer: hammer, trap: trap, move: move, open: open, buyLand: buyLand, buyBridge: buyBridge, borrow: borrow, repay: repay, setSpeed: setSpeed, lockedCells: lockedCells, loanOptions: loanOptions, loanOwed: loanOwed, loanMonthsLeft: loanMonthsLeft, bankRate: bankRate, SEIZED: SEIZED, LOAN_RATE: LOAN_RATE, LOAN_TICKS: LOAN_TICKS, MAX_SPEED: MAX_SPEED, buyBank: buyBank, bankPrice: bankPrice, bankCount: bankCount, bankSlots: bankSlots, bankIncome: bankIncome, canBuyBank: canBuyBank, isBankAvailable: isBankAvailable, calendar: calendar, BANK: BANK, MAX_BANKS: MAX_BANKS, BANK_PRICE: BANK_PRICE, BANK_MIN_TIER: BANK_MIN_TIER, TICKS_PER_MONTH: TICKS_PER_MONTH, MONTHS_PER_YEAR: MONTHS_PER_YEAR, buyPond: buyPond, pondPrice: pondPrice, pondPoints: pondPoints, pondCoins: pondCoins, payingPonds: payingPonds, pondPriceAt: pondPriceAt, longBridgeCells: longBridgeCells, longBridgeIncome: longBridgeIncome, LONG_BRIDGE_MIN: LONG_BRIDGE_MIN, reclaimSpots: reclaimSpots, reclaimPrice: reclaimPrice, canReclaim: canReclaim, buyReclaim: buyReclaim, MAX_RECLAIM: MAX_RECLAIM, RECLAIM_PRICE: RECLAIM_PRICE, ISLAND_SIZE: ISLAND_SIZE, TITLES: TITLES, MOUNTAIN: MOUNTAIN, HOLE: HOLE, levelSpots: levelSpots, levelPrice: levelPrice, canLevel: canLevel, buyLevel: buyLevel, fillCount: fillCount, isTerrain: isTerrain, deposit: deposit, withdraw: withdraw, treasuryNet: treasuryNet, TREASURY_FEE: TREASURY_FEE, TREASURY_CAP: TREASURY_CAP, canPond: canPond, bestLake: bestLake, POND_PRICE: POND_PRICE, LAKE_SIZES: LAKE_SIZES, LAKE_BONUS: LAKE_BONUS, LAKE_COINS: LAKE_COINS, bridgeSpots: bridgeSpots, bridgePrice: bridgePrice, canBridge: canBridge, freeCount: freeCount, MAX_BRIDGES: MAX_BRIDGES, BRIDGE_PRICE: BRIDGE_PRICE, preview: preview, previewMove: previewMove, isOver: isOver,
     priceOf: priceOf, isMovable: isMovable, canMove: canMove, isAvailable: isAvailable, unlockedTop: unlockedTop, landPrice: landPrice, canLand: canLand
   };
 });
