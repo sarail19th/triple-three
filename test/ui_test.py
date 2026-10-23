@@ -168,7 +168,7 @@ with sync_playwright() as p:
             page.tap('#tourNext'); page.wait_for_timeout(100); assert page.inner_text('#tourStep').lower().startswith('step 3 of')
         page.tap('#tourNext')
     assert len(steps) >= 15, steps
-    for need in ['🗺️ The map', '🌱 Place and Next', '📦 Reserve', '↶ Undo', '👁 Preview', '⟳ New game', '☰ Menu', '📋 Turn and calendar', '🛒 Shop', '🪤 Trap', '🔨 Hammer', '🚚 Mover', '💧 Pond', '⬆️⬇️⬅️➡️ Land']:
+    for need in ['🗺️ The map', '🌱 Place and Next', '📦 Reserve', '↶ Undo', '👁 Preview', '☰ Menu', '📋 Turn and calendar', '🛒 Shop', '🪤 Trap', '🔨 Hammer', '🚚 Mover', '💧 Pond', '⬆️⬇️⬅️➡️ Land']:
         assert need in steps, f'the tour misses {need}: {steps}'
     assert page.locator('#shopSheet').is_hidden() and page.evaluate("localStorage.getItem('tt-seen-help')") == '1', 'the tour ends with the shop closed and remembered'
     page.evaluate('navigator.serviceWorker.ready')
@@ -185,11 +185,11 @@ with sync_playwright() as p:
     assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), 'horizontal scroll on mobile'
     st = check_consistent(page, 'initial')
     assert st['turn'] == 0 and st['seed'] == 12345 and st['grid'] == [0] * 36 and st['coins'] == 10
-    # board is large on a phone; the New game button sits at the top-left, and the Reserve slot is in the same row as Place and Next
-    box = page.evaluate("""() => { const r = s => document.querySelector(s).getBoundingClientRect(), b = r('#board'), sh = r('#newBtn'), h = r('#holdBtn'), p = r('.slot.current'), n = r('#nextBtn');
+    # board is large on a phone; the Menu button sits at the top-left, and the Reserve slot is in the same row as Place and Next
+    box = page.evaluate("""() => { const r = s => document.querySelector(s).getBoundingClientRect(), b = r('#board'), sh = r('#menuBtn'), h = r('#holdBtn'), p = r('.slot.current'), n = r('#nextBtn');
         return { w: b.width, bt: b.top, shl: sh.left, shb: sh.bottom, holdTop: h.top, holdRight: h.right, placeTop: p.top, placeLeft: p.left, nextTop: n.top } }""")
     assert box['w'] >= 380, f"board too small: {box['w']}"
-    assert box['shl'] < 20 and box['shb'] <= box['bt'] + 1, f'the New game button should be top-left: {box}'
+    assert box['shl'] < 20 and box['shb'] <= box['bt'] + 1, f'the Menu button should be top-left: {box}'
     assert abs(box['holdTop'] - box['placeTop']) < 3 and abs(box['holdTop'] - box['nextTop']) < 3 and box['holdRight'] <= box['placeLeft'] + 1, f'Reserve shares the Place / Next row: {box}'
     # phone layout: turn / rules line at the top, Place / Next above the map, Shop / Preview / Undo below it, the map in the lower half (thumb reach), the shop closed
     lay = page.evaluate("""() => { const r = id => document.getElementById(id).getBoundingClientRect(), b = r('board');
@@ -523,7 +523,7 @@ with sync_playwright() as p:
     assert after['grid'][14] == TOMB and FOX not in after['grid'], 'a walled-in fox becomes a tombstone'
 
     # ---- Wild bears: the New game dialog picks the mode; boxed-in bears escalate (growl) and then maul a low-tier building
-    page.tap('#newBtn')
+    menu_tap(page, '#newBtn')
     assert page.locator('#newGame').is_visible()
     cur = state(page)
     assert cur['turn'] > 0 and page.locator('#newWarn').is_visible(), 'a game in progress gets a warning before New'
@@ -531,7 +531,7 @@ with sync_playwright() as p:
     assert 'lost' in warn and f"turn {cur['turn']}" in warn and f"score {cur['score']}" in warn, warn
     assert page.inner_text('#newStart') == 'Erase game & start' and 'danger' in page.get_attribute('#newStart', 'class')
     page.tap('#newCancel'); assert page.locator('#newGame').is_hidden()
-    page.tap('#newBtn'); page.tap('.opt[data-bears="wild"]'); page.tap('#newStart')
+    menu_tap(page, '#newBtn'); page.tap('.opt[data-bears="wild"]'); page.tap('#newStart')
     wild = check_consistent(page, 'new wild game')
     assert wild['wild'] is True and wild['turn'] == 0 and 'wild bears' in page.inner_text('#seed')
     assert page.evaluate("JSON.parse(localStorage.getItem('tt-wild'))") is True, 'the mode pick is remembered'
@@ -551,7 +551,7 @@ with sync_playwright() as p:
     assert page.evaluate("JSON.parse(localStorage.getItem('tt-best-wild'))") == 150, 'wild games keep their own best score'
     assert page.evaluate("JSON.parse(localStorage.getItem('tt-best'))") != 150, 'and leave the classic best alone'
     assert page.evaluate("document.getElementById('seed').textContent").endswith('wild bears')
-    page.tap('#newBtn'); page.tap('.opt[data-bears="classic"]'); page.tap('#newStart')
+    menu_tap(page, '#newBtn'); page.tap('.opt[data-bears="classic"]'); page.tap('#newStart')
     classic = check_consistent(page, 'new classic game')
     assert classic['wild'] is False and 'wild' not in page.inner_text('#seed')
 
@@ -718,7 +718,7 @@ with sync_playwright() as p:
     SW_OVERRIDE['body'] = None
 
     # ---- calm mode: No bears + No foxes. No animals ever show up, no trap tool, own best score, the picks are remembered
-    page.tap('#newBtn'); page.tap('.opt[data-bears="off"]'); page.tap('.opt[data-foxes="off"]'); page.tap('#newStart')
+    menu_tap(page, '#newBtn'); page.tap('.opt[data-bears="off"]'); page.tap('.opt[data-foxes="off"]'); page.tap('#newStart')
     calm = check_consistent(page, 'new calm game')
     assert calm['bears'] is False and calm['foxes'] is False and 'calm' in page.inner_text('#seed')
     assert page.evaluate("JSON.parse(localStorage.getItem('tt-bears'))") is False and page.evaluate("JSON.parse(localStorage.getItem('tt-foxes'))") is False
@@ -731,13 +731,13 @@ with sync_playwright() as p:
         tap_cell(page, e[0], True)
         st = check_consistent(page, 'calm turn')
         assert not any(v in (12, 13, 14, 15, 18, 19, 20) for v in st['grid']) and st['cur'] not in (12, 18) and st['next'] not in (12, 18), 'no animals in a calm game'
-    page.tap('#newBtn'); assert page.get_attribute('.opt[data-bears="off"]', 'aria-pressed') == 'true' and page.get_attribute('.opt[data-foxes="off"]', 'aria-pressed') == 'true', 'the dialog remembers the calm picks'
+    menu_tap(page, '#newBtn'); assert page.get_attribute('.opt[data-bears="off"]', 'aria-pressed') == 'true' and page.get_attribute('.opt[data-foxes="off"]', 'aria-pressed') == 'true', 'the dialog remembers the calm picks'
     page.tap('.opt[data-bears="classic"]'); page.tap('.opt[data-foxes="on"]'); page.tap('#newStart')
     back = check_consistent(page, 'bears and foxes back on')
     assert back['bears'] is True and back['foxes'] is True
 
     # ---- Maps: picked in the New game dialog; water tiles are blue, fixed and unusable
-    page.tap('#newBtn')
+    menu_tap(page, '#newBtn')
     assert state(page)['turn'] == 0 and page.locator('#newWarn').is_hidden(), 'nothing to lose on a fresh game: no warning'
     assert page.inner_text('#newStart') == 'Start' and 'danger' not in page.get_attribute('#newStart', 'class')
     for m in ['easy', 'standard', 'medium', 'hard', 'highlands', 'island']:
@@ -758,10 +758,10 @@ with sync_playwright() as p:
     page.tap('.opt[data-map="standard"]'); page.tap('#newStart')
     std = check_consistent(page, 'standard map')
     assert std['map'] == 'standard' and sum(1 for v in std['grid'] if v) == 5 and 21 not in std['grid'] and 'standard map' in page.inner_text('#seed')
-    page.tap('#newBtn'); page.tap('.opt[data-map="hard"]'); page.tap('#newStart')
+    menu_tap(page, '#newBtn'); page.tap('.opt[data-map="hard"]'); page.tap('#newStart')
     hard = check_consistent(page, 'hard map')
     assert hard['map'] == 'hard' and 6 <= hard['grid'].count(21) <= 9 and page.locator('#board .cell[data-c="21"]').count() == hard['grid'].count(21)
-    page.tap('#newBtn'); page.tap('.opt[data-map="medium"]'); page.tap('.opt[data-bears="classic"]'); page.tap('#newStart')
+    menu_tap(page, '#newBtn'); page.tap('.opt[data-map="medium"]'); page.tap('.opt[data-bears="classic"]'); page.tap('#newStart')
     med = check_consistent(page, 'medium map')
     assert med['map'] == 'medium' and [i for i, v in enumerate(med['grid']) if v == 21] == [2, 8, 14, 15, 21, 27, 33]
     assert page.evaluate("JSON.parse(localStorage.getItem('tt-map'))") == 'medium', 'the map pick is remembered'
@@ -874,14 +874,14 @@ with sync_playwright() as p:
     load(g, coins=50, top=4)
     open_shop(page); assert page.locator('#pondBtn').is_disabled(); page.tap('#shopClose')
 
-    page.tap('#newBtn'); page.tap('.opt[data-map="easy"]'); page.tap('.opt[data-bears="classic"]'); page.tap('#newStart')
+    menu_tap(page, '#newBtn'); page.tap('.opt[data-map="easy"]'); page.tap('.opt[data-bears="classic"]'); page.tap('#newStart')
     easy = check_consistent(page, 'easy map')
     assert easy['map'] == 'easy' and easy['grid'] == [0] * 36 and 'map' not in page.inner_text('#seed')
     assert page.locator('#bridgeBtn').is_hidden(), 'no water, no bridge tool'
     assert page.locator('#board svg.water').count() == 0 and page.evaluate('window.ttDebug.critters()') == [], 'no water, no water layer and no swans'
 
     # ---- highlands: mountains (levelled with the Level tool) and holes (swallow an item, then flat)
-    page.tap('#newBtn'); page.tap('.opt[data-map="highlands"]'); page.tap('.opt[data-bears="classic"]'); page.tap('#newStart')
+    menu_tap(page, '#newBtn'); page.tap('.opt[data-map="highlands"]'); page.tap('.opt[data-bears="classic"]'); page.tap('#newStart')
     hl = check_consistent(page, 'highlands map')
     assert hl['map'] == 'highlands' and 4 <= hl['grid'].count(24) <= 6 and 3 <= hl['grid'].count(25) <= 5 and 'highlands map' in page.inner_text('#seed')
     assert page.locator('#board .cell[data-c="24"]').count() == hl['grid'].count(24) and page.locator('#board .cell[data-c="25"]').count() == hl['grid'].count(25)
@@ -906,7 +906,7 @@ with sync_playwright() as p:
     open_shop(page); assert page.locator('#hammerBtn').is_disabled(), 'only a mountain is left: the hammer has nothing to smash'; page.tap('#shopClose')
 
     # ---- island: the biggest board, a small random island in the sea, no land to buy, reclaim sea next to the land
-    page.tap('#newBtn'); page.tap('.opt[data-map="island"]'); page.tap('.opt[data-bears="classic"]'); page.tap('#newStart')
+    menu_tap(page, '#newBtn'); page.tap('.opt[data-map="island"]'); page.tap('.opt[data-bears="classic"]'); page.tap('#newStart')
     isl = check_consistent(page, 'island map')
     assert isl['map'] == 'island' and isl['w'] == 8 and isl['h'] == 8 and isl['land'] == ['top', 'bottom', 'left', 'right'] and isl['reclaimed'] == 0
     land = [i for i, v in enumerate(isl['grid']) if v == 0]
@@ -980,12 +980,12 @@ with sync_playwright() as p:
     # ---- titles: 100 bears trapped across games earn Bears Hunter (counted when a game is left), picked per game in New game
     page.evaluate("localStorage.setItem('tt-stats', JSON.stringify({ bears: 70 }))")
     load([0] * 36, coins=50, top=4, bearsTrapped=20)
-    page.tap('#newBtn')
+    menu_tap(page, '#newBtn')
     assert page.is_disabled('.opt[data-title="hunter"]') and '90/100' in page.inner_text('#titleNote') and '🔒' in page.inner_text('.opt[data-title="hunter"]'), page.inner_text('#titleNote')
     assert page.get_attribute('.opt[data-title=""]', 'aria-pressed') == 'true'
     page.tap('#newCancel')
     load([0] * 36, coins=50, top=4, bearsTrapped=30)         # 70 + 30 = 100: earned the moment this game is left
-    page.tap('#newBtn')
+    menu_tap(page, '#newBtn')
     assert not page.is_disabled('.opt[data-title="hunter"]') and '🏹' in page.inner_text('.opt[data-title="hunter"]')
     page.tap('.opt[data-title="hunter"]'); assert page.get_attribute('.opt[data-title="hunter"]', 'aria-pressed') == 'true'
     page.tap('#newStart')
@@ -993,11 +993,11 @@ with sync_playwright() as p:
     assert hunter['title'] == 'hunter' and hunter['bearsTrapped'] == 0 and 'Bears Hunter' in page.inner_text('#seed'), page.inner_text('#seed')
     assert page.evaluate("JSON.parse(localStorage.getItem('tt-stats')).bears") == 100 and page.evaluate("JSON.parse(localStorage.getItem('tt-title'))") == 'hunter'
     assert 'Title earned' in page.inner_text('#fx'), 'a toast tells the title was earned'
-    page.tap('#newBtn'); page.tap('.opt[data-title=""]'); page.tap('#newStart')
+    menu_tap(page, '#newBtn'); page.tap('.opt[data-title=""]'); page.tap('#newStart')
     assert state(page)['title'] == '' and page.evaluate("JSON.parse(localStorage.getItem('tt-stats')).bears") == 100
     page.evaluate("localStorage.setItem('tt-stats', JSON.stringify({ bears: 0 }))")
     page.evaluate("localStorage.setItem('tt-title', JSON.stringify('hunter'))")
-    page.tap('#newBtn'); page.tap('#newStart')
+    menu_tap(page, '#newBtn'); page.tap('#newStart')
     assert state(page)['title'] == '', 'a remembered title that is locked again is not applied'
 
     # ---- the world: a 3x3 grid of regions, each its own game and save; the Meadow is open, the rest unlock by building tiers in the neighbours
@@ -1049,7 +1049,7 @@ with sync_playwright() as p:
     page.tap('#worldGrid .regioncard[data-region="nw"]')
     corner = check_consistent(page, 'thornwood')
     assert corner['map'] == 'hard' and corner['wild'] is True and corner['bears'] is True and 'Thornwood' in page.inner_text('#seed')
-    page.tap('#newBtn')
+    menu_tap(page, '#newBtn')
     assert page.locator('#dlgSetup').is_hidden() and 'Restart' in page.inner_text('#newTitle') and 'Thornwood' in page.inner_text('#newTitle')
     page.tap('#newStart')
     again = state(page)
@@ -1057,7 +1057,7 @@ with sync_playwright() as p:
     # back to the free game: the normal New game dialog again
     menu_tap(page, '#worldLink'); page.tap('#worldFree')
     assert page.evaluate("JSON.parse(localStorage.getItem('tt-region'))") == '' and page.evaluate("(() => { const s = JSON.parse(localStorage.getItem('tt-save')); return [s.turn, s.coins, s.top, s.grid.join(',')].join('|'); })()") == free_before
-    page.tap('#newBtn'); assert page.locator('#dlgSetup').is_visible() and page.inner_text('#newTitle') == 'New game'; page.tap('#newCancel')
+    menu_tap(page, '#newBtn'); assert page.locator('#dlgSetup').is_visible() and page.inner_text('#newTitle') == 'New game'; page.tap('#newCancel')
     # a locked region refuses
     page.evaluate("localStorage.removeItem('tt-world')")
     menu_tap(page, '#worldLink'); assert page.locator('#worldGrid .regioncard[data-region="se"]').is_disabled(); page.tap('#worldClose'); assert page.locator('#world').is_hidden()
@@ -1110,7 +1110,7 @@ with sync_playwright() as p:
     assert 'Title earned: Master of Tides' in page.inner_text('#fx'), 'the title is announced'
     menu_tap(page, '#questsLink'); assert 'done' in page.inner_text('#questsBody .questrow[data-quest="tides"]') and page.evaluate("document.querySelector('#questsBody .questrow[data-quest=tides]').classList.contains('done')")
     page.tap('#questsClose')
-    page.tap('#newBtn')
+    menu_tap(page, '#newBtn')
     assert page.evaluate("[...document.querySelectorAll('#titleOpts .opt')].map(b => b.dataset.title)") == ['', 'hunter', 'hawkeye', 'tides', 'gold']
     assert not page.is_disabled('.opt[data-title="tides"]') and page.is_disabled('.opt[data-title="hunter"]') and page.is_disabled('.opt[data-title="gold"]')
     page.tap('.opt[data-title="tides"]'); assert 'lucky drops' in page.inner_text('#titleNote')
@@ -1119,7 +1119,7 @@ with sync_playwright() as p:
     # Hawkeyes: the foxes of the game being left count in the dialog like the bears do
     page.evaluate("localStorage.setItem('tt-stats', JSON.stringify({ foxes: 24 }))")
     load([0] * 36, coins=50, top=3, foxesTrapped=1)
-    page.tap('#newBtn'); assert not page.is_disabled('.opt[data-title="hawkeye"]'), 'the 25th fox is in the game on screen'
+    menu_tap(page, '#newBtn'); assert not page.is_disabled('.opt[data-title="hawkeye"]'), 'the 25th fox is in the game on screen'
     page.tap('.opt[data-title="hawkeye"]'); page.tap('#newStart')
     assert state(page)['title'] == 'hawkeye' and page.evaluate("JSON.parse(localStorage.getItem('tt-stats')).foxes") == 25
     # Gold Keeper: three banks, each account full (1M) in one game
@@ -1128,7 +1128,7 @@ with sync_playwright() as p:
     load(gg, coins=500, top=7, banksBought=3, bankOrder=[0, 2, 4])
     tap_cell(page, 35, True)
     assert page.evaluate("JSON.parse(localStorage.getItem('tt-stats')).gold") == 1 and 'Title earned: Gold Keeper' in page.inner_text('#fx')
-    page.tap('#newBtn'); page.tap('.opt[data-title="gold"]'); page.tap('#newStart')
+    menu_tap(page, '#newBtn'); page.tap('.opt[data-title="gold"]'); page.tap('#newStart')
     assert state(page)['title'] == 'gold'
     # what was already done before the quests existed is recorded silently (no flood of announcements)
     page.evaluate("localStorage.removeItem('tt-earned'); localStorage.setItem('tt-stats', JSON.stringify({ bears: 150, topEver: 8 }))")

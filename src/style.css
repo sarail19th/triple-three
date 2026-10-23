@@ -222,6 +222,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 .menugrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 8px 0; }
 .menuitem { position: relative; margin: 0; padding: 12px 6px; font-size: 14px; }
 .menuitem[hidden] { display: none; }
+.menuitem.wide { grid-column: 1 / -1; }
 #menu .updatebtn { display: block; width: 100%; margin: 4px 0 8px; padding: 10px 12px; }
 .dot { position: absolute; top: 5px; right: 5px; width: 11px; height: 11px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px #14301f; }
 .dot[hidden] { display: none; }
