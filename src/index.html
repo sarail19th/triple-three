@@ -126,13 +126,6 @@
     <h3>Title</h3>
     <div id="titleOpts" class="opts two"></div>
     <p id="titleNote" class="gnote"></p>
-    <h3>Treasury</h3>
-    <div class="opts three">
-      <button class="opt" data-take="none" aria-pressed="false">None</button>
-      <button class="opt" data-take="half" aria-pressed="false">Half</button>
-      <button class="opt" data-take="all" aria-pressed="true">All</button>
-    </div>
-    <p id="treasuryNote" class="gnote"></p>
     <div id="newWarn" class="warn hidden" role="alert"></div>
     <div class="dlgbtns">
       <button id="newStart" class="btn primary">Start</button>
@@ -148,6 +141,9 @@
     <div id="bankLoans"></div>
     <button id="bankBorrow" class="btn primary"></button>
     <p id="bankNote" class="gnote"></p>
+    <h3>🏛️ Treasury <span id="trBal"></span></h3>
+    <div id="trBtns" class="trbtns"></div>
+    <p id="trNote" class="gnote"></p>
     <button id="bankClose" class="btn">Close</button>
   </div>
 </div>
@@ -185,7 +181,6 @@
         <li>Connect <b>3 or more</b> identical items (up, down, left, right) and <i>all</i> of them merge into one of the next tier on the tile you tapped (4 or 5 pay more points and coins, nothing is left over):<br>🌱 → 🌿 → 🌳 → 🏕️ → 🛖 → 🏠 → 🏘️ → 🏫 → 🏥 → 🏬 → 💵 <b>cash</b>: tap it to collect coins.</li>
         <li>Tap the <b>⇄</b> button between <b>Place</b> and <b>Next</b> (or the Next item itself) to swap them (free, as often as you like). The <b>Reserve</b> slot (left of Place) stores the current item for later (free swap). <b>Undo</b> takes back your last move, or your last 🚚 / 🔨 / 🪤 use, for a few coins (one step only).</li>
         <li>The game ends when the board is full and you cannot afford a hammer.</li>
-        <li>🏛️ <b>Treasury</b>: when you leave a game (it ended, or you start a new one), <b>2%</b> of the coins you had are saved in your treasury (at most 🪙1000). In <b>New</b>, take <b>None</b>, <b>Half</b> or <b>All</b> of it as extra starting coins. Games that start with treasury coins keep their own best score.</li>
         </ul>
       </section>
       <section class="helppage" data-title="Animals" hidden>
@@ -221,6 +216,7 @@
         <h3>Banks and loans</h3>
         <ul>
         <li>🏦 <b>Banks</b> (shop, once a village is built): a bank is placed like an item, is a dead tile for animals, can be carried by the 🚚 mover (unless a loan locks it; use it to line three banks up) and is broken only by the hammer. It cannot go in the reserve. It pays <b>coins every turn</b> (the 📅 date at the top counts 10 turns to a month). At most 3, each dearer than the last; three connected banks merge into 💵 cash. <b>Loans</b>: tap a bank to borrow half the shop price of the dearest building next to it; that building and the bank are locked until you repay it with simple interest (15% a year, 30% at the second bank, 60% at the third). A year unpaid and the building is lost and its tile seized until you pay the debt, and that bank stops paying. The ⏱ clock speed (tap it: 1×, 2×, 3×, paused) sets how fast the calendar, income and interest run.</li>
+        <li>🏛️ <b>Treasury</b>: tap a bank to <b>deposit</b> coins from this game into your treasury (a 5% fee is kept, at most 🪙10000 in all) or <b>withdraw</b> them. The treasury is saved between games, so coins earned on a calm map can pay for a hard one. You need a bank on the board for either. A game that has taken coins out has its own best score, and Undo is cleared after a deposit or withdrawal.</li>
         </ul>
       </section>
     </div>

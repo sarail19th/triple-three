@@ -105,7 +105,6 @@ with sync_playwright() as p:
     browser = p.chromium.launch(**({'executable_path': os.environ['TT_CHROMIUM']} if os.environ.get('TT_CHROMIUM') else {}))
     ctx = browser.new_context(viewport={'width': 412, 'height': 860}, device_scale_factor=2, has_touch=True, is_mobile=True)
     ctx.add_init_script("if (!localStorage.getItem('tt-season')) localStorage.setItem('tt-season', '\"summer\"');")  # the real default is Auto (by month): pin the look the tests expect
-    ctx.add_init_script("if (!localStorage.getItem('tt-take')) localStorage.setItem('tt-take', '\"none\"');")  # the real default takes the whole treasury into a new game: the tests start with plain coins
     ctx.add_init_script("window.__vib = []; Object.defineProperty(navigator, 'vibrate', { configurable: true, value: (ms) => { window.__vib.push(ms); return true; } });")
     page = ctx.new_page()
     errors = []
@@ -835,35 +834,23 @@ with sync_playwright() as p:
     load(gi, map='island', w=8, h=8, land=['top', 'bottom', 'left', 'right'], coins=59, top=4)
     open_shop(page); assert page.locator('#reclaimBtn').is_disabled(); page.tap('#shopClose')
 
-    # ---- treasury: 2% of a left game is saved; New game starts with None / Half / All of it
-    page.evaluate("localStorage.setItem('tt-treasury', '0')")
-    load([0] * 36, coins=5000, top=4)
-    page.tap('#newBtn')
-    assert 'includes +100' in page.inner_text('#treasuryNote') and 'plain 🪙10' in page.inner_text('#treasuryNote') or 'start with' in page.inner_text('#treasuryNote'), page.inner_text('#treasuryNote')
-    page.tap('.opt[data-take="none"]'); page.tap('#newStart')
-    assert page.evaluate("JSON.parse(localStorage.getItem('tt-treasury'))") == 100 and state(page)['coins'] == 10 and state(page)['boost'] == 0, 'left a game with 5000 coins: 2% saved'
-    assert page.evaluate("JSON.parse(localStorage.getItem('tt-take'))") == 'none', 'the pick is remembered'
-    load([0] * 36, coins=60000, top=4)                       # 2% would be 1200: capped at 1000 in total
-    page.tap('#newBtn'); page.tap('.opt[data-take="half"]')
-    assert 'Treasury 🪙1000' in page.inner_text('#treasuryNote') and 'start with 🪙510' in page.inner_text('#treasuryNote'), page.inner_text('#treasuryNote')
-    page.tap('#newStart')
-    half = check_consistent(page, 'half the treasury')
-    assert half['coins'] == 510 and half['boost'] == 500 and 'treasury start' in page.inner_text('#seed')
-    assert page.evaluate("JSON.parse(localStorage.getItem('tt-treasury'))") == 500
-    # an unplayed boosted game gives its coins back; the best score of a boosted game is a separate board
-    page.tap('#newBtn'); page.tap('.opt[data-take="all"]')
-    assert 'Treasury 🪙1000' in page.inner_text('#treasuryNote'), page.inner_text('#treasuryNote')
-    page.tap('#newStart')
-    allin = check_consistent(page, 'all of the treasury')
-    assert allin['boost'] == 1000 and allin['coins'] == 1010 and page.evaluate("JSON.parse(localStorage.getItem('tt-treasury'))") == 0
-    page.tap('#newBtn')
-    assert page.is_disabled('.opt[data-take="all"]') is False and 'Treasury 🪙1000' in page.inner_text('#treasuryNote'), page.inner_text('#treasuryNote')
-    page.tap('.opt[data-take="none"]'); page.tap('#newStart')
-    assert state(page)['boost'] == 0 and page.evaluate("JSON.parse(localStorage.getItem('tt-treasury'))") == 1000
-    page.evaluate("localStorage.setItem('tt-treasury', '0')")
-    page.tap('#newBtn')
-    assert 'empty' in page.inner_text('#treasuryNote') and page.is_disabled('.opt[data-take="half"]') and page.is_disabled('.opt[data-take="all"]') and page.get_attribute('.opt[data-take="none"]', 'aria-pressed') == 'true'
-    page.tap('#newCancel')
+    # ---- treasury: a bank deposits coins into the saved purse (5% fee) and withdraws them again, in any game
+    g = [0] * 36; g[14] = 22; g[13] = 6
+    page.evaluate("localStorage.setItem('tt-treasury', '500')")
+    load(g, coins=1000, top=7, banksBought=1, bankOrder=[14])
+    page.tap('#board .cell[data-i="14"]')
+    assert page.locator('#bankDlg').is_visible() and '🪙500' in page.inner_text('#trBal'), page.inner_text('#trBal')
+    assert page.locator('#trBtns .btn').count() == 6
+    page.tap('#trBtns .btn:nth-child(2)')                      # Deposit ½ = 500 coins -> 475 net
+    dep = check_consistent(page, 'deposit')
+    assert dep['coins'] == 500 and dep['undo'] is None and page.evaluate("JSON.parse(localStorage.getItem('tt-treasury'))") == 975 and '🪙975' in page.inner_text('#trBal')
+    assert page.locator('#undoBtn').is_disabled(), 'a deposit clears Undo (the purse is outside the game)'
+    page.tap('#trBtns .btn:nth-child(6)')                      # Withdraw All = 975
+    wd = check_consistent(page, 'withdraw')
+    assert wd['coins'] == 1475 and wd['boost'] == 975 and page.evaluate("JSON.parse(localStorage.getItem('tt-treasury'))") == 0
+    assert page.locator('#trBtns .btn:nth-child(4)').is_disabled() and page.locator('#trBtns .btn:nth-child(6)').is_disabled(), 'an empty purse: nothing to withdraw'
+    page.tap('#bankClose')
+    assert 'treasury coins' in page.inner_text('#seed'), page.inner_text('#seed')
 
     # ---- titles: 100 bears trapped across games earn Bears Hunter (counted when a game is left), picked per game in New game
     page.evaluate("localStorage.setItem('tt-stats', JSON.stringify({ bears: 70 }))")
