@@ -15,16 +15,13 @@
 <div id="seasonFx" class="season-fx" aria-hidden="true"></div>
 <main id="app">
   <header class="hud">
-    <button id="newBtn" class="tray newtray" aria-label="New game">
-      <small>New</small><span class="emoji">⟳</span>
+    <button id="menuBtn" class="tray newtray menutray" type="button" aria-label="Menu" aria-haspopup="dialog">
+      <small>Menu</small><span class="emoji">☰</span><i id="menuDot" class="dot" hidden></i>
     </button>
     <div class="brand">Triple <span>Three</span></div>
     <div class="stat"><small>Score</small><b id="score">0</b></div>
     <div class="stat"><small>Best</small><b id="best">0</b></div>
     <div class="stat coins"><small>Coins</small><b id="coins">0</b></div>
-    <button id="menuBtn" class="tray newtray menutray" type="button" aria-label="Menu" aria-haspopup="dialog">
-      <small>Menu</small><span class="emoji">☰</span><i id="menuDot" class="dot" hidden></i>
-    </button>
   </header>
 
   <div class="topinfo">
@@ -103,6 +100,7 @@
   <div class="card">
     <h2>☰ Menu</h2>
     <div class="menugrid">
+      <button id="newBtn" class="btn menuitem wide" type="button" aria-label="New game">⟳ New game</button>
       <button id="worldLink" class="btn menuitem" type="button">🗺️ World</button>
       <button id="questsLink" class="btn menuitem" type="button">🏆 Quests<i id="questsDot" class="dot" hidden></i></button>
       <button id="helpLink" class="btn menuitem" type="button">📖 How to play</button>
