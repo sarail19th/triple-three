@@ -1227,7 +1227,8 @@ t('ponds: dug on an empty tile, dearer each time, pay points every turn, never t
   s = r.state; s.cur = 1; s.next = 1;
   const t = TT.place(s, I(5, 5));
   assert.strictEqual(t.state.score - s.score, TT.pondPoints(s)); assert.strictEqual(TT.pondPoints(s), Math.ceil(TT.BASE[4] / 20));
-  assert(t.events.some((e) => e.type === 'pondpts' && e.points === TT.pondPoints(s)));
+  assert(t.events.some((e) => e.type === 'pondpts' && e.points === TT.pondPoints(s) && e.coins === TT.pondCoins(s)));
+  assert.strictEqual(t.state.coins - s.coins, TT.pondCoins(s)); assert.strictEqual(TT.pondCoins(s), Math.max(1, Math.round(TT.PRICE[4] / 400)), 'one pond pays coins too');
   // never the last free tile (a fuller board than that would end the game by your own hand)
   const g = {}; for (let i = 0; i < 34; i++) g[i] = (i % 2) ? 5 : 6;
   const tight = withGrid(g, { coins: 100000 });
@@ -1292,14 +1293,16 @@ t('bank: bought with coins once a village stands, placed like an item, never in 
   // a dead tile: movers cannot carry it, animals cannot walk through it, the hammer can break it
   assert(TT.isMovable(TT.BANK), 'the mover can carry a bank');
   const hm = TT.hammer(Object.assign(r.state, { coins: 1000 }), I(2, 2)); assert.strictEqual(hm.state.grid[I(2, 2)], 0, 'the hammer destroys a bank');
-  assert.strictEqual(hm.state.banksBought, 1, 'rebuying costs the next price');
-  assert(TT.bankPrice(hm.state) > TT.BANK_PRICE[0]);
+  assert.strictEqual(hm.state.banksBought, 1); assert.strictEqual(TT.bankPrice(hm.state), TT.BANK_PRICE[0], 'the price follows the banks held now, so it starts again after a bank is gone');
   // at most 3 on the board (placed + in the queue)
   let t = base({ coins: 10 ** 7 });
   for (let k = 0; k < 3; k++) { t = TT.buyBank(t); assert(t, 'bank ' + (k + 1)); t = TT.place(t, I(0, k * 2)).state; }
   assert.strictEqual(TT.bankCount(t), 3);
   assert.strictEqual(TT.buyBank(t), null, 'a fourth bank is refused');
-  assert.strictEqual(TT.bankPrice(base({ banksBought: 1 })), TT.BANK_PRICE[1]); assert.strictEqual(TT.bankPrice(base({ banksBought: 2 })), TT.BANK_PRICE[2]);
+  assert.strictEqual(TT.bankPrice(base({ banksBought: 9 })), TT.BANK_PRICE[0], 'banks ever bought do not raise the price');
+  const two = withGrid({ [I(0, 0)]: TT.BANK, [I(0, 2)]: TT.BANK }, { banksBought: 9, bankOrder: [I(0, 0), I(0, 2)] }); assert.strictEqual(TT.bankPrice(two), TT.BANK_PRICE[2]);
+  const one = withGrid({ [I(0, 0)]: TT.BANK }, { banksBought: 9, bankOrder: [I(0, 0)] }); assert.strictEqual(TT.bankPrice(one), TT.BANK_PRICE[1]);
+  assert.strictEqual(TT.bankPrice(Object.assign(one, { cur: TT.BANK })), TT.BANK_PRICE[2], 'a bank waiting in the queue counts');
 });
 
 t('bank: pays coins every turn (more at a higher clock speed, nothing paused); three connected banks merge into cash', () => {
