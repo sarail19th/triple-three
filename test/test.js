@@ -1723,7 +1723,7 @@ t('highlands: a full board is not over while a hole can take an item or a mounta
 });
 
 t('treasury: a bank lets you deposit coins (5% fee, cap 10000) and withdraw them in any game', () => {
-  assert.strictEqual(TT.TREASURY_FEE, 0.05); assert.strictEqual(TT.TREASURY_CAP, 10000);
+  assert.strictEqual(TT.TREASURY_FEE, 0.05); assert.deepStrictEqual(TT.TREASURY_CAPS, [10000, 25000, 50000]); assert.strictEqual(TT.TREASURY_CAP, 50000);
   assert.strictEqual(TT.treasuryNet(1000), 950); assert.strictEqual(TT.treasuryNet(19), 19, 'a deposit under 20 coins pays no fee'); assert.strictEqual(TT.treasuryNet(20), 19);
   const bank = (over = {}) => withGrid({ [I(2, 2)]: TT.BANK }, Object.assign({ coins: 1000, top: 7, banksBought: 1, bankOrder: [I(2, 2)], cur: 1, next: 1 }, over));
   const d = TT.deposit(bank(), 400, 0);
@@ -1742,6 +1742,14 @@ t('treasury: a bank lets you deposit coins (5% fee, cap 10000) and withdraw them
   const w = TT.withdraw(bank(), 300, 500);
   assert(w); assert.strictEqual(w.state.coins, 1300); assert.strictEqual(w.state.boost, 300); assert.strictEqual(w.taken, 300); assert.strictEqual(w.state.undo, null); assert.deepStrictEqual(TT.validate(w.state), []);
   assert.strictEqual(TT.withdraw(w.state, 200, 200).state.boost, 500, 'the boost adds up');
+  // more banks, more room: 10000 / 25000 / 50000 for one, two and three banks on the board
+  const banks = (n) => withGrid({ [I(0, 0)]: TT.BANK, [I(0, 2)]: n > 1 ? TT.BANK : 0, [I(0, 4)]: n > 2 ? TT.BANK : 0 }, { coins: 90000, top: 7, banksBought: n, bankOrder: [I(0, 0), I(0, 2), I(0, 4)].slice(0, n), cur: 1, next: 1 });
+  [[1, 10000], [2, 25000], [3, 50000]].forEach(([n, cap]) => {
+    assert.strictEqual(TT.treasuryCap(banks(n)), cap, n + ' bank(s)');
+    assert(TT.deposit(banks(n), 1000, cap - 950), n + ': a deposit that just fits'); assert.strictEqual(TT.deposit(banks(n), 1000, cap - 949), null, n + ': one coin too many');
+  });
+  assert(TT.deposit(banks(3), 52000, 0) && TT.deposit(banks(3), 52000, 0).net === 49400, 'three banks take a big deposit'); assert.strictEqual(TT.deposit(banks(1), 52000, 0), null);
+  assert.strictEqual(TT.withdraw(banks(1), 30000, 30000).taken, 30000, 'a purse above this game\'s cap can still be withdrawn');
   assert.strictEqual(TT.withdraw(bank(), 501, 500), null, 'no more than the purse holds'); assert.strictEqual(TT.withdraw(bank(), 0, 500), null);
   assert.strictEqual(TT.newGame(9).boost, 0); assert(TT.validate(Object.assign({}, TT.newGame(2), { boost: -1 })).length);
   // the whole point: no money appears out of thin air, whatever the order

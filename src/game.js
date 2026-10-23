@@ -204,8 +204,8 @@
   }
   // the bank's treasury section: deposit part of this game's coins (a fee is kept), or withdraw from the purse into this game
   function renderTreasury() {
-    var tr = treasury(), box = $('trBtns'), room = Math.max(0, TT.TREASURY_CAP - tr);
-    $('trBal').textContent = '🪙' + fmt(tr) + ' / ' + fmt(TT.TREASURY_CAP);
+    var tr = treasury(), box = $('trBtns'), cap = TT.treasuryCap(state), room = Math.max(0, cap - tr);
+    $('trBal').textContent = '🪙' + fmt(tr) + ' / ' + fmt(cap);
     box.textContent = '';
     var add = function (label, amount, act) {
       var b = document.createElement('button');
@@ -230,7 +230,7 @@
     var fit = function (a) { while (a > 0 && TT.treasuryNet(a) > room) a--; return a; }; // the biggest deposit the purse has room for
     [[0.25, '¼'], [0.5, '½'], [1, 'All']].forEach(function (f) { add('Deposit ' + f[1] + ' · 🪙' + fmt(fit(Math.floor(state.coins * f[0]))), fit(Math.floor(state.coins * f[0])), dep); });
     [[0.25, '¼'], [0.5, '½'], [1, 'All']].forEach(function (f) { add('Withdraw ' + f[1] + ' · 🪙' + fmt(Math.floor(tr * f[0])), Math.floor(tr * f[0]), wd); });
-    $('trNote').textContent = 'Coins in the treasury stay between games. Depositing keeps a ' + Math.round(TT.TREASURY_FEE * 100) + '% fee. A game that has taken coins out has its own best score, and Undo is cleared by either.';
+    $('trNote').textContent = 'Coins in the treasury stay between games. Depositing keeps a ' + Math.round(TT.TREASURY_FEE * 100) + '% fee; more banks on the board raise how much the treasury may hold (' + TT.TREASURY_CAPS.map(fmt).join(' / ') + ' for 1 / 2 / 3 banks). A game that has taken coins out has its own best score, and Undo is cleared by either.';
   }
   function renderLoanLine() {
     var el = $('loanLine'), n = state.loans.length;
