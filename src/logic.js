@@ -36,9 +36,9 @@
   // queue turn into grass. The extra random number is only drawn when the title is on, so games without one replay exactly as before.
   var TITLES = { hunter: { stat: 'bears', goal: 100, bearCut: 0.3 } };
   // Treasury: a saved purse (kept by the page, outside the game state) that carries coins from one game to the next. A game with a bank on
-  // the board can deposit coins into it (TREASURY_FEE is kept) or withdraw coins from it; a deposit may fill the purse up to TREASURY_CAPS[banks on the board - 1] (10000 / 25000 / 50000: more banks, more room). A game that has
+  // the board can deposit coins into it (TREASURY_FEE is kept) or withdraw coins from it; a deposit may fill the purse up to TREASURY_CAPS[banks on the board - 1] (200000 / 500000 / 1000000: more banks, more room). A game that has
   // withdrawn has state.boost > 0 (the total taken) and its own best-score board.
-  var TREASURY_FEE = 0.05, TREASURY_CAPS = [10000, 25000, 50000], TREASURY_CAP = TREASURY_CAPS[TREASURY_CAPS.length - 1]; // TREASURY_CAP: the most any purse can hold
+  var TREASURY_FEE = 0.05, TREASURY_CAPS = [200000, 500000, 1000000], TREASURY_CAP = TREASURY_CAPS[TREASURY_CAPS.length - 1]; // TREASURY_CAP: the most any purse can hold
   var STANDARD_ITEMS = 5;
   // Calendar: every turn advances the game clock by `speed` ticks (1 = normal; 0 pauses it), 10 ticks = a month, 12 months = a year.
   // Banks (a shop item, at most MAX_BANKS on the board) pay coins every turn; three connected banks merge into cash.

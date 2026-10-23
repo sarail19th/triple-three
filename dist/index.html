@@ -545,12 +545,12 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
         <h3>Banks and loans</h3>
         <ul>
         <li>🏦 <b>Banks</b> (shop, once a village is built): a bank is placed like an item, is a dead tile for animals, can be carried by the 🚚 mover (unless a loan locks it; use it to line three banks up) and is broken only by the hammer. It cannot go in the reserve. It pays <b>coins every turn</b> (the 📅 date at the top counts 10 turns to a month). At most 3, each dearer than the last; three connected banks merge into 💵 cash. <b>Loans</b>: tap a bank to borrow half the shop price of the dearest building next to it; that building and the bank are locked until you repay it with simple interest (15% a year, 30% at the second bank, 60% at the third). A year unpaid and the building is lost and its tile seized until you pay the debt, and that bank stops paying. The ⏱ clock speed (tap it: 1×, 2×, 3×, paused) sets how fast the calendar, income and interest run.</li>
-        <li>🏛️ <b>Treasury</b>: tap a bank to <b>deposit</b> coins from this game into your treasury (a 5% fee is kept; the treasury may hold 🪙10000 with one bank on the board, 🪙25000 with two and 🪙50000 with three) or <b>withdraw</b> them. The treasury is saved between games, so coins earned on a calm map can pay for a hard one. You need a bank on the board for either. A game that has taken coins out has its own best score, and Undo is cleared after a deposit or withdrawal.</li>
+        <li>🏛️ <b>Treasury</b>: tap a bank to <b>deposit</b> coins from this game into your treasury (a 5% fee is kept; the treasury may hold 🪙200,000 with one bank on the board, 🪙500,000 with two and 🪙1,000,000 with three) or <b>withdraw</b> them. The treasury is saved between games, so coins earned on a calm map can pay for a hard one. You need a bank on the board for either. A game that has taken coins out has its own best score, and Undo is cleared after a deposit or withdrawal.</li>
         </ul>
       </section>
     </div>
     <div class="pager"><button id="helpPrev" class="btn" aria-label="Previous page">‹ Back</button><span id="helpPageLabel" aria-live="polite"></span><button id="helpNext" class="btn" aria-label="Next page">Next ›</button></div>
-    <p class="gnote">Version <b id="buildId">b6b2b57c</b> · <a href="#" id="updateLink">↻ Get the latest version</a><br>(keeps your saved game and best scores)</p>
+    <p class="gnote">Version <b id="buildId">827fdf92</b> · <a href="#" id="updateLink">↻ Get the latest version</a><br>(keeps your saved game and best scores)</p>
     <div class="helpbtns"><button id="helpTour" class="btn">▶ Quick tour</button><button id="helpClose" class="btn primary">Got it</button></div>
   </div>
 </div>
@@ -593,9 +593,9 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   // queue turn into grass. The extra random number is only drawn when the title is on, so games without one replay exactly as before.
   var TITLES = { hunter: { stat: 'bears', goal: 100, bearCut: 0.3 } };
   // Treasury: a saved purse (kept by the page, outside the game state) that carries coins from one game to the next. A game with a bank on
-  // the board can deposit coins into it (TREASURY_FEE is kept) or withdraw coins from it; a deposit may fill the purse up to TREASURY_CAPS[banks on the board - 1] (10000 / 25000 / 50000: more banks, more room). A game that has
+  // the board can deposit coins into it (TREASURY_FEE is kept) or withdraw coins from it; a deposit may fill the purse up to TREASURY_CAPS[banks on the board - 1] (200000 / 500000 / 1000000: more banks, more room). A game that has
   // withdrawn has state.boost > 0 (the total taken) and its own best-score board.
-  var TREASURY_FEE = 0.05, TREASURY_CAPS = [10000, 25000, 50000], TREASURY_CAP = TREASURY_CAPS[TREASURY_CAPS.length - 1]; // TREASURY_CAP: the most any purse can hold
+  var TREASURY_FEE = 0.05, TREASURY_CAPS = [200000, 500000, 1000000], TREASURY_CAP = TREASURY_CAPS[TREASURY_CAPS.length - 1]; // TREASURY_CAP: the most any purse can hold
   var STANDARD_ITEMS = 5;
   // Calendar: every turn advances the game clock by `speed` ticks (1 = normal; 0 pauses it), 10 ticks = a month, 12 months = a year.
   // Banks (a shop item, at most MAX_BANKS on the board) pay coins every turn; three connected banks merge into cash.
@@ -1645,7 +1645,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     return m ? (parseInt(m[1], 10) >>> 0) || 1 : 0;
   }
   function randomSeed() { return ((Math.random() * 4294967295) >>> 0) || 1; }
-  function fmt(n) { return n >= 10000 ? Math.round(n / 1000) + 'k' : n >= 1000 ? (Math.round(n / 100) / 10) + 'k' : String(n); }
+  function fmt(n) { return n >= 1000000 ? (Math.round(n / 100000) / 10) + 'M' : n >= 10000 ? Math.round(n / 1000) + 'k' : n >= 1000 ? (Math.round(n / 100) / 10) + 'k' : String(n); }
 
   // best scores are kept per map and bear mode: harder games get their own board (easy + classic keeps the original key)
   function bestKey() {
