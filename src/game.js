@@ -32,18 +32,11 @@
   function mapPref() { var m = store.get('tt-map', 'easy'); return TT.MAPS.indexOf(m) >= 0 ? m : 'easy'; }
   // ' · wild bears', ' · calm' ... for the seed line and the erase warning
   function modeLabel(st) {
-    return (st.wild ? ' · wild bears' : '') + (st.bears === false && st.foxes === false ? ' · calm' : (st.bears === false ? ' · no bears' : '') + (st.foxes === false ? ' · no foxes' : '')) + (st.boost > 0 ? ' · 🏛️ treasury start' : '') + (st.title ? ' · ' + TITLE_ICON[st.title] + ' ' + TITLE_NAMES[st.title] : '');
+    return (st.wild ? ' · wild bears' : '') + (st.bears === false && st.foxes === false ? ' · calm' : (st.bears === false ? ' · no bears' : '') + (st.foxes === false ? ' · no foxes' : '')) + (st.boost > 0 ? ' · 🏛️ treasury coins' : '') + (st.title ? ' · ' + TITLE_ICON[st.title] + ' ' + TITLE_NAMES[st.title] : '');
   }
-  // Treasury: 2% of the coins of a game you leave are saved (tt-treasury, at most 1000); the New game dialog spends None / Half / All of it as starting coins.
+  // Treasury: a saved purse (tt-treasury, at most TT.TREASURY_CAP) that carries coins between games. The Bank dialog deposits into it (a small fee) and
+  // withdraws from it; a game that has withdrawn has its own best-score board (state.boost).
   function treasury() { var v = store.get('tt-treasury', 0); return v > 0 ? Math.min(TT.TREASURY_CAP, Math.floor(v)) : 0; }
-  function takePref() { var v = store.get('tt-take', 'all'); return v === 'none' || v === 'half' ? v : 'all'; }
-  function takeAmount(kind, t) { return kind === 'none' ? 0 : kind === 'half' ? Math.floor(t / 2) : t; }
-  // the treasury once the game on screen is left: a played game adds its share, an unplayed game with a boost gives its starting coins back
-  function treasuryNow() {
-    var t = treasury();
-    if (!state) return t;
-    return state.turn > 0 ? TT.treasuryAfter(t, state.coins) : Math.min(TT.TREASURY_CAP, t + (state.boost || 0));
-  }
   // Titles: quest counters are saved across games (tt-stats); the game on screen adds its own count when it is left (state.bearsTrapped is in the
   // state, so undo takes it back too). A title is earned at its goal and picked per game in the New game dialog (tt-title).
   var TITLE_NAMES = { hunter: 'Bears Hunter' }, TITLE_ICON = { hunter: '🏹' };
@@ -53,13 +46,11 @@
   function titlePref() { var v = store.get('tt-title', ''); return TT.TITLES[v] ? v : ''; }
   function startNew(seed, o) {
     o = o || {};
-    var t = treasuryNow(), start = takeAmount(o.take === undefined ? takePref() : o.take, t);
-    store.set('tt-treasury', t - start);
     var was = stats(), now = statsNow(), want = o.title === undefined ? titlePref() : o.title;
     store.set('tt-stats', now);
     state = TT.newGame(seed || randomSeed(), {
       wild: o.wild === undefined ? wildPref() : o.wild, map: o.map === undefined ? mapPref() : o.map,
-      bears: o.bears === undefined ? bearsPref() : o.bears, foxes: o.foxes === undefined ? foxesPref() : o.foxes, start: start,
+      bears: o.bears === undefined ? bearsPref() : o.bears, foxes: o.foxes === undefined ? foxesPref() : o.foxes,
       title: titleUnlocked(want, now) ? want : '' });
     sel = -1; hover = -1; mode = null; moveFrom = -1;
     $('overlay').classList.add('hidden');
@@ -208,7 +199,38 @@
     var o = TT.loanOptions(state, bankAt), bb = $('bankBorrow');
     bb.hidden = !o;
     if (o) bb.textContent = 'Borrow 🪙' + fmt(o.principal) + ' · locks the ' + em(o.tier) + ' ' + nm(o.tier);
+    renderTreasury();
     $('bankNote').textContent = o ? '' : (mine.length ? 'Nothing else to lock next to this bank.' : 'Put a building next to the bank (up, down, left or right) to borrow against it.');
+  }
+  // the bank's treasury section: deposit part of this game's coins (a fee is kept), or withdraw from the purse into this game
+  function renderTreasury() {
+    var tr = treasury(), box = $('trBtns'), room = Math.max(0, TT.TREASURY_CAP - tr);
+    $('trBal').textContent = '🪙' + fmt(tr) + ' / ' + fmt(TT.TREASURY_CAP);
+    box.textContent = '';
+    var add = function (label, amount, act) {
+      var b = document.createElement('button');
+      b.className = 'btn'; b.textContent = label;
+      b.disabled = state.over || amount < 1 || !act(amount);
+      b.addEventListener('click', function () {
+        var r = act(amount, true);
+        if (r) { state = r.state; save(); render([]); vibrate(15); }
+      });
+      box.appendChild(b);
+    };
+    var dep = function (amount, go) {
+      var r = TT.deposit(state, amount, treasury());
+      if (r && go) { store.set('tt-treasury', treasury() + r.net); toast('🏛️ +' + fmt(r.net) + ' saved (fee ' + r.fee + ')', 0.4); }
+      return r;
+    };
+    var wd = function (amount, go) {
+      var r = TT.withdraw(state, amount, treasury());
+      if (r && go) { store.set('tt-treasury', treasury() - r.taken); toast('🏛️ +' + fmt(r.taken) + ' coins from the treasury', 0.4); }
+      return r;
+    };
+    var fit = function (a) { while (a > 0 && TT.treasuryNet(a) > room) a--; return a; }; // the biggest deposit the purse has room for
+    [[0.25, '¼'], [0.5, '½'], [1, 'All']].forEach(function (f) { add('Deposit ' + f[1] + ' · 🪙' + fmt(fit(Math.floor(state.coins * f[0]))), fit(Math.floor(state.coins * f[0])), dep); });
+    [[0.25, '¼'], [0.5, '½'], [1, 'All']].forEach(function (f) { add('Withdraw ' + f[1] + ' · 🪙' + fmt(Math.floor(tr * f[0])), Math.floor(tr * f[0]), wd); });
+    $('trNote').textContent = 'Coins in the treasury stay between games. Depositing keeps a ' + Math.round(TT.TREASURY_FEE * 100) + '% fee. A game that has taken coins out has its own best score, and Undo is cleared by either.';
   }
   function renderLoanLine() {
     var el = $('loanLine'), n = state.loans.length;
@@ -709,8 +731,7 @@
     var best = store.get(bestKey(), 0), newBest = state.score >= best && state.score > 0;
     $('overTitle').textContent = newBest ? 'New best!' : 'Town full!';
     $('overText').textContent = 'Score ' + state.score + ' in ' + state.turn + ' turns' + (newBest ? '' : ' · best ' + best);
-    var gain = TT.treasuryGain(state.coins), tr = TT.treasuryAfter(treasury(), state.coins);
-    $('overTreasury').textContent = '🏛️ ' + (gain ? '+' + gain + ' saved to your treasury · ' : 'Treasury ') + '🪙' + tr + ' for your next game (choose how much in New).';
+    $('overTreasury').textContent = '🏛️ Treasury 🪙' + treasury() + ' · deposit coins at a bank in one game, withdraw them at a bank in another.';
     var tst = statsNow(), q = TT.TITLES.hunter;
     $('overStats').textContent = state.bearsTrapped || tst.bears < q.goal
       ? TITLE_ICON.hunter + ' ' + state.bearsTrapped + ' bears trapped this game · ' + Math.min(tst.bears, q.goal) + '/' + q.goal + ' for ' + TITLE_NAMES.hunter : TITLE_ICON.hunter + ' ' + TITLE_NAMES.hunter + ' earned: pick it in New game.';
@@ -755,7 +776,7 @@
     if (s) { state = s; save(); render([]); }
   });
   // New game: pick the map and the bear mode in a small dialog (the last picks are remembered); Play again repeats both
-  var dlg = { map: 'easy', bears: 'classic', foxes: true, take: 'all', title: '' };
+  var dlg = { map: 'easy', bears: 'classic', foxes: true, title: '' };
   // sample maps: the real generator with fixed seeds, drawn as tiny boards (water blue, plants as emoji). Easy and Medium are the same every game.
   var SAMPLE_SEEDS = { easy: [1], standard: [3, 8, 21], medium: [1], hard: [4, 9, 17], island: [1, 5, 9] }, CARD_SEED = { easy: 1, standard: 3, medium: 1, hard: 4, island: 1 };
   function miniMap(map, seed, into) {
@@ -800,18 +821,13 @@
       var q = TT.TITLES[id], have = Math.min(tst[q.stat], q.goal), mine = state && state.bearsTrapped ? ' (' + state.bearsTrapped + ' in the game you are leaving)' : '';
       return TITLE_ICON[id] + ' ' + TITLE_NAMES[id] + ': trap ' + q.goal + ' bears in total (' + have + '/' + q.goal + (have < q.goal ? mine : '') + ') for ' + Math.round(q.bearCut * 100) + '% fewer bears in the queue. A game with a title has its own best score.';
     }).join(' ');
-    var tr = treasuryNow(), st = takeAmount(dlg.take, tr), pend = state && state.turn > 0 ? TT.treasuryGain(state.coins) : 0;
-    document.querySelectorAll('#newGame .opt[data-take]').forEach(function (b) { b.setAttribute('aria-pressed', tr > 0 ? b.dataset.take === dlg.take : b.dataset.take === 'none'); b.disabled = tr === 0 && b.dataset.take !== 'none'; });
-    $('treasuryNote').textContent = tr === 0
-      ? '🏛️ The treasury is empty. When a game ends, 2% of its coins (up to 🪙' + TT.TREASURY_CAP + ') are saved here to start a later game with.'
-      : '🏛️ Treasury 🪙' + tr + (pend ? ' (includes +' + pend + ' from the game you are leaving)' : '') + (st > 0 ? ' · you start with 🪙' + (TT.START_COINS + st) + '. Games that start this way have their own best score.' : ' · you start with the plain 🪙' + TT.START_COINS + '.');
     showSamples();
     $('foxNote').textContent = dlg.foxes ? 'Foxes warp around the board; walls or a full box trap them.' : 'No foxes in the item queue.';
     $('bearNote').textContent = dlg.bears === 'off' ? 'No bears in the item queue' + (dlg.foxes ? '.' : ' (calm mode: no animals at all, nothing to interrupt you).') : dlg.bears === 'wild' ? 'Boxed-in bears growl, get angry, then maul a 🌱🌿🌳🏕️🛖 next to them (one tier down). Bears breed in small pens. Own best scores.' : 'Bears wander and get trapped into tombstones.';
   }
   var MAP_NOTES = { easy: 'A plain grass field.', standard: 'A plain field with a few grass, bushes and trees already growing (different every game, e.g. these).', medium: 'A river runs across the field and splits it in two (the same map every game).', hard: 'Random ponds eat into the field (different every game, e.g. these).', island: 'The biggest board, all sea except a small island (a different shape every game, e.g. these). You cannot buy land, but you can reclaim sea tiles next to it (dearer each time) to grow it.' };
   function openNewGame() {
-    dlg.map = mapPref(); dlg.bears = !bearsPref() ? 'off' : wildPref() ? 'wild' : 'classic'; dlg.foxes = foxesPref(); dlg.take = takePref(); dlg.title = titlePref();
+    dlg.map = mapPref(); dlg.bears = !bearsPref() ? 'off' : wildPref() ? 'wild' : 'classic'; dlg.foxes = foxesPref(); dlg.title = titlePref();
     // a game in progress would be erased: say so loudly, with what is at stake, and make the button say it too
     var inProgress = !state.over && state.turn > 0, warn = $('newWarn');
     warn.classList.toggle('hidden', !inProgress);
@@ -824,11 +840,10 @@
   document.querySelectorAll('#newGame .opt[data-map]').forEach(function (b) { b.addEventListener('click', function () { dlg.map = b.dataset.map; showDialog(); }); });
   document.querySelectorAll('#newGame .opt[data-bears]').forEach(function (b) { b.addEventListener('click', function () { dlg.bears = b.dataset.bears; showDialog(); }); });
   document.querySelectorAll('#newGame .opt[data-foxes]').forEach(function (b) { b.addEventListener('click', function () { dlg.foxes = b.dataset.foxes === 'on'; showDialog(); }); });
-  document.querySelectorAll('#newGame .opt[data-take]').forEach(function (b) { b.addEventListener('click', function () { dlg.take = b.dataset.take; showDialog(); }); });
-  $('newStart').addEventListener('click', function () {
-    store.set('tt-map', dlg.map); store.set('tt-wild', dlg.bears === 'wild'); store.set('tt-bears', dlg.bears !== 'off'); store.set('tt-foxes', dlg.foxes); store.set('tt-take', dlg.take); store.set('tt-title', dlg.title);
+    $('newStart').addEventListener('click', function () {
+    store.set('tt-map', dlg.map); store.set('tt-wild', dlg.bears === 'wild'); store.set('tt-bears', dlg.bears !== 'off'); store.set('tt-foxes', dlg.foxes); store.set('tt-title', dlg.title);
     $('newGame').classList.add('hidden');
-    startNew(0, { wild: dlg.bears === 'wild', map: dlg.map, bears: dlg.bears !== 'off', foxes: dlg.foxes, take: dlg.take, title: dlg.title });
+    startNew(0, { wild: dlg.bears === 'wild', map: dlg.map, bears: dlg.bears !== 'off', foxes: dlg.foxes, title: dlg.title });
   });
   $('shopBtn').addEventListener('click', openShop);
   $('shopClose').addEventListener('click', closeShop);
@@ -946,7 +961,7 @@
     { target: '#hammerBtn', sheet: true, title: '🔨 Hammer', text: 'Smashes any item you have placed, to make room. Tap the tool, then the item.' },
     { target: '#moveBtn', sheet: true, title: '🚚 Mover', text: 'Picks up one item and drops it on another empty tile, where it merges like a placed item. Bears and foxes cannot be moved.' },
     { target: '#bridgeBtn', sheet: true, title: '🌉 Bridge', text: 'On maps with water: turns a water tile that has land on both sides into a road bears can cross. Glowing tiles show where it can go. Up to 8, dearer each time. Three or more bridged tiles in a straight line make a <b>long bridge</b> that pays coins every turn.', when: function () { return !$('bridgeBtn').hidden; } },
-    { target: '.tools.shop .tool[data-tool="22"]', sheet: true, title: '🏦 Bank', text: 'Appears once you have built a village. A bank is placed like an item, is a dead tile that animals cannot cross, and pays <b>coins every turn</b> (the 📅 calendar at the top counts 10 turns to a month). At most 3, dearer each time; it cannot go in the reserve. Three connected banks merge into 💵 cash.', when: function () { return !!document.querySelector('.tools.shop .tool[data-tool="22"]'); } },
+    { target: '.tools.shop .tool[data-tool="22"]', sheet: true, title: '🏦 Bank', text: 'Appears once you have built a village. A bank is placed like an item, is a dead tile that animals cannot cross, and pays <b>coins every turn</b> (tap it to borrow, or to deposit coins in your <b>treasury</b> and withdraw them in another game) (the 📅 calendar at the top counts 10 turns to a month). At most 3, dearer each time; it cannot go in the reserve. Three connected banks merge into 💵 cash.', when: function () { return !!document.querySelector('.tools.shop .tool[data-tool="22"]'); } },
     { target: '#speedLink', title: '⏱ Clock speed', text: 'Appears once you own a bank. Each turn adds this many ticks to the calendar (10 ticks = a month): faster means bank income per turn, loan interest and the repayment deadline all come sooner; paused stops them all. Tap to cycle 1×, 2×, 3×, paused. <b>Tap a bank</b> on the map to borrow against the dearest building next to it.', when: function () { return !$('speedBox').hidden; } },
     { target: '#pondBtn', sheet: true, title: '💧 Pond', text: 'Digs a pond on an empty tile. It takes the tile for good and there is no limit, but a pond only pays <b>points and coins every turn</b> once it sits inside a <b>3×3 block of dug ponds</b> (the map\'s own water never pays). Dig a 2×2, then 3×3 and 4×4 block of water for <b>lake quests</b>: each pays coins and points (see the line under the tools, and at the top of the screen).' },
     { target: '#reclaimBtn', sheet: true, title: '🏝️ Reclaim', text: 'Island map only: land cannot be bought here, but this turns a sea tile next to the field into new ground. Glowing tiles show where. as many as the sea has, each one dearer than the last.', when: function () { return !$('reclaimBtn').hidden; } },
@@ -1003,7 +1018,7 @@
 
   // ---- start: ?#seed=N forces a reproducible game, otherwise resume the saved one
   var forced = seedFromHash();
-  if (forced) startNew(forced, { take: 'none', title: '' }); // a shared seed is the same game for everybody: no treasury coins
+  if (forced) startNew(forced, { title: '' }); // a shared seed is the same game for everybody: no title
   else {
     state = loadSaved();
     if (state) render([]); else startNew();
