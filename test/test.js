@@ -1722,43 +1722,43 @@ t('highlands: a full board is not over while a hole can take an item or a mounta
   assert(filled); assert.strictEqual(filled.state.over, false, 'filling the hole leaves an empty tile');
 });
 
-t('treasury: a bank lets you deposit coins (5% fee, cap 1M with three banks) and withdraw them in any game', () => {
-  assert.strictEqual(TT.TREASURY_FEE, 0.05); assert.deepStrictEqual(TT.TREASURY_CAPS, [200000, 500000, 1000000]); assert.strictEqual(TT.TREASURY_CAP, 1000000);
+t('treasury: every bank has its own account (5% fee, 1M each): deposit and withdraw through that bank in any game', () => {
+  assert.strictEqual(TT.TREASURY_FEE, 0.05); assert.strictEqual(TT.TREASURY_BANK_CAP, 1000000);
   assert.strictEqual(TT.treasuryNet(1000), 950); assert.strictEqual(TT.treasuryNet(19), 19, 'a deposit under 20 coins pays no fee'); assert.strictEqual(TT.treasuryNet(20), 19);
-  const bank = (over = {}) => withGrid({ [I(2, 2)]: TT.BANK }, Object.assign({ coins: 1000, top: 7, banksBought: 1, bankOrder: [I(2, 2)], cur: 1, next: 1 }, over));
-  const d = TT.deposit(bank(), 400, 0);
-  assert(d); assert.strictEqual(d.state.coins, 600); assert.strictEqual(d.net, 380); assert.strictEqual(d.fee, 20); assert.strictEqual(d.state.turn, 0, 'a free action');
-  assert.strictEqual(d.state.undo, null, 'a deposit cannot be undone (the purse is outside the state)'); assert.deepStrictEqual(TT.validate(d.state), []);
-  // no bank, no purse access; a bad amount, too much, a purse that is full, a game that is over
-  assert.strictEqual(TT.deposit(withGrid({}, { coins: 1000 }), 100, 0), null); assert.strictEqual(TT.withdraw(withGrid({}, { coins: 1000 }), 100, 500), null);
-  [0, -5, 2.5, 1001, NaN].forEach((x) => assert.strictEqual(TT.deposit(bank(), x, 0), null, 'amount ' + x));
-  assert.strictEqual(TT.deposit(bank(), 100, 199950), null, 'the purse only has room for 50'); assert(TT.deposit(bank(), 52, 199950), '52 coins is 50 net: just fits'); assert.strictEqual(TT.deposit(bank(), 100, -1), null);
-  assert.strictEqual(TT.deposit(bank({ over: true }), 100, 0), null); assert.strictEqual(TT.withdraw(bank({ over: true }), 100, 500), null);
+  const B = I(2, 2), bank = (over = {}) => withGrid({ [B]: TT.BANK }, Object.assign({ coins: 1000, top: 7, banksBought: 1, bankOrder: [B], cur: 1, next: 1 }, over));
+  const d = TT.deposit(bank(), B, 400, 0);
+  assert(d); assert.strictEqual(d.state.coins, 600); assert.strictEqual(d.net, 380); assert.strictEqual(d.fee, 20); assert.strictEqual(d.rank, 0); assert.strictEqual(d.state.turn, 0, 'a free action');
+  assert.strictEqual(d.state.undo, null, 'a deposit cannot be undone (the accounts are outside the state)'); assert.deepStrictEqual(TT.validate(d.state), []);
+  // not a bank, no bank, a bad amount, too much, a full account, a game that is over
+  assert.strictEqual(TT.deposit(bank(), I(0, 0), 100, 0), null, 'an empty tile is no bank'); assert.strictEqual(TT.deposit(withGrid({}, { coins: 1000 }), B, 100, 0), null); assert.strictEqual(TT.withdraw(withGrid({}, { coins: 1000 }), B, 100, 500), null);
+  [0, -5, 2.5, 1001, NaN].forEach((x) => assert.strictEqual(TT.deposit(bank(), B, x, 0), null, 'amount ' + x));
+  assert.strictEqual(TT.deposit(bank(), B, 100, 999950), null, 'the account only has room for 50'); assert(TT.deposit(bank(), B, 52, 999950), '52 coins is 50 net: just fits'); assert.strictEqual(TT.deposit(bank(), B, 100, -1), null);
+  assert.strictEqual(TT.deposit(bank({ over: true }), B, 100, 0), null); assert.strictEqual(TT.withdraw(bank({ over: true }), B, 100, 500), null);
   // a full board with no hammer left and no loan to rescue it refuses the deposit
-  const g = {}; for (let i = 0; i < 36; i++) g[i] = (((i / 6) | 0) + (i % 6)) % 2 ? 5 : 6; g[I(2, 2)] = TT.BANK;
-  const stuck = (coins) => withGrid(g, { coins, top: 7, banksBought: 1, bankOrder: [I(2, 2)], stock: Object.assign({}, blank().stock, { hammer: 0 }) });
-  assert.strictEqual(TT.deposit(stuck(25), 5, 0), null, 'a full board with no way out is not a place to deposit from');
+  const g = {}; for (let i = 0; i < 36; i++) g[i] = (((i / 6) | 0) + (i % 6)) % 2 ? 5 : 6; g[B] = TT.BANK;
+  const stuck = (coins) => withGrid(g, { coins, top: 7, banksBought: 1, bankOrder: [B], stock: Object.assign({}, blank().stock, { hammer: 0 }) });
+  assert.strictEqual(TT.deposit(stuck(25), B, 5, 0), null, 'a full board with no way out is not a place to deposit from');
   // withdraw: coins arrive, boost counts the total taken, the best-score board changes with it
-  const w = TT.withdraw(bank(), 300, 500);
-  assert(w); assert.strictEqual(w.state.coins, 1300); assert.strictEqual(w.state.boost, 300); assert.strictEqual(w.taken, 300); assert.strictEqual(w.state.undo, null); assert.deepStrictEqual(TT.validate(w.state), []);
-  assert.strictEqual(TT.withdraw(w.state, 200, 200).state.boost, 500, 'the boost adds up');
-  // more banks, more room: 200k / 500k / 1M for one, two and three banks on the board
-  const banks = (n) => withGrid({ [I(0, 0)]: TT.BANK, [I(0, 2)]: n > 1 ? TT.BANK : 0, [I(0, 4)]: n > 2 ? TT.BANK : 0 }, { coins: 90000, top: 7, banksBought: n, bankOrder: [I(0, 0), I(0, 2), I(0, 4)].slice(0, n), cur: 1, next: 1 });
-  [[1, 200000], [2, 500000], [3, 1000000]].forEach(([n, cap]) => {
-    assert.strictEqual(TT.treasuryCap(banks(n)), cap, n + ' bank(s)');
-    assert(TT.deposit(banks(n), 1000, cap - 950), n + ': a deposit that just fits'); assert.strictEqual(TT.deposit(banks(n), 1000, cap - 949), null, n + ': one coin too many');
-  });
-  assert(TT.deposit(banks(3), 52000, 160000) && TT.deposit(banks(3), 52000, 160000).net === 49400, 'three banks take a big deposit'); assert.strictEqual(TT.deposit(banks(1), 52000, 160000), null, 'one bank would be overfilled');
-  assert.strictEqual(TT.withdraw(banks(1), 300000, 300000).taken, 300000, 'a purse above this game\'s cap can still be withdrawn');
-  assert.strictEqual(TT.withdraw(bank(), 501, 500), null, 'no more than the purse holds'); assert.strictEqual(TT.withdraw(bank(), 0, 500), null);
+  const w = TT.withdraw(bank(), B, 300, 500);
+  assert(w); assert.strictEqual(w.state.coins, 1300); assert.strictEqual(w.state.boost, 300); assert.strictEqual(w.taken, 300); assert.strictEqual(w.rank, 0); assert.strictEqual(w.state.undo, null); assert.deepStrictEqual(TT.validate(w.state), []);
+  assert.strictEqual(TT.withdraw(w.state, B, 200, 200).state.boost, 500, 'the boost adds up');
+  assert.strictEqual(TT.withdraw(bank(), B, 501, 500), null, 'no more than the account holds'); assert.strictEqual(TT.withdraw(bank(), B, 0, 500), null);
+  // the account is named by the bank's place in the order they were built: Bank 1, 2, 3
+  const B1 = I(0, 0), B2 = I(0, 2), B3 = I(0, 4);
+  const three = withGrid({ [B1]: TT.BANK, [B2]: TT.BANK, [B3]: TT.BANK }, { coins: 90000, top: 7, banksBought: 3, bankOrder: [B3, B1, B2], cur: 1, next: 1 });
+  assert.strictEqual(TT.treasuryRank(three, B3), 0, 'the bank built first is Bank 1'); assert.strictEqual(TT.treasuryRank(three, B1), 1); assert.strictEqual(TT.treasuryRank(three, B2), 2); assert.strictEqual(TT.treasuryRank(three, I(4, 4)), -1);
+  assert.strictEqual(TT.deposit(three, B2, 1000, 0).rank, 2); assert.strictEqual(TT.withdraw(three, B1, 10, 10).rank, 1);
+  // each account has its own limit: a full Bank 1 does not stop a deposit through Bank 2
+  assert.strictEqual(TT.deposit(three, B3, 1000, 1000000), null, 'Bank 1 is full'); assert(TT.deposit(three, B1, 1000, 0), 'Bank 2 is empty');
+  assert(TT.deposit(three, B2, 52000, 900000) && TT.deposit(three, B2, 52000, 900000).net === 49400, 'a big deposit that fits'); assert.strictEqual(TT.deposit(three, B2, 52000, 960000), null, 'one account would be overfilled');
   assert.strictEqual(TT.newGame(9).boost, 0); assert(TT.validate(Object.assign({}, TT.newGame(2), { boost: -1 })).length);
   // the whole point: no money appears out of thin air, whatever the order
   let st = bank({ coins: 5000 }), purse = 0;
   for (const [kind, amt] of [['d', 1000], ['w', 400], ['d', 2000], ['w', 1500]]) {
     const before = st.coins + purse;
-    const r = kind === 'd' ? TT.deposit(st, amt, purse) : TT.withdraw(st, amt, purse);
+    const r = kind === 'd' ? TT.deposit(st, B, amt, purse) : TT.withdraw(st, B, amt, purse);
     assert(r); st = r.state; purse += kind === 'd' ? r.net : -r.taken;
-    assert(st.coins + purse <= before, 'coins in game + purse never grow: ' + [st.coins, purse, before]);
+    assert(st.coins + purse <= before, 'coins in game + account never grow: ' + [st.coins, purse, before]);
   }
 });
 
@@ -1769,7 +1769,7 @@ t('fuzz: 400 random games keep state valid and always terminate', () => {
     if (seed % 5 === 0) { s.top = 7; s.coins = 60000; } // banks need a village in the past and the money
     if (s.map === 'medium' || s.map === 'hard' || s.map === 'island') s.coins = 30000; // well off, so bridges and land get bought in these games too
     const pick = TT.newGame(seed * 7919 + 1); // independent chooser rng
-    let purse = 0; // a stand-in for the saved treasury
+    const purses = [0, 0, 0]; // a stand-in for the three saved bank accounts
     let guard = 0;
     while (!s.over) {
       assert(++guard < 4000, 'game must terminate (seed ' + seed + ')');
@@ -1793,9 +1793,10 @@ t('fuzz: 400 random games keep state valid and always terminate', () => {
         else { const sp = TT.setSpeed(s, Math.floor(TT.rand(pick) * 4)); if (sp) { s = sp; assert.deepStrictEqual(TT.validate(s), []); continue; } }
         if (act) { loansUsed++; s = act.state; assert.deepStrictEqual(TT.validate(s), []); continue; }
       }
-      if (TT.bankSlots ? TT.bankCount(s) > 0 && TT.rand(pick) < 0.02 : false) { // deposit or withdraw at a bank now and then
-        const amt = 1 + Math.floor(TT.rand(pick) * 300), tr = TT.rand(pick) < 0.5 ? TT.deposit(s, amt, purse) : TT.withdraw(s, amt, purse);
-        if (tr) { purse += tr.net !== undefined ? tr.net : -tr.taken; assert(purse >= 0 && purse <= TT.TREASURY_CAP); s = tr.state; assert.deepStrictEqual(TT.validate(s), []); continue; }
+      if (s.bankOrder.length && TT.rand(pick) < 0.02) { // deposit or withdraw at a bank now and then
+        const bi = s.bankOrder[Math.floor(TT.rand(pick) * s.bankOrder.length)], rk = s.bankOrder.indexOf(bi), amt = 1 + Math.floor(TT.rand(pick) * 300);
+        const tr = TT.rand(pick) < 0.5 ? TT.deposit(s, bi, amt, purses[rk]) : TT.withdraw(s, bi, amt, purses[rk]);
+        if (tr) { purses[tr.rank] += tr.net !== undefined ? tr.net : -tr.taken; assert(purses[tr.rank] >= 0 && purses[tr.rank] <= TT.TREASURY_BANK_CAP); s = tr.state; assert.deepStrictEqual(TT.validate(s), []); continue; }
       }
       if (TT.rand(pick) < 0.03) { const bk = TT.buyBank(s); if (bk) { banksBought++; s = bk; assert.deepStrictEqual(TT.validate(s), []); continue; } } // a bank now and then (needs a village on the board and the coins)
       if (TT.rand(pick) < 0.01 && empties.length) { // dig a pond now and then

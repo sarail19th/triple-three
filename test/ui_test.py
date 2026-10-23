@@ -860,21 +860,26 @@ with sync_playwright() as p:
     load(gi, map='island', w=8, h=8, land=['top', 'bottom', 'left', 'right'], coins=59, top=4)
     open_shop(page); assert page.locator('#reclaimBtn').is_disabled(); page.tap('#shopClose')
 
-    # ---- treasury: a bank deposits coins into the saved purse (5% fee) and withdraws them again, in any game
-    g = [0] * 36; g[14] = 22; g[13] = 6
-    page.evaluate("localStorage.setItem('tt-treasury', '500')")
-    load(g, coins=1000, top=7, banksBought=1, bankOrder=[14])
+    # ---- treasury: every bank has its own account (Bank 1, 2, 3 in build order): deposit (5% fee) and withdraw through that bank, in any game
+    g = [0] * 36; g[14] = 22; g[13] = 6; g[20] = 22; g[19] = 5
+    page.evaluate("localStorage.setItem('tt-treasury', '500')")      # an old single number goes into Bank 1's account
+    load(g, coins=1000, top=7, banksBought=2, bankOrder=[14, 20])
     page.tap('#board .cell[data-i="14"]')
-    assert page.locator('#bankDlg').is_visible() and '🪙500' in page.inner_text('#trBal'), page.inner_text('#trBal')
+    assert page.locator('#bankDlg').is_visible() and 'Bank 1 account 🪙500' in page.text_content('#trBal'), page.text_content('#trBal')
     assert page.locator('#trBtns .btn').count() == 6
     page.tap('#trBtns .btn:nth-child(2)')                      # Deposit ½ = 500 coins -> 475 net
     dep = check_consistent(page, 'deposit')
-    assert dep['coins'] == 500 and dep['undo'] is None and page.evaluate("JSON.parse(localStorage.getItem('tt-treasury'))") == 975 and '🪙975' in page.inner_text('#trBal')
-    assert page.locator('#undoBtn').is_disabled(), 'a deposit clears Undo (the purse is outside the game)'
-    page.tap('#trBtns .btn:nth-child(6)')                      # Withdraw All = 975
+    assert dep['coins'] == 500 and dep['undo'] is None and page.evaluate("JSON.parse(localStorage.getItem('tt-treasury'))") == [975, 0, 0] and 'Bank 1 account 🪙975' in page.text_content('#trBal')
+    assert page.locator('#undoBtn').is_disabled(), 'a deposit clears Undo (the accounts are outside the game)'
+    page.tap('#bankClose'); page.tap('#board .cell[data-i="20"]')
+    assert 'Bank 2 account 🪙0' in page.text_content('#trBal') and page.locator('#trBtns .btn:nth-child(6)').is_disabled(), 'the second bank has its own, empty account'
+    page.tap('#trBtns .btn:nth-child(3)')                      # Deposit All through Bank 2 = 500 coins -> 475 net
+    assert page.evaluate("JSON.parse(localStorage.getItem('tt-treasury'))") == [975, 475, 0] and 'Bank 2 account 🪙475' in page.text_content('#trBal')
+    page.tap('#bankClose'); page.tap('#board .cell[data-i="14"]')
+    page.tap('#trBtns .btn:nth-child(6)')                      # Withdraw All from Bank 1 = 975
     wd = check_consistent(page, 'withdraw')
-    assert wd['coins'] == 1475 and wd['boost'] == 975 and page.evaluate("JSON.parse(localStorage.getItem('tt-treasury'))") == 0
-    assert page.locator('#trBtns .btn:nth-child(4)').is_disabled() and page.locator('#trBtns .btn:nth-child(6)').is_disabled(), 'an empty purse: nothing to withdraw'
+    assert wd['coins'] == 975 and wd['boost'] == 975 and page.evaluate("JSON.parse(localStorage.getItem('tt-treasury'))") == [0, 475, 0]
+    assert page.locator('#trBtns .btn:nth-child(4)').is_disabled() and page.locator('#trBtns .btn:nth-child(6)').is_disabled(), 'an empty account: nothing to withdraw'
     page.tap('#bankClose')
     assert 'treasury coins' in page.inner_text('#seed'), page.inner_text('#seed')
 
