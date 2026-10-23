@@ -41,6 +41,14 @@ URL = f'http://localhost:{server.server_address[1]}/index.html'
 rng = random.Random(args.seed)
 
 
+def compact(n):
+    """The header counters: the full number up to 99,999, then 353k, 500k, 2.7M (see compact() in game.js)."""
+    k = int(n / 1000 + 0.5)
+    if n >= 1000000 or k >= 1000:
+        return f'{int(n / 100000 + 0.5) / 10:g}M'
+    return f'{k}k' if n >= 100000 else str(n)
+
+
 def json_turn(page, key):
     return page.evaluate('k => JSON.parse(localStorage.getItem(k)).turn', key)
 
@@ -64,8 +72,8 @@ def check_consistent(page, where):
         undoDisabled: document.getElementById('undoBtn').disabled })""")
     assert len(dom['cells']) == st['w'] * st['h'] == len(st['grid']), f'{where}: board must have w*h cells'
     assert dom['cells'] == [EMOJI[v] for v in st['grid']], f'{where}: DOM board differs from state'
-    assert dom['score'] == str(st['score']), f'{where}: score text'
-    assert dom['coins'] == str(st['coins']), f'{where}: coins text'
+    assert dom['score'] == compact(st['score']), f'{where}: score text'
+    assert dom['coins'] == compact(st['coins']), f'{where}: coins text'
     assert dom['cur'] == EMOJI[st['cur']] and dom['next'] == EMOJI[st['next']], f'{where}: queue display'
     assert dom['hold'] == (EMOJI[st['hold']] if st['hold'] else '·'), f'{where}: hold display'
     assert dom['undoDisabled'] == (st['undo'] is None or st['undo']['coins'] < 5), f'{where}: undo button state'
@@ -109,6 +117,7 @@ with sync_playwright() as p:
     browser = p.chromium.launch(**({'executable_path': os.environ['TT_CHROMIUM']} if os.environ.get('TT_CHROMIUM') else {}))
     ctx = browser.new_context(viewport={'width': 412, 'height': 860}, device_scale_factor=2, has_touch=True, is_mobile=True)
     ctx.add_init_script("if (!localStorage.getItem('tt-season')) localStorage.setItem('tt-season', '\"summer\"');")  # the real default is Auto (by month): pin the look the tests expect
+    ctx.add_init_script("if (!localStorage.getItem('tt-test-fresh') && localStorage.getItem('tt-region') === null) localStorage.setItem('tt-region', '\"\"');")  # a brand-new player really starts in the Meadow; the tests start in the custom game they were written for
     ctx.add_init_script("window.__vib = []; Object.defineProperty(navigator, 'vibrate', { configurable: true, value: (ms) => { window.__vib.push(ms); return true; } });")
     page = ctx.new_page()
     errors = []
@@ -956,7 +965,7 @@ with sync_playwright() as p:
     page.tap('#worldGrid .regioncard[data-region="n"]')
     orch = check_consistent(page, 'orchard')
     assert orch['map'] == 'standard' and orch['bears'] is True and orch['wild'] is False and 'Orchard' in page.inner_text('#seed') and sum(1 for v in orch['grid'] if v) == 5
-    tap_cell(page, 0, True)
+    tap_cell(page, orch['grid'].index(0), True)                # the Orchard starts with 5 random plants: play on a free tile
     assert json_turn(page, 'tt-save-n') == 1 and json_turn(page, 'tt-save-c') == 4
     page.tap('#worldLink'); page.tap('#worldGrid .regioncard[data-region="c"]')
     back = check_consistent(page, 'back in the meadow')
@@ -984,6 +993,25 @@ with sync_playwright() as p:
     page.evaluate("localStorage.removeItem('tt-world')")
     page.tap('#worldLink'); assert page.locator('#worldGrid .regioncard[data-region="se"]').is_disabled(); page.tap('#worldClose'); assert page.locator('#world').is_hidden()
     page.evaluate("localStorage.removeItem('tt-region')")
+
+    # ---- a brand-new player starts in the Meadow (nothing saved, no region chosen yet); the custom game is still one tap away
+    page.evaluate("localStorage.setItem('tt-test-fresh', '1'); ['tt-save', 'tt-region', 'tt-save-c', 'tt-world'].forEach(k => localStorage.removeItem(k))")
+    page.reload(); page.wait_for_selector('#board .cell')
+    fresh_c = check_consistent(page, 'new player')
+    assert fresh_c['map'] == 'easy' and fresh_c['bears'] is False and fresh_c['foxes'] is False and 'Meadow' in page.inner_text('#seed')
+    assert page.evaluate("JSON.parse(localStorage.getItem('tt-region'))") == 'c' and page.evaluate("localStorage.getItem('tt-save-c') !== null && localStorage.getItem('tt-save') === null")
+    page.tap('#worldLink'); assert 'Custom game' in page.inner_text('#worldFree'); page.tap('#worldFree')
+    assert page.evaluate("JSON.parse(localStorage.getItem('tt-region'))") == '' and page.evaluate("localStorage.getItem('tt-save') !== null"), 'the custom game has its own save'
+    page.evaluate("localStorage.removeItem('tt-test-fresh'); localStorage.setItem('tt-region', '\"\"')")
+
+    # ---- big numbers stay short in the header: 500k, 2.7M
+    load([0] * 36, coins=2700000, top=3, score=500000)
+    assert page.inner_text('#score') == '500k' and page.inner_text('#coins') == '2.7M' and page.inner_text('#best') == '500k', (page.inner_text('#score'), page.inner_text('#coins'), page.inner_text('#best'))
+    load([0] * 36, coins=99999, top=3, score=100000)
+    assert page.inner_text('#coins') == '99999' and page.inner_text('#score') == '100k'
+    load([0] * 36, coins=999600, top=3, score=2700000)
+    assert page.inner_text('#coins') == '1M' and page.inner_text('#score') == '2.7M'
+    check_consistent(page, 'compact counters')
 
     # ---- shop: higher tiers unlock once built; stock runs out -> price doubles (shown on the button)
     load([0] * 36, coins=500)

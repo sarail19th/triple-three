@@ -438,7 +438,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     <div id="worldGrid" class="worldgrid"></div>
     <p id="worldNote" class="gnote"></p>
     <div class="dlgbtns">
-      <button id="worldFree" class="btn">Free game (pick any map)</button>
+      <button id="worldFree" class="btn">Custom game (pick any map)</button>
       <button id="worldClose" class="btn primary">Close</button>
     </div>
   </div>
@@ -557,7 +557,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       <section class="helppage" data-title="Maps and water" hidden>
         <h3>Maps and water</h3>
         <ul>
-        <li>🌍 <b>World</b> (top, next to the item guide): a 3×3 map of regions, each its own game with its own save. The Meadow in the middle is calm (no bears or foxes). The four regions beside it open when you have built a 🏘️ <b>village</b> in the Meadow, and each corner (wild bears, the hard ones) opens when you have built a 🏫 <b>school</b> in a neighbouring side region. Your bank accounts and treasury are shared by every region, so coins earned in the Meadow can pay for a harsh corner. <b>Free game</b> in the world screen is the normal New game with any map, kept separate.</li>
+        <li>🌍 <b>World</b> (top, next to the item guide): a 3×3 map of regions, each its own game with its own save. The Meadow in the middle is calm (no bears or foxes). The four regions beside it open when you have built a 🏘️ <b>village</b> in the Meadow, and each corner (wild bears, the hard ones) opens when you have built a 🏫 <b>school</b> in a neighbouring side region. Your bank accounts and treasury are shared by every region, so coins earned in the Meadow can pay for a harsh corner. <b>Custom game</b> in the world screen is the normal New game with any map and animals, kept separate (it is also where a shared seed link plays). New players start in the Meadow.</li>
         <li>🗺️ <b>Maps</b> (also in <b>New</b>): Easy is a plain field, Standard starts with a few plants, Medium has a river across the field, Hard has random ponds, Highlands has mountains and holes, Island is the biggest board, mostly sea (see below). Blue tiles are <b>water</b>: nothing can be placed, merged, moved or smashed there, and animals cannot enter it. Use the 🌉 <b>bridge</b> tool (up to 8, dearer each time) on a water tile that has land on both sides, up/down or left/right (never a corner or the middle of wide water; a bridge counts as land, so wide water opens up one tile at a time): it becomes a road that bears can walk over, but nothing can be built on it. <b>Three or more bridged tiles in a straight line are a long bridge</b>: it glows gold and pays coins every turn (about 1/400 of your best building's shop price per tile).</li>
         <li>💧 <b>Ponds</b> (shop): dig a pond on an empty tile. It stays for the whole game, takes a tile away, and pays <b>points and coins every turn</b>, but only while it is inside a <b>3×3 block of dug ponds</b> (a 4×4 pays all 16; the map's own water never pays): points about 5% of your best building's value per paying pond, coins about 1/400 of its shop price. <b>Lake quests</b>: the pond that completes a 2×2, then a 3×3, then a 4×4 block of water pays a one-off bonus of <b>coins and points</b>. The first pond costs only 60 coins, then each one is dearer; there is no limit once the lakes are built, only your coins and free tiles. Animals cannot cross water, and a bear or fox shut in by ponds is trapped like anywhere else.</li>
         <li>⛰️ <b>Highlands</b>: <b>mountains</b> ⛰️ are walls (nothing can be built on them, the hammer and the mover leave them alone, animals cannot enter) until you flatten one with the ⛏️ <b>Level</b> tool for coins (🪙150, then dearer each time). A <b>hole</b> 🕳️ is a wall for animals, but you can place any item into it: the item is used up, the tile becomes flat ground and a turn passes.</li>
@@ -573,7 +573,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       </section>
     </div>
     <div class="pager"><button id="helpPrev" class="btn" aria-label="Previous page">‹ Back</button><span id="helpPageLabel" aria-live="polite"></span><button id="helpNext" class="btn" aria-label="Next page">Next ›</button></div>
-    <p class="gnote">Version <b id="buildId">c8430664</b> · <a href="#" id="updateLink">↻ Get the latest version</a><br>(keeps your saved game and best scores)</p>
+    <p class="gnote">Version <b id="buildId">d52abbe8</b> · <a href="#" id="updateLink">↻ Get the latest version</a><br>(keeps your saved game and best scores)</p>
     <div class="helpbtns"><button id="helpTour" class="btn">▶ Quick tour</button><button id="helpClose" class="btn primary">Got it</button></div>
   </div>
 </div>
@@ -1679,6 +1679,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     return m ? (parseInt(m[1], 10) >>> 0) || 1 : 0;
   }
   function randomSeed() { return ((Math.random() * 4294967295) >>> 0) || 1; }
+  // the top counters (score, best, coins): the full number up to 99,999, then 353k, 500k, 2.7M so a big score never overflows the header
+  function compact(n) { var k = Math.round(n / 1000); return n >= 1000000 || k >= 1000 ? (Math.round(n / 100000) / 10) + 'M' : n >= 100000 ? k + 'k' : String(n); }
   function fmt(n) { return n >= 1000000 ? (Math.round(n / 100000) / 10) + 'M' : n >= 10000 ? Math.round(n / 1000) + 'k' : n >= 1000 ? (Math.round(n / 100) / 10) + 'k' : String(n); }
 
   // best scores are kept per map and bear mode: harder games get their own board (easy + classic keeps the original key)
@@ -1725,7 +1727,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     { id: 'se', name: 'Atoll', icon: '🐚', map: 'island', wild: true, bears: true, foxes: true, seed: 5, need: 8, needs: ['s', 'e'] }
   ];
   function regionById(id) { for (var i = 0; i < REGIONS.length; i++) if (REGIONS[i].id === id) return REGIONS[i]; return null; }
-  var region = (function () { var r = store.get('tt-region', ''); return regionById(r) ? r : ''; })(); // '' = the free game
+  // '' = the custom game (any map). A brand-new player (nothing saved, no region ever chosen) starts in the Meadow; players with a game keep it as the custom game.
+  var region = (function () { var r = store.get('tt-region', null); if (r === null && !store.get('tt-save', null)) r = 'c'; return regionById(r) ? r : ''; })();
   function worldTops() { var v = store.get('tt-world', null); return v && v.tops && typeof v.tops === 'object' ? v.tops : {}; }
   function regionOpen(r, tops) { // the centre is always open; the rest open when one of the neighbours it needs has reached its tier
     tops = tops || worldTops();
@@ -2144,12 +2147,12 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     else if (mode && (state.over || state.coins < TT.PRICE[mode] || !(state.stock[mode] > 0))) mode = null;
     if (mode !== 'move' || (moveFrom >= 0 && !TT.isMovable(g[moveFrom]))) moveFrom = -1;
     if (sel >= 0 && (state.over || !targetOk(sel))) sel = -1;
-    $('score').textContent = state.score;
-    $('coins').textContent = state.coins;
-    $('sheetCoins').textContent = state.coins;
+    $('score').textContent = compact(state.score);
+    $('coins').textContent = compact(state.coins);
+    $('sheetCoins').textContent = compact(state.coins);
     var best = store.get(bestKey(), 0);
     if (state.score > best) { best = state.score; store.set(bestKey(), best); }
-    $('best').textContent = best;
+    $('best').textContent = compact(best);
     $('curItem').textContent = em(state.cur);
     $('curName').textContent = nm(state.cur);
     $('nextItem').textContent = em(state.next);
@@ -2690,7 +2693,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     if (window.caches && caches.keys) jobs.push(caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); }));
     Promise.all(jobs).catch(function () {}).then(function () { location.reload(); });
   });
-  // ---- the world screen: switch between the regions (and back to the free game); every region keeps its own save
+  // ---- the world screen: switch between the regions (and back to the custom game); every region keeps its own save
   function enterRegion(id) {
     var r = id ? regionById(id) : null;
     if (id && (!r || !regionOpen(r))) { toast('🔒 Not open yet', 0.4); return; }
@@ -2718,7 +2721,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       b.addEventListener('click', function () { enterRegion(id); });
       grid.appendChild(b);
     });
-    $('worldNote').textContent = region ? 'You are in ' + regionById(region).icon + ' ' + regionById(region).name + '.' : 'You are in the free game.';
+    $('worldNote').textContent = region ? 'You are in ' + regionById(region).icon + ' ' + regionById(region).name + '.' : 'You are in the custom game.';
     $('worldFree').setAttribute('aria-pressed', !region);
   }
   $('worldLink').addEventListener('click', function (e) { e.preventDefault(); closeShop(); buildWorld(); $('world').classList.remove('hidden'); });
@@ -2764,8 +2767,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     { target: '.panel', title: '🌱 Place and Next', text: '<b>Place</b> is the item you will put down now, <b>Next</b> is the one after it. <b>Tap the ⇄ button between them to swap them</b> (tapping the Next item works too): free, as often as you like.' },
     { target: '#holdBtn', title: '📦 Reserve', text: 'Store the current item here for later. Tap it again to swap with what is stored. Also free.' },
     { target: '.hud .stat', title: '⭐ Score and coins', text: 'Every merge adds to your <b>score</b> and pays 🪙 <b>coins</b> (bigger groups pay more). Coins buy things in the shop. <b>Best</b> is your top score on this map.' },
-    { target: '#worldLink', title: '🗺️ World', text: 'Nine regions in a 3×3 grid, each its own game with its own save: the calm Meadow in the middle, harder ones further out. Build a 🏘️ village in the Meadow to open the next regions. <b>Free game</b> there is the normal New game.', when: function () { return $('worldLink').offsetParent !== null; } },
-    { target: '#newBtn', title: '⟳ New game', text: 'Starts a new game: choose the <b>map</b> (Easy, Standard, Medium, Hard) the <b>bear mode</b> (Classic, Wild or No bears) and whether <b>foxes</b> appear. Switch both animals off for a calm game. It erases the game you are playing, and warns you first.' },
+    { target: '#worldLink', title: '🗺️ World', text: 'Nine regions in a 3×3 grid, each its own game with its own save: the calm Meadow in the middle, harder ones further out. Build a 🏘️ village in the Meadow to open the next regions. <b>Custom game</b> there is the normal New game with any map.', when: function () { return $('worldLink').offsetParent !== null; } },
+    { target: '#newBtn', title: '⟳ New game', text: 'In a region it restarts that region on its own map. In the <b>Custom game</b> (🗺️ World) it lets you choose the <b>map</b>, the <b>bear mode</b> (Classic, Wild or No bears) and whether <b>foxes</b> appear; switch both animals off for a calm game. It erases the game you are playing, and warns you first.' },
     { target: '.topinfo', title: '📋 Turn, rules and settings', text: 'The turn counter with the 📅 calendar and, once you own a bank, the ⏱ clock speed (tap to cycle 1×, 2×, 3×, paused) (10 turns = a month, 12 months = a year) and game seed, <b>How to play</b> (the rules and this tour), the <b>Item guide</b> (every item and what it merges into), the <b>🎨 Season</b> theme (Auto follows the calendar; tap to cycle spring, summer, autumn, winter), the 🏞️ <b>lake quest</b> line (tap it to open the shop) and, on phones with vibration, the <b>📳 Haptics</b> switch.' },
     { target: '#undoBtn', title: '↶ Undo', text: 'Takes back your last move, or your last 🚚 mover, 🔨 hammer or 🪤 trap use (a mover drop that merges at once, say). It costs a few coins, and only one step can be undone.' },
     { target: '#previewBtn', title: '👁 Preview', text: 'Shows what a tap would do before you place. Turn it off to place with a single tap.' },
@@ -2836,7 +2839,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   if (forced) { region = ''; store.set('tt-region', ''); startNew(forced, { title: '' }); } // a shared seed is the same free game for everybody: no title, no region
   else {
     state = loadSaved();
-    if (state) render([]); else startNew();
+    if (region && store.get('tt-region', null) === null) store.set('tt-region', region);
+    if (state) render([]); else startNew(0, region ? regionOptions(regionById(region)) : {}); // a new player starts in the Meadow
   }
   if (!store.get('tt-seen-help', 0) && state.turn === 0) startTour(); // first launch: the guided tour (How to play keeps the written rules)
 
