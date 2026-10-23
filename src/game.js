@@ -340,8 +340,7 @@
   }
 
   // Highlands terrain, drawn like the water: ONE soft SVG layer above the water and under the tiles. Mountains fuse into a ridge with a shaded
-  // skirt, a lit top and a few peaks; holes fuse into a pit with a rim and a dark middle. The tiles themselves only carry the emoji (hidden by the CSS)
-  // for the tests and screen readers.
+  // skirt and a lit top (the emoji is the peak, drawn on top by the tile); holes fuse into a pit with a rim (the emoji sits in it).
   function drawTerrain() {
     var g = state.grid, w = state.w, h = state.h;
     var key = w + 'x' + h + ':' + g.map(function (v) { return v === TT.MOUNTAIN ? 'm' : v === TT.HOLE ? 'h' : '.'; }).join('');
@@ -349,7 +348,7 @@
     terrainKey = key;
     if (terrainEl) { terrainEl.remove(); terrainEl = null; }
     if (!/[mh]/.test(key)) return;
-    var mrects = '', hrects = '', peaks = '', pits = '';
+    var mrects = '', hrects = '';
     g.forEach(function (v, i) {
       var c = i % w, r = (i / w) | 0, cell = '<rect x="' + (c - 0.01) + '" y="' + (r - 0.01) + '" width="1.02" height="1.02"/>';
       var rect = function (cc, rr) { return '<rect x="' + (cc - 0.01) + '" y="' + (rr - 0.01) + '" width="1.02" height="1.02"/>'; };
@@ -358,16 +357,8 @@
       }
       if (v === TT.MOUNTAIN) {
         mrects += cell;
-        var k = (i * 37 + 11) % 5, s = 0.85 + k * 0.07, cx = c + 0.5 + ((k % 3) - 1) * 0.04, base = r + 0.74, top = base - 0.62 * s, hw = 0.3 * s; // a big peak and a small one beside it
-        peaks += '<polygon points="' + (cx - hw) + ',' + base + ' ' + cx + ',' + top + ' ' + (cx + 0.02) + ',' + base + '" style="fill:var(--m-lit)"/>' +
-          '<polygon points="' + (cx + 0.02) + ',' + base + ' ' + cx + ',' + top + ' ' + (cx + hw) + ',' + base + '" style="fill:var(--m-dark)"/>' +
-          '<polygon points="' + (cx - 0.08 * s) + ',' + (top + 0.13 * s) + ' ' + cx + ',' + top + ' ' + (cx + 0.08 * s) + ',' + (top + 0.13 * s) + ' ' + cx + ',' + (top + 0.09 * s) + '" fill="#fff" fill-opacity="0.92"/>';
-        var sx = cx + 0.2 * (k % 2 ? 1 : -1), sb = base + 0.02, st = sb - 0.34 * s;
-        peaks += '<polygon points="' + (sx - 0.15) + ',' + sb + ' ' + sx + ',' + st + ' ' + (sx + 0.01) + ',' + sb + '" style="fill:var(--m-lit)"/>' +
-          '<polygon points="' + (sx + 0.01) + ',' + sb + ' ' + sx + ',' + st + ' ' + (sx + 0.15) + ',' + sb + '" style="fill:var(--m-dark)"/>';
       } else if (v === TT.HOLE) {
         hrects += cell;
-        pits += '<ellipse cx="' + (c + 0.5) + '" cy="' + (r + 0.54) + '" rx="0.27" ry="0.2" fill="url(#hgrad)"/>';
       }
     });
     var x0 = -2, y0 = -2, W = w + 4, H = h + 4, box = 'x="' + x0 + '" y="' + y0 + '" width="' + W + '" height="' + H + '"';
@@ -383,13 +374,13 @@
       filter('thskirt', 0.3, 4, -0.8) + filter('thrim', 0.24, 8, -2.6) + filter('thbody', 0.24, 9, -4.1) +
       mask('mkskirt', 'tmskirt', 'tmcells') + mask('mkbody', 'tmbody', 'tmcells') + mask('mkhi', 'tmhi', 'tmcells') +
       mask('hkskirt', 'thskirt', 'thcells') + mask('hkrim', 'thrim', 'thcells') + mask('hkbody', 'thbody', 'thcells') +
-      '<radialGradient id="hgrad"><stop offset="0" style="stop-color:var(--h-in)"/><stop offset="1" style="stop-color:var(--h-out)" stop-opacity="0"/></radialGradient></defs>' +
+      '</defs>' +
       '<rect ' + box + ' style="fill:var(--m-sh)" fill-opacity="0.35" mask="url(#mkskirt)"/>' +
       '<rect ' + box + ' style="fill:var(--m-mid)" mask="url(#mkbody)"/>' +
-      '<g transform="translate(-0.05 -0.07)"><rect ' + box + ' style="fill:var(--m-hi)" fill-opacity="0.55" mask="url(#mkhi)"/></g>' + peaks +
+      '<g transform="translate(-0.05 -0.07)"><rect ' + box + ' style="fill:var(--m-hi)" fill-opacity="0.7" mask="url(#mkhi)"/></g>' +
       '<rect ' + box + ' style="fill:var(--m-sh)" fill-opacity="0.3" mask="url(#hkskirt)"/>' +
       '<rect ' + box + ' style="fill:var(--h-rim)" fill-opacity="0.9" mask="url(#hkrim)"/>' +
-      '<rect ' + box + ' style="fill:var(--h-out)" mask="url(#hkbody)"/>' + pits;
+      '<rect ' + box + ' style="fill:var(--h-out)" mask="url(#hkbody)"/>';
     boardEl.insertBefore(svg, boardEl.querySelector('.cell')); // above the water layer, under the tiles
     terrainEl = svg;
   }
