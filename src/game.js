@@ -24,7 +24,7 @@
   // best scores are kept per map and bear mode: harder games get their own board (easy + classic keeps the original key)
   function bestKey() {
     return (state && state.map && state.map !== 'easy' ? 'tt-best-' + state.map : 'tt-best') + (state && state.wild ? '-wild' : '') +
-      (state && state.bears === false ? '-nobears' : '') + (state && state.foxes === false ? '-nofox' : '');
+      (state && state.bears === false ? '-nobears' : '') + (state && state.foxes === false ? '-nofox' : '') + (state && state.boost > 0 ? '-boost' : '');
   }
   function wildPref() { return store.get('tt-wild', false) === true; } // the mode picked last in the New game dialog
   function bearsPref() { return store.get('tt-bears', true) !== false; }
@@ -32,13 +32,25 @@
   function mapPref() { var m = store.get('tt-map', 'easy'); return TT.MAPS.indexOf(m) >= 0 ? m : 'easy'; }
   // ' · wild bears', ' · calm' ... for the seed line and the erase warning
   function modeLabel(st) {
-    return (st.wild ? ' · wild bears' : '') + (st.bears === false && st.foxes === false ? ' · calm' : (st.bears === false ? ' · no bears' : '') + (st.foxes === false ? ' · no foxes' : ''));
+    return (st.wild ? ' · wild bears' : '') + (st.bears === false && st.foxes === false ? ' · calm' : (st.bears === false ? ' · no bears' : '') + (st.foxes === false ? ' · no foxes' : '')) + (st.boost > 0 ? ' · 🏛️ treasury start' : '');
+  }
+  // Treasury: 2% of the coins of a game you leave are saved (tt-treasury, at most 1000); the New game dialog spends None / Half / All of it as starting coins.
+  function treasury() { var v = store.get('tt-treasury', 0); return v > 0 ? Math.min(TT.TREASURY_CAP, Math.floor(v)) : 0; }
+  function takePref() { var v = store.get('tt-take', 'all'); return v === 'none' || v === 'half' ? v : 'all'; }
+  function takeAmount(kind, t) { return kind === 'none' ? 0 : kind === 'half' ? Math.floor(t / 2) : t; }
+  // the treasury once the game on screen is left: a played game adds its share, an unplayed game with a boost gives its starting coins back
+  function treasuryNow() {
+    var t = treasury();
+    if (!state) return t;
+    return state.turn > 0 ? TT.treasuryAfter(t, state.coins) : Math.min(TT.TREASURY_CAP, t + (state.boost || 0));
   }
   function startNew(seed, o) {
     o = o || {};
+    var t = treasuryNow(), start = takeAmount(o.take === undefined ? takePref() : o.take, t);
+    store.set('tt-treasury', t - start);
     state = TT.newGame(seed || randomSeed(), {
       wild: o.wild === undefined ? wildPref() : o.wild, map: o.map === undefined ? mapPref() : o.map,
-      bears: o.bears === undefined ? bearsPref() : o.bears, foxes: o.foxes === undefined ? foxesPref() : o.foxes });
+      bears: o.bears === undefined ? bearsPref() : o.bears, foxes: o.foxes === undefined ? foxesPref() : o.foxes, start: start });
     sel = -1; hover = -1; mode = null; moveFrom = -1;
     $('overlay').classList.add('hidden');
     save();
@@ -203,12 +215,13 @@
     if (mode === 'move') return (TT.isMovable(v) && !lockedNow[idx]) || (v === 0 && moveFrom >= 0 && !isBridgeTile(idx)); // pick something up (not a locked tile), then an empty tile to drop it on
     if (mode === 'bridge') return TT.bridgeSpots(state).indexOf(idx) >= 0;
     if (mode === 'pond') return v === 0 && !isBridgeTile(idx);
+    if (mode === 'reclaim') return TT.reclaimSpots(state).indexOf(idx) >= 0;
     return mode === 'hammer' ? v !== 0 && v !== TT.WATER && v !== TT.SEIZED && !lockedNow[idx] : mode === 'trap' ? isAnimal(v) : ((v === 0 && !isBridgeTile(idx)) || isCollectible(v));
   }
   var lockedNow = {}; // cells a loan has locked (rebuilt on every render)
   function isBridgeTile(i) { return state.bridges.indexOf(i) >= 0; }
   function doAction(idx) {
-    return mode === 'hammer' ? TT.hammer(state, idx) : mode === 'trap' ? TT.trap(state, idx) : mode === 'bridge' ? TT.buyBridge(state, idx) : mode === 'pond' ? TT.buyPond(state, idx) : TT.place(state, idx);
+    return mode === 'hammer' ? TT.hammer(state, idx) : mode === 'trap' ? TT.trap(state, idx) : mode === 'bridge' ? TT.buyBridge(state, idx) : mode === 'pond' ? TT.buyPond(state, idx) : mode === 'reclaim' ? TT.buyReclaim(state, idx) : TT.place(state, idx);
   }
 
   // Mouse: hover already showed the preview, so one click commits. Touch: the first tap selects and previews
@@ -340,6 +353,7 @@
     });
     if (mode === 'bridge') { if (!TT.canBridge(state)) mode = null; }
     else if (mode === 'pond') { if (!TT.canPond(state)) mode = null; }
+    else if (mode === 'reclaim') { if (!TT.canReclaim(state)) mode = null; }
     else if (mode && (state.over || state.coins < TT.PRICE[mode] || !(state.stock[mode] > 0))) mode = null;
     if (mode !== 'move' || (moveFrom >= 0 && !TT.isMovable(g[moveFrom]))) moveFrom = -1;
     if (sel >= 0 && (state.over || !targetOk(sel))) sel = -1;
@@ -370,6 +384,13 @@
         b.querySelector('.tp').textContent = TT.pondPrice(state) === null ? 'max' : '🪙' + fmt(TT.pondPrice(state));
         b.querySelector('.tb').textContent = '×' + (TT.MAX_PONDS - state.ponds.length);
         return;
+      } else if (t === 'reclaim') {
+        b.hidden = state.map !== 'island'; // the island's answer to buying land
+        b.disabled = state.over || !TT.canReclaim(state);
+        b.setAttribute('aria-pressed', mode === 'reclaim');
+        b.querySelector('.tp').textContent = TT.reclaimPrice(state) === null ? 'max' : '🪙' + fmt(TT.reclaimPrice(state));
+        b.querySelector('.tb').textContent = '×' + (TT.MAX_RECLAIM - state.reclaimed);
+        return;
       } else if (t === 'bridge') {
         b.hidden = !state.bridges.length && !TT.bridgeSpots(state).length; // only where a bridge can actually go (dug ponds are not crossable)
         b.disabled = state.over || !TT.canBridge(state);
@@ -393,7 +414,7 @@
       }
       b.querySelector('.tb').textContent = '×' + Math.max(0, state.stock[t] || 0);
     });
-    var TOOL_NAMES = { hammer: '🔨 Hammer', trap: '🪤 Trap', move: '🚚 Mover', bridge: '🌉 Bridge', pond: '💧 Pond' };
+    var TOOL_NAMES = { hammer: '🔨 Hammer', trap: '🪤 Trap', move: '🚚 Mover', bridge: '🌉 Bridge', pond: '💧 Pond', reclaim: '🏝️ Reclaim' };
     $('toolCancel').hidden = !mode; // a tool is armed: the Shop sheet is closed, so offer a way to put it away
     if (mode) $('toolCancelName').textContent = TOOL_NAMES[mode];
     var util = document.querySelector('.tools.util');
@@ -401,6 +422,7 @@
     var lp = TT.landPrice(state);
     document.querySelectorAll('.land').forEach(function (b) {
       var owned = state.land.indexOf(b.dataset.land) >= 0;
+      b.hidden = state.map === 'island'; // nothing to buy there: the whole board is already land
       b.disabled = state.over || owned || !TT.canLand(state);
       b.querySelector('.tp').textContent = owned ? '✓' : '🪙' + fmt(lp);
     });
@@ -409,7 +431,8 @@
       (nq ? ' · 🏞️ quest: a ' + nq + '×' + nq + ' lake (biggest now ' + bl + '×' + bl + ') pays 🪙' + fmt(TT.LAKE_COINS[state.lake]) + ' + points' : ' · 🏞️ all lakes built');
     var ql = $('questLine');
     ql.textContent = nq ? '🏞️ Lake quest ' + nq + '×' + nq + ': biggest ' + bl + '×' + bl + ' · reward 🪙' + fmt(TT.LAKE_COINS[state.lake]) + ' + points' : '🏞️ All lakes built';
-    $('landNote').textContent = 'Land ' + state.land.length + '/' + TT.MAX_LAND + (lp ? ' · next side 🪙' + lp : ' · all bought');
+    var rp = TT.reclaimPrice(state);
+    $('landNote').textContent = state.map === 'island' ? '🏝️ Island · sea reclaimed ' + state.reclaimed + '/' + TT.MAX_RECLAIM + (rp ? ' · next tile 🪙' + fmt(rp) : ' · all reclaimed') : 'Land ' + state.land.length + '/' + TT.MAX_LAND + (lp ? ' · next side 🪙' + lp : ' · all bought');
     var nextAt = TT.milestoneScore(state.milestone), gifts = [];
     [1, 2, 3, TT.CRYSTAL].forEach(function (c) { gifts.push('+' + TT.RESTOCK[c] + em(c)); });
     $('unlock').textContent = 'Shop restocks in ' + (nextAt - TT.milestoneProgress(state)) + ' more points from merges (pond income and lake bonuses do not count): ' + gifts.join(' ') +
@@ -450,6 +473,13 @@
         cells[pi].classList.add('target');
         note = (sel === pi ? 'Tap again to dig' : 'Dig') + ' a pond here (-' + pp + ' coins, +' + TT.pondPoints(Object.assign({}, state, { ponds: state.ponds.concat([pi]) })) + ' pts + 🪙' + TT.pondCoins(Object.assign({}, state, { ponds: state.ponds.concat([pi]) })) + ' per turn)'; hot = sel === pi;
       } else note = '💧 Tap an empty tile to dig a pond (-' + pp + ' coins)';
+    } else if (mode === 'reclaim') {
+      var rs = TT.reclaimSpots(state), rpr = TT.reclaimPrice(state);
+      rs.forEach(function (i) { cells[i].classList.add('spot'); });
+      if (pi >= 0 && rs.indexOf(pi) >= 0) {
+        cells[pi].classList.add('target');
+        note = (sel === pi ? 'Tap again to reclaim' : 'Reclaim') + ' this sea tile as new ground (-' + rpr + ' coins)'; hot = sel === pi;
+      } else note = '🏝️ Tap a glowing sea tile next to the land to reclaim it (-' + rpr + ' coins)';
     } else if (mode === 'bridge') {
       var spots = TT.bridgeSpots(state), bp = TT.bridgePrice(state);
       spots.forEach(function (i) { cells[i].classList.add('spot'); });
@@ -544,6 +574,9 @@
       } else if (ev.type === 'bridge') { // planks slide in; the price just paid is the one before the current next price
         cells[ev.at].classList.add('built');
         floatAt(ev.at, '🌉 -' + TT.BRIDGE_PRICE[state.bridges.length - 1] + '🪙');
+      } else if (ev.type === 'reclaim') {
+        cells[ev.at].classList.add('drop');
+        floatAt(ev.at, '🏝️ -' + fmt(ev.price) + '🪙');
       } else if (ev.type === 'pond') {
         cells[ev.at].classList.add('drop');
         floatAt(ev.at, '💧 -' + fmt(ev.price) + '🪙');
@@ -654,6 +687,8 @@
     var best = store.get(bestKey(), 0), newBest = state.score >= best && state.score > 0;
     $('overTitle').textContent = newBest ? 'New best!' : 'Town full!';
     $('overText').textContent = 'Score ' + state.score + ' in ' + state.turn + ' turns' + (newBest ? '' : ' · best ' + best);
+    var gain = TT.treasuryGain(state.coins), tr = TT.treasuryAfter(treasury(), state.coins);
+    $('overTreasury').textContent = '🏛️ ' + (gain ? '+' + gain + ' saved to your treasury · ' : 'Treasury ') + '🪙' + tr + ' for your next game (choose how much in New).';
     $('overlay').classList.remove('hidden');
   }
 
@@ -675,7 +710,7 @@
   });
   document.querySelectorAll('.tool[data-tool]').forEach(function (b) { // trap, hammer and mover (the item shop is built in buildShop)
     var t = b.dataset.tool;
-    if (t !== 'bridge' && t !== 'pond') b.querySelector('.tp').textContent = '🪙' + TT.PRICE[t];
+    if (t !== 'bridge' && t !== 'pond' && t !== 'reclaim') b.querySelector('.tp').textContent = '🪙' + TT.PRICE[t];
     b.addEventListener('click', function () { mode = mode === t ? null : t; sel = -1; moveFrom = -1; render([]); closeShop(); });
   });
   document.querySelectorAll('.land').forEach(function (b) {
@@ -695,12 +730,13 @@
     if (s) { state = s; save(); render([]); }
   });
   // New game: pick the map and the bear mode in a small dialog (the last picks are remembered); Play again repeats both
-  var dlg = { map: 'easy', bears: 'classic', foxes: true };
+  var dlg = { map: 'easy', bears: 'classic', foxes: true, take: 'all' };
   // sample maps: the real generator with fixed seeds, drawn as tiny boards (water blue, plants as emoji). Easy and Medium are the same every game.
-  var SAMPLE_SEEDS = { easy: [1], standard: [3, 8, 21], medium: [1], hard: [4, 9, 17] }, CARD_SEED = { easy: 1, standard: 3, medium: 1, hard: 4 };
+  var SAMPLE_SEEDS = { easy: [1], standard: [3, 8, 21], medium: [1], hard: [4, 9, 17], island: [1] }, CARD_SEED = { easy: 1, standard: 3, medium: 1, hard: 4, island: 1 };
   function miniMap(map, seed, into) {
-    var g = TT.newGame(seed, { map: map }).grid;
+    var g = TT.newGame(seed, { map: map }).grid, side = Math.round(Math.sqrt(g.length));
     into.textContent = '';
+    into.style.gridTemplate = 'repeat(' + side + ', 1fr) / repeat(' + side + ', 1fr)'; // the island is 8x8
     g.forEach(function (v) {
       var c = document.createElement('span');
       if (v === TT.WATER) c.className = 'w'; else if (v) c.textContent = em(v);
@@ -725,13 +761,18 @@
     document.querySelectorAll('#newGame .opt[data-bears]').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.bears === dlg.bears); });
     document.querySelectorAll('#newGame .opt[data-foxes]').forEach(function (b) { b.setAttribute('aria-pressed', (b.dataset.foxes === 'on') === dlg.foxes); });
     $('mapNote').textContent = MAP_NOTES[dlg.map];
+    var tr = treasuryNow(), st = takeAmount(dlg.take, tr), pend = state && state.turn > 0 ? TT.treasuryGain(state.coins) : 0;
+    document.querySelectorAll('#newGame .opt[data-take]').forEach(function (b) { b.setAttribute('aria-pressed', tr > 0 ? b.dataset.take === dlg.take : b.dataset.take === 'none'); b.disabled = tr === 0 && b.dataset.take !== 'none'; });
+    $('treasuryNote').textContent = tr === 0
+      ? '🏛️ The treasury is empty. When a game ends, 2% of its coins (up to 🪙' + TT.TREASURY_CAP + ') are saved here to start a later game with.'
+      : '🏛️ Treasury 🪙' + tr + (pend ? ' (includes +' + pend + ' from the game you are leaving)' : '') + (st > 0 ? ' · you start with 🪙' + (TT.START_COINS + st) + '. Games that start this way have their own best score.' : ' · you start with the plain 🪙' + TT.START_COINS + '.');
     showSamples();
     $('foxNote').textContent = dlg.foxes ? 'Foxes warp around the board; walls or a full box trap them.' : 'No foxes in the item queue.';
     $('bearNote').textContent = dlg.bears === 'off' ? 'No bears in the item queue' + (dlg.foxes ? '.' : ' (calm mode: no animals at all, nothing to interrupt you).') : dlg.bears === 'wild' ? 'Boxed-in bears growl, get angry, then maul a 🌱🌿🌳🏕️🛖 next to them (one tier down). Bears breed in small pens. Own best scores.' : 'Bears wander and get trapped into tombstones.';
   }
-  var MAP_NOTES = { easy: 'A plain grass field.', standard: 'A plain field with a few grass, bushes and trees already growing (different every game, e.g. these).', medium: 'A river runs across the field and splits it in two (the same map every game).', hard: 'Random ponds eat into the field (different every game, e.g. these).' };
+  var MAP_NOTES = { easy: 'A plain grass field.', standard: 'A plain field with a few grass, bushes and trees already growing (different every game, e.g. these).', medium: 'A river runs across the field and splits it in two (the same map every game).', hard: 'Random ponds eat into the field (different every game, e.g. these).', island: 'The biggest board, with the sea all around it. You cannot buy land, but you can reclaim sea tiles next to the field (dearer each time) to grow it.' };
   function openNewGame() {
-    dlg.map = mapPref(); dlg.bears = !bearsPref() ? 'off' : wildPref() ? 'wild' : 'classic'; dlg.foxes = foxesPref();
+    dlg.map = mapPref(); dlg.bears = !bearsPref() ? 'off' : wildPref() ? 'wild' : 'classic'; dlg.foxes = foxesPref(); dlg.take = takePref();
     // a game in progress would be erased: say so loudly, with what is at stake, and make the button say it too
     var inProgress = !state.over && state.turn > 0, warn = $('newWarn');
     warn.classList.toggle('hidden', !inProgress);
@@ -744,10 +785,11 @@
   document.querySelectorAll('#newGame .opt[data-map]').forEach(function (b) { b.addEventListener('click', function () { dlg.map = b.dataset.map; showDialog(); }); });
   document.querySelectorAll('#newGame .opt[data-bears]').forEach(function (b) { b.addEventListener('click', function () { dlg.bears = b.dataset.bears; showDialog(); }); });
   document.querySelectorAll('#newGame .opt[data-foxes]').forEach(function (b) { b.addEventListener('click', function () { dlg.foxes = b.dataset.foxes === 'on'; showDialog(); }); });
+  document.querySelectorAll('#newGame .opt[data-take]').forEach(function (b) { b.addEventListener('click', function () { dlg.take = b.dataset.take; showDialog(); }); });
   $('newStart').addEventListener('click', function () {
-    store.set('tt-map', dlg.map); store.set('tt-wild', dlg.bears === 'wild'); store.set('tt-bears', dlg.bears !== 'off'); store.set('tt-foxes', dlg.foxes);
+    store.set('tt-map', dlg.map); store.set('tt-wild', dlg.bears === 'wild'); store.set('tt-bears', dlg.bears !== 'off'); store.set('tt-foxes', dlg.foxes); store.set('tt-take', dlg.take);
     $('newGame').classList.add('hidden');
-    startNew(0, { wild: dlg.bears === 'wild', map: dlg.map, bears: dlg.bears !== 'off', foxes: dlg.foxes });
+    startNew(0, { wild: dlg.bears === 'wild', map: dlg.map, bears: dlg.bears !== 'off', foxes: dlg.foxes, take: dlg.take });
   });
   $('shopBtn').addEventListener('click', openShop);
   $('shopClose').addEventListener('click', closeShop);
@@ -868,7 +910,8 @@
     { target: '.tools.shop .tool[data-tool="22"]', sheet: true, title: '🏦 Bank', text: 'Appears once you have built a village. A bank is placed like an item, is a dead tile that animals cannot cross, and pays <b>coins every turn</b> (the 📅 calendar at the top counts 10 turns to a month). At most 3, dearer each time; it cannot go in the reserve. Three connected banks merge into 💵 cash.', when: function () { return !!document.querySelector('.tools.shop .tool[data-tool="22"]'); } },
     { target: '#speedLink', title: '⏱ Clock speed', text: 'Appears once you own a bank. Each turn adds this many ticks to the calendar (10 ticks = a month): faster means bank income per turn, loan interest and the repayment deadline all come sooner; paused stops them all. Tap to cycle 1×, 2×, 3×, paused. <b>Tap a bank</b> on the map to borrow against the dearest building next to it.', when: function () { return !$('speedBox').hidden; } },
     { target: '#pondBtn', sheet: true, title: '💧 Pond', text: 'Digs a pond on an empty tile. It takes the tile for good, but pays <b>points every turn</b>, and dearer ponds pay more in total. Dig a 2×2, then 3×3 and 4×4 block of water for <b>lake quests</b>: each pays coins and points (see the line under the tools, and at the top of the screen).' },
-    { target: '.tool.land', sheet: true, title: '⬆️⬇️⬅️➡️ Land', text: 'Adds one more row or column on that side of the map (each side once, dearer every time). Water that touches that edge carries on into it. Handy when the map is nearly full.' },
+    { target: '#reclaimBtn', sheet: true, title: '🏝️ Reclaim', text: 'Island map only: land cannot be bought here, but this turns a sea tile next to the field into new ground. Glowing tiles show where. 28 in all, each one dearer than the last.', when: function () { return !$('reclaimBtn').hidden; } },
+    { target: '.tool.land', sheet: true, title: '⬆️⬇️⬅️➡️ Land', text: 'Adds one more row or column on that side of the map (each side once, dearer every time). Water that touches that edge carries on into it. Handy when the map is nearly full.', when: function () { return state.map !== 'island'; } },
     { title: '🎉 You are ready', text: 'The <b>Item guide</b> at the top lists every item and what it merges into, and <b>How to play</b> repeats the rules and this tour. Your game is saved automatically. Have fun!' }
   ];
   var tourSteps = [], tourAt = 0, tourDir = 1;
@@ -921,7 +964,7 @@
 
   // ---- start: ?#seed=N forces a reproducible game, otherwise resume the saved one
   var forced = seedFromHash();
-  if (forced) startNew(forced);
+  if (forced) startNew(forced, { take: 'none' }); // a shared seed is the same game for everybody: no treasury coins
   else {
     state = loadSaved();
     if (state) render([]); else startNew();

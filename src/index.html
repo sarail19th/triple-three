@@ -65,6 +65,7 @@
           <button class="tool" data-tool="move" id="moveBtn" aria-pressed="false" aria-label="Mover: pick up an item and put it on an empty tile"><span class="te">🚚</span><span class="tp"></span><span class="tb"></span></button>
           <button class="tool" data-tool="bridge" id="bridgeBtn" aria-pressed="false" aria-label="Bridge: join two banks across water" hidden><span class="te">🌉</span><span class="tp"></span><span class="tb"></span></button>
           <button class="tool" data-tool="pond" id="pondBtn" aria-pressed="false" aria-label="Pond: dig a pond on an empty tile; it pays points and coins every turn"><span class="te">💧</span><span class="tp"></span><span class="tb"></span></button>
+          <button class="tool" data-tool="reclaim" id="reclaimBtn" aria-pressed="false" aria-label="Reclaim: turn a sea tile next to the land into new ground (island map)" hidden><span class="te">🏝️</span><span class="tp"></span><span class="tb"></span></button>
           <button class="tool land" data-land="top" aria-label="Buy land: a new row on top"><span class="te">⬆️</span><span class="tp"></span></button>
           <button class="tool land" data-land="bottom" aria-label="Buy land: a new row at the bottom"><span class="te">⬇️</span><span class="tp"></span></button>
           <button class="tool land" data-land="left" aria-label="Buy land: a new column on the left"><span class="te">⬅️</span><span class="tp"></span></button>
@@ -89,6 +90,7 @@
   <div class="card" id="overCard">
     <h2 id="overTitle">Town full!</h2>
     <p id="overText"></p>
+    <p id="overTreasury" class="gnote"></p>
     <button id="againBtn" class="btn primary">Play again</button>
   </div>
 </div>
@@ -97,11 +99,12 @@
   <div class="card">
     <h2>New game</h2>
     <h3>Map</h3>
-    <div class="opts">
+    <div class="opts five">
       <button class="opt mapcard" data-map="easy" aria-pressed="true"><span class="mini" aria-hidden="true"></span><span>Easy</span></button>
       <button class="opt mapcard" data-map="standard" aria-pressed="false"><span class="mini" aria-hidden="true"></span><span>Standard</span></button>
       <button class="opt mapcard" data-map="medium" aria-pressed="false"><span class="mini" aria-hidden="true"></span><span>Medium</span></button>
       <button class="opt mapcard" data-map="hard" aria-pressed="false"><span class="mini" aria-hidden="true"></span><span>Hard</span></button>
+      <button class="opt mapcard" data-map="island" aria-pressed="false"><span class="mini" aria-hidden="true"></span><span>Island</span></button>
     </div>
     <div id="mapSamples" class="samples" aria-label="Sample maps"></div>
     <p id="mapNote" class="gnote"></p>
@@ -118,6 +121,13 @@
       <button class="opt" data-foxes="off" aria-pressed="false">No foxes</button>
     </div>
     <p id="foxNote" class="gnote"></p>
+    <h3>Treasury</h3>
+    <div class="opts three">
+      <button class="opt" data-take="none" aria-pressed="false">None</button>
+      <button class="opt" data-take="half" aria-pressed="false">Half</button>
+      <button class="opt" data-take="all" aria-pressed="true">All</button>
+    </div>
+    <p id="treasuryNote" class="gnote"></p>
     <div id="newWarn" class="warn hidden" role="alert"></div>
     <button id="newStart" class="btn primary">Start</button>
     <button id="newCancel" class="btn">Cancel</button>
@@ -168,6 +178,7 @@
         <li>Connect <b>3 or more</b> identical items (up, down, left, right) and <i>all</i> of them merge into one of the next tier on the tile you tapped (4 or 5 pay more points and coins, nothing is left over):<br>🌱 → 🌿 → 🌳 → 🏕️ → 🛖 → 🏠 → 🏘️ → 🏫 → 🏥 → 🏬 → 💵 <b>cash</b>: tap it to collect coins.</li>
         <li>Tap the <b>⇄</b> button between <b>Place</b> and <b>Next</b> (or the Next item itself) to swap them (free, as often as you like). The <b>Reserve</b> slot (left of Place) stores the current item for later (free swap). <b>Undo</b> takes back your last move, or your last 🚚 / 🔨 / 🪤 use, for a few coins (one step only).</li>
         <li>The game ends when the board is full and you cannot afford a hammer.</li>
+        <li>🏛️ <b>Treasury</b>: when you leave a game (it ended, or you start a new one), <b>2%</b> of the coins you had are saved in your treasury (at most 🪙1000). In <b>New</b>, take <b>None</b>, <b>Half</b> or <b>All</b> of it as extra starting coins. Games that start with treasury coins keep their own best score.</li>
         </ul>
       </section>
       <section class="helppage" data-title="Animals" hidden>
@@ -193,8 +204,9 @@
       <section class="helppage" data-title="Maps and water" hidden>
         <h3>Maps and water</h3>
         <ul>
-        <li>🗺️ <b>Maps</b> (also in <b>New</b>): Easy is a plain field, Standard starts with a few plants, Medium has a river across the field, Hard has random ponds. Blue tiles are <b>water</b>: nothing can be placed, merged, moved or smashed there, and animals cannot enter it. Use the 🌉 <b>bridge</b> tool (up to 5, dearer each time) on a water tile that has land on both sides, up/down or left/right (never a corner or the middle of wide water): it becomes a road that bears can walk over, but nothing can be built on it.</li>
+        <li>🗺️ <b>Maps</b> (also in <b>New</b>): Easy is a plain field, Standard starts with a few plants, Medium has a river across the field, Hard has random ponds, Island is the biggest board with the sea all around it (see below). Blue tiles are <b>water</b>: nothing can be placed, merged, moved or smashed there, and animals cannot enter it. Use the 🌉 <b>bridge</b> tool (up to 5, dearer each time) on a water tile that has land on both sides, up/down or left/right (never a corner or the middle of wide water): it becomes a road that bears can walk over, but nothing can be built on it.</li>
         <li>💧 <b>Ponds</b> (shop): dig a pond on an empty tile. It stays for the whole game, takes a tile away, and pays <b>points and coins every turn</b> (points about 5% of your best building's value each, coins about 1/400 of its shop price each, more with every pond). <b>Lake quests</b>: the pond that completes a 2×2, then a 3×3, then a 4×4 block of water pays a one-off bonus of <b>coins and points</b>. The first pond costs only 60 coins, then each one is dearer (up to 16). Animals cannot cross water, and a bear or fox shut in by ponds is trapped like anywhere else.</li>
+        <li>🏝️ <b>Island</b>: the biggest board (8×8) with a ring of sea around the field. Land cannot be bought and the sea cannot be bridged, but the <b>Reclaim</b> tool (shop) turns a sea tile next to the land into new ground: glowing tiles show where, 28 in all, each one dearer than the last (🪙100, then ×1.2). Only the ponds you dig count for lake quests there, not the sea.</li>
         </ul>
       </section>
       <section class="helppage" data-title="Banks and loans" hidden>
