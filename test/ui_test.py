@@ -67,11 +67,11 @@ def check_consistent(page, where):
     assert dom['undoDisabled'] == (st['undo'] is None or st['undo']['coins'] < 5), f'{where}: undo button state'
     tools = page.evaluate("[...document.querySelectorAll('.tool[data-tool]')].map(b => b.dataset.tool)")
     bank = ['22'] if st['top'] >= 7 else []   # the bank is sold once a village has stood on the board
-    assert tools[:3] == ['1', '2', '3'] and tools[-(6 + len(bank)):] == ['16'] + bank + ['trap', 'hammer', 'move', 'bridge', 'pond'], f'{where}: shop items {tools}'
-    assert len(tools) == max(3, st['top']) + 6 + len(bank), f'{where}: one button per unlocked tier + crystal (+ bank) + trap + hammer + mover + bridge + pond, got {tools}'
+    assert tools[:3] == ['1', '2', '3'] and tools[-(7 + len(bank)):] == ['16'] + bank + ['trap', 'hammer', 'move', 'bridge', 'pond', 'reclaim'], f'{where}: shop items {tools}'
+    assert len(tools) == max(3, st['top']) + 7 + len(bank), f'{where}: one button per unlocked tier + crystal (+ bank) + trap + hammer + mover + bridge + pond + reclaim, got {tools}'
     for tool in tools:
         slots = st['grid'].count(22) + [st['cur'], st['next'], st['hold']].count(22)
-        want = f"×{5 - len(st['bridges'])}" if tool == 'bridge' else f"×{16 - len(st['ponds'])}" if tool == 'pond' else f"×{3 - slots}" if tool == '22' else f"×{max(0, st['stock'][tool])}"
+        want = f"×{5 - len(st['bridges'])}" if tool == 'bridge' else f"×{16 - len(st['ponds'])}" if tool == 'pond' else f"×{28 - st['reclaimed']}" if tool == 'reclaim' else f"×{3 - slots}" if tool == '22' else f"×{max(0, st['stock'][tool])}"
         assert page.inner_text(f'.tool[data-tool="{tool}"] .tb') == want, f'{where}: badge {tool}'
     return st
 
@@ -105,6 +105,7 @@ with sync_playwright() as p:
     browser = p.chromium.launch(**({'executable_path': os.environ['TT_CHROMIUM']} if os.environ.get('TT_CHROMIUM') else {}))
     ctx = browser.new_context(viewport={'width': 412, 'height': 860}, device_scale_factor=2, has_touch=True, is_mobile=True)
     ctx.add_init_script("if (!localStorage.getItem('tt-season')) localStorage.setItem('tt-season', '\"summer\"');")  # the real default is Auto (by month): pin the look the tests expect
+    ctx.add_init_script("if (!localStorage.getItem('tt-take')) localStorage.setItem('tt-take', '\"none\"');")  # the real default takes the whole treasury into a new game: the tests start with plain coins
     ctx.add_init_script("window.__vib = []; Object.defineProperty(navigator, 'vibrate', { configurable: true, value: (ms) => { window.__vib.push(ms); return true; } });")
     page = ctx.new_page()
     errors = []
@@ -205,7 +206,7 @@ with sync_playwright() as p:
             assert after['undo'] is None and page.locator('#undoBtn').is_disabled(), 'single-level undo'
             continue
         if roll < 0.20:  # shop: buy grass / bush / tree if enabled
-            tool = rng.choice([t for t in page.evaluate("[...document.querySelectorAll('.tool[data-tool]')].map(b => b.dataset.tool)") if t not in ('trap', 'hammer', 'move', 'bridge', 'pond')])
+            tool = rng.choice([t for t in page.evaluate("[...document.querySelectorAll('.tool[data-tool]')].map(b => b.dataset.tool)") if t not in ('trap', 'hammer', 'move', 'bridge', 'pond', 'reclaim')])
             btn = page.locator(f'.tool[data-tool="{tool}"]')
             price = page.evaluate('([s, t]) => TT.priceOf(s, +t)', [st, tool])
             if btn.is_enabled():
@@ -278,6 +279,7 @@ with sync_playwright() as p:
     assert turns >= MIN_TURNS, f'only {turns} random turns before game over (want >= {MIN_TURNS})'
     assert page.locator('#overlay').is_visible(), 'game-over overlay'
     assert str(final['score']) in page.inner_text('#overText')
+    assert '🏛️' in page.inner_text('#overTreasury') and 'treasury' in page.inner_text('#overTreasury').lower(), page.inner_text('#overTreasury')
     best = page.evaluate("JSON.parse(localStorage.getItem('tt-best'))")
     assert best >= final['score'], 'best score persisted'
     page.screenshot(path=os.path.join(args.shots, '3_gameover.png'))
@@ -655,19 +657,20 @@ with sync_playwright() as p:
     page.tap('#newBtn')
     assert state(page)['turn'] == 0 and page.locator('#newWarn').is_hidden(), 'nothing to lose on a fresh game: no warning'
     assert page.inner_text('#newStart') == 'Start' and 'danger' not in page.get_attribute('#newStart', 'class')
-    for m in ['easy', 'standard', 'medium', 'hard']:
+    for m in ['easy', 'standard', 'medium', 'hard', 'island']:
         page.tap(f'.opt[data-map="{m}"]')
         assert page.get_attribute(f'.opt[data-map="{m}"]', 'aria-pressed') == 'true' and page.inner_text('#mapNote') != ''
     # sample maps: every card has a 6x6 thumbnail; the selected category lists examples (3 for the random maps, 1 for the fixed ones)
     cnt = lambda sel: page.evaluate("s => [...document.querySelectorAll(s)].map(e => e.children.length)", sel)
-    assert cnt('#newGame .mapcard .mini') == [36] * 4, 'a 6x6 sample on each map card'
-    assert page.evaluate("[...document.querySelectorAll('#newGame .mapcard')].map(c => c.querySelectorAll('.mini span.w').length)") == [0, 0, 7, page.evaluate("document.querySelectorAll('#newGame .mapcard[data-map=hard] .mini span.w').length")]
+    assert cnt('#newGame .mapcard .mini') == [36] * 4 + [64], 'a 6x6 sample on each map card (the island is 8x8)'
+    assert page.evaluate("[...document.querySelectorAll('#newGame .mapcard')].map(c => c.querySelectorAll('.mini span.w').length)") == [0, 0, 7, page.evaluate("document.querySelectorAll('#newGame .mapcard[data-map=hard] .mini span.w').length"), 28]
     waters = {}
-    for m, n in [('easy', 1), ('standard', 3), ('medium', 1), ('hard', 3)]:
+    for m, n in [('easy', 1), ('standard', 3), ('medium', 1), ('hard', 3), ('island', 1)]:
         page.tap(f'.opt[data-map="{m}"]')
-        assert cnt('#mapSamples .mini') == [36] * n, (m, cnt('#mapSamples .mini'))
+        assert cnt('#mapSamples .mini') == [64 if m == 'island' else 36] * n, (m, cnt('#mapSamples .mini'))
         waters[m] = page.evaluate("[...document.querySelectorAll('#mapSamples .mini')].map(e => e.querySelectorAll('span.w').length)")
-    assert waters['easy'] == [0] and waters['standard'] == [0, 0, 0] and waters['medium'] == [7] and all(6 <= w <= 9 for w in waters['hard']), waters
+    assert waters['easy'] == [0] and waters['standard'] == [0, 0, 0] and waters['medium'] == [7] and waters['island'] == [28] and all(6 <= w <= 9 for w in waters['hard']), waters
+    page.tap('.opt[data-map="hard"]')
     assert page.evaluate("new Set([...document.querySelectorAll('#mapSamples .mini')].map(e => e.textContent + [...e.children].map(c => c.className).join())).size") == 3, 'the hard samples differ'
     page.tap('.opt[data-map="standard"]'); page.tap('#newStart')
     std = check_consistent(page, 'standard map')
@@ -770,6 +773,72 @@ with sync_playwright() as p:
     assert easy['map'] == 'easy' and easy['grid'] == [0] * 36 and 'map' not in page.inner_text('#seed')
     assert page.locator('#bridgeBtn').is_hidden(), 'no water, no bridge tool'
     assert page.locator('#board svg.water').count() == 0 and page.evaluate('window.ttDebug.critters()') == [], 'no water, no water layer and no swans'
+
+    # ---- island: the biggest board with a ring of sea, no land to buy, reclaim sea next to the field
+    page.tap('#newBtn'); page.tap('.opt[data-map="island"]'); page.tap('.opt[data-bears="classic"]'); page.tap('#newStart')
+    isl = check_consistent(page, 'island map')
+    assert isl['map'] == 'island' and isl['w'] == 8 and isl['h'] == 8 and isl['land'] == ['top', 'bottom', 'left', 'right'] and isl['reclaimed'] == 0
+    assert [i for i, v in enumerate(isl['grid']) if v == 21] == [i for i in range(64) if i < 8 or i >= 56 or i % 8 in (0, 7)], 'sea on the border only'
+    assert page.locator('#board .cell').count() == 64 and 'island map' in page.inner_text('#seed')
+    assert page.evaluate("JSON.parse(localStorage.getItem('tt-map'))") == 'island'
+    open_shop(page)
+    assert page.evaluate("[...document.querySelectorAll('.tool.land')].every(b => b.offsetParent === null)"), 'no land buttons on the island'
+    assert page.locator('#reclaimBtn').is_visible() and page.locator('#reclaimBtn').is_disabled() and page.evaluate("document.getElementById('bridgeBtn').hidden")
+    assert page.inner_text('#reclaimBtn .tp') == '🪙100' and page.inner_text('#reclaimBtn .tb') == '×28' and 'sea reclaimed 0/28' in page.inner_text('#landNote'), page.inner_text('#landNote')
+    page.tap('#shopClose')
+    gi = [0] * 64
+    for i in range(64):
+        if i < 8 or i >= 56 or i % 8 in (0, 7): gi[i] = 21
+    gi[9] = 5
+    load(gi, map='island', w=8, h=8, land=['top', 'bottom', 'left', 'right'], coins=1000, top=4)
+    assert page.locator('#board .cell').count() == 64 and page.locator('#board svg.water').count() == 1
+    shop_tap(page, '#reclaimBtn')
+    assert page.get_attribute('#reclaimBtn', 'aria-pressed') == 'true' and 'sea tile' in page.inner_text('#note'), page.inner_text('#note')
+    assert page.locator('#board .cell.spot').count() == 24, 'every sea tile next to the field glows (not the four corners)'
+    page.tap('#board .cell[data-i="0"]'); page.tap('#board .cell[data-i="9"]')
+    assert state(page)['reclaimed'] == 0 and state(page)['coins'] == 1000, 'a corner and a built tile are not targets'
+    tap_cell(page, 3, True)
+    rec = check_consistent(page, 'reclaim')
+    assert rec['reclaimed'] == 1 and rec['grid'][3] == 0 and rec['coins'] == 900 and rec['turn'] == 3, 'a free action that costs the first price'
+    assert page.get_attribute('#board .cell[data-i="3"]', 'aria-label').endswith('empty') or 'water' not in page.get_attribute('#board .cell[data-i="3"]', 'aria-label')
+    assert page.get_attribute('#reclaimBtn', 'aria-pressed') == 'false'
+    open_shop(page); assert page.inner_text('#reclaimBtn .tp') == '🪙120' and page.inner_text('#reclaimBtn .tb') == '×27' and 'sea reclaimed 1/28' in page.inner_text('#landNote'); page.tap('#shopClose')
+    tap_cell(page, 3, True)
+    built = check_consistent(page, 'build on reclaimed ground')
+    assert built['grid'][3] == 1 and built['turn'] == 4, 'the new tile takes a building like any other'
+    # a poor player cannot reclaim
+    load(gi, map='island', w=8, h=8, land=['top', 'bottom', 'left', 'right'], coins=99, top=4)
+    open_shop(page); assert page.locator('#reclaimBtn').is_disabled(); page.tap('#shopClose')
+
+    # ---- treasury: 2% of a left game is saved; New game starts with None / Half / All of it
+    page.evaluate("localStorage.setItem('tt-treasury', '0')")
+    load([0] * 36, coins=5000, top=4)
+    page.tap('#newBtn')
+    assert 'includes +100' in page.inner_text('#treasuryNote') and 'plain 🪙10' in page.inner_text('#treasuryNote') or 'start with' in page.inner_text('#treasuryNote'), page.inner_text('#treasuryNote')
+    page.tap('.opt[data-take="none"]'); page.tap('#newStart')
+    assert page.evaluate("JSON.parse(localStorage.getItem('tt-treasury'))") == 100 and state(page)['coins'] == 10 and state(page)['boost'] == 0, 'left a game with 5000 coins: 2% saved'
+    assert page.evaluate("JSON.parse(localStorage.getItem('tt-take'))") == 'none', 'the pick is remembered'
+    load([0] * 36, coins=60000, top=4)                       # 2% would be 1200: capped at 1000 in total
+    page.tap('#newBtn'); page.tap('.opt[data-take="half"]')
+    assert 'Treasury 🪙1000' in page.inner_text('#treasuryNote') and 'start with 🪙510' in page.inner_text('#treasuryNote'), page.inner_text('#treasuryNote')
+    page.tap('#newStart')
+    half = check_consistent(page, 'half the treasury')
+    assert half['coins'] == 510 and half['boost'] == 500 and 'treasury start' in page.inner_text('#seed')
+    assert page.evaluate("JSON.parse(localStorage.getItem('tt-treasury'))") == 500
+    # an unplayed boosted game gives its coins back; the best score of a boosted game is a separate board
+    page.tap('#newBtn'); page.tap('.opt[data-take="all"]')
+    assert 'Treasury 🪙1000' in page.inner_text('#treasuryNote'), page.inner_text('#treasuryNote')
+    page.tap('#newStart')
+    allin = check_consistent(page, 'all of the treasury')
+    assert allin['boost'] == 1000 and allin['coins'] == 1010 and page.evaluate("JSON.parse(localStorage.getItem('tt-treasury'))") == 0
+    page.tap('#newBtn')
+    assert page.is_disabled('.opt[data-take="all"]') is False and 'Treasury 🪙1000' in page.inner_text('#treasuryNote'), page.inner_text('#treasuryNote')
+    page.tap('.opt[data-take="none"]'); page.tap('#newStart')
+    assert state(page)['boost'] == 0 and page.evaluate("JSON.parse(localStorage.getItem('tt-treasury'))") == 1000
+    page.evaluate("localStorage.setItem('tt-treasury', '0')")
+    page.tap('#newBtn')
+    assert 'empty' in page.inner_text('#treasuryNote') and page.is_disabled('.opt[data-take="half"]') and page.is_disabled('.opt[data-take="all"]') and page.get_attribute('.opt[data-take="none"]', 'aria-pressed') == 'true'
+    page.tap('#newCancel')
 
     # ---- shop: higher tiers unlock once built; stock runs out -> price doubles (shown on the button)
     load([0] * 36, coins=500)
