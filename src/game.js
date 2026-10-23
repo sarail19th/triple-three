@@ -24,7 +24,7 @@
   // best scores are kept per map and bear mode: harder games get their own board (easy + classic keeps the original key)
   function bestKey() {
     return (state && state.map && state.map !== 'easy' ? 'tt-best-' + state.map : 'tt-best') + (state && state.wild ? '-wild' : '') +
-      (state && state.bears === false ? '-nobears' : '') + (state && state.foxes === false ? '-nofox' : '') + (state && state.boost > 0 ? '-boost' : '') + (state && state.title ? '-' + state.title : '');
+      (state && state.bears === false ? '-nobears' : '') + (state && state.foxes === false ? '-nofox' : '') + (state && state.boost > 0 ? '-boost' : '') + (region ? '-r-' + region : '') + (state && state.title ? '-' + state.title : '');
   }
   function wildPref() { return store.get('tt-wild', false) === true; } // the mode picked last in the New game dialog
   function bearsPref() { return store.get('tt-bears', true) !== false; }
@@ -51,9 +51,39 @@
   function statsNow() { return { bears: stats().bears + (state ? state.bearsTrapped || 0 : 0) }; } // the totals once the game on screen is left
   function titleUnlocked(id, st) { return !!TT.TITLES[id] && st[TT.TITLES[id].stat] >= TT.TITLES[id].goal; }
   function titlePref() { var v = store.get('tt-title', ''); return TT.TITLES[v] ? v : ''; }
+  // ---- the world: a 3x3 grid of regions, each a normal game in its own save slot (tt-save-<id>; the free game keeps tt-save). Layout: easy in the middle, a mix
+  // of maps on the four sides, wild bears in the corners. `needs` = the neighbours that unlock a region once one of them has reached building tier `need`.
+  var REGIONS = [
+    { id: 'nw', name: 'Thornwood', icon: '🌲', map: 'hard', wild: true, bears: true, foxes: true, seed: 4, need: 8, needs: ['n', 'w'] },
+    { id: 'n', name: 'Orchard', icon: '🍎', map: 'standard', wild: false, bears: true, foxes: true, seed: 3, need: 7, needs: ['c'] },
+    { id: 'ne', name: 'Black Marsh', icon: '🪷', map: 'medium', wild: true, bears: true, foxes: true, seed: 1, need: 8, needs: ['n', 'e'] },
+    { id: 'w', name: 'Isle', icon: '🏝️', map: 'island', wild: false, bears: true, foxes: true, seed: 1, need: 7, needs: ['c'] },
+    { id: 'c', name: 'Meadow', icon: '🌼', map: 'easy', wild: false, bears: false, foxes: false, seed: 1, need: 0, needs: [] },
+    { id: 'e', name: 'River Bend', icon: '🌊', map: 'medium', wild: false, bears: true, foxes: true, seed: 1, need: 7, needs: ['c'] },
+    { id: 'sw', name: 'Crag', icon: '🪨', map: 'highlands', wild: true, bears: true, foxes: true, seed: 8, need: 8, needs: ['s', 'w'] },
+    { id: 's', name: 'Highlands', icon: '⛰️', map: 'highlands', wild: false, bears: true, foxes: true, seed: 3, need: 7, needs: ['c'] },
+    { id: 'se', name: 'Atoll', icon: '🐚', map: 'island', wild: true, bears: true, foxes: true, seed: 5, need: 8, needs: ['s', 'e'] }
+  ];
+  function regionById(id) { for (var i = 0; i < REGIONS.length; i++) if (REGIONS[i].id === id) return REGIONS[i]; return null; }
+  var region = (function () { var r = store.get('tt-region', ''); return regionById(r) ? r : ''; })(); // '' = the free game
+  function worldTops() { var v = store.get('tt-world', null); return v && v.tops && typeof v.tops === 'object' ? v.tops : {}; }
+  function regionOpen(r, tops) { // the centre is always open; the rest open when one of the neighbours it needs has reached its tier
+    tops = tops || worldTops();
+    return !r.needs.length || r.needs.some(function (id) { return (tops[id] || 0) >= r.need; });
+  }
+  function saveKey(id) { return id ? 'tt-save-' + id : 'tt-save'; }
+  function regionOptions(r) { return { map: r.map, wild: r.wild, bears: r.bears, foxes: r.foxes }; }
+  var worldNews = [];
+  function noteWorld() { // remember the best building tier of the region on screen; tell when that opens another region
+    if (!region || !state || !(state.top > (worldTops()[region] || 0))) return;
+    var before = worldTops(), after = Object.assign({}, before);
+    after[region] = state.top;
+    store.set('tt-world', { tops: after });
+    REGIONS.forEach(function (r) { if (!regionOpen(r, before) && regionOpen(r, after)) worldNews.push('🗺️ ' + r.icon + ' ' + r.name + ' is open: see 🗺️ World'); }); // shown after the effects are cleared (animate)
+  }
   function startNew(seed, o) {
     o = o || {};
-    var was = stats(), now = statsNow(), want = o.title === undefined ? titlePref() : o.title;
+    var was = stats(), now = o.noBank ? was : statsNow(), want = o.title === undefined ? titlePref() : o.title;
     store.set('tt-stats', now);
     state = TT.newGame(seed || randomSeed(), {
       wild: o.wild === undefined ? wildPref() : o.wild, map: o.map === undefined ? mapPref() : o.map,
@@ -66,10 +96,10 @@
     render([]);
     Object.keys(TT.TITLES).forEach(function (id) { if (!titleUnlocked(id, was) && titleUnlocked(id, now)) toast(TITLE_ICON[id] + ' Title earned: ' + TITLE_NAMES[id] + '! Pick it in New game.', 0.4); });
   }
-  function save() { store.set('tt-save', state); }
+  function save() { store.set(saveKey(region), state); noteWorld(); }
 
   function loadSaved() {
-    var s = store.get('tt-save', null);
+    var s = store.get(saveKey(region), null);
     try { if (s) TT.migrate(s); } catch (e) { return null; } // saves from before coins / stock / land / the new building chain
     try { if (s && TT.validate(s).length === 0 && typeof s.rng === 'number') return s; } catch (e) {}
     return null;
@@ -554,7 +584,7 @@
     $('speedLink').textContent = SPEED_LABEL[state.speed];
     renderLoanLine();
     if (!$('bankDlg').classList.contains('hidden')) renderBank();
-    $('seed').textContent = 'seed ' + state.seed + (state.map !== 'easy' ? ' · ' + state.map + ' map' : '') + modeLabel(state);
+    $('seed').textContent = (region ? regionById(region).icon + ' ' + regionById(region).name + ' · ' : '') + 'seed ' + state.seed + (state.map !== 'easy' ? ' · ' + state.map + ' map' : '') + modeLabel(state);
     animate(events);
     updatePreview();
     syncCritters();
@@ -744,6 +774,7 @@
         floatAt(ev.at, '🔨 -' + TT.PRICE.hammer + '🪙');
       }
     });
+    while (worldNews.length) toast(worldNews.shift(), 0.35);
     setTimeout(function () { if (fxEl.childNodes.length) fxEl.textContent = ''; }, 1000);
   }
 
@@ -909,6 +940,9 @@
   }
   var MAP_NOTES = { easy: 'A plain grass field.', standard: 'A plain field with a few grass, bushes and trees already growing (different every game, e.g. these).', medium: 'A river runs across the field and splits it in two (the same map every game).', hard: 'Random ponds eat into the field (different every game, e.g. these).', highlands: 'Mountains (walls until you pay to flatten them) and holes (swallow the next item you place, then the tile is flat) are scattered over the field (different every game, e.g. these).', island: 'The biggest board, all sea except a small island (a different shape every game, e.g. these). You cannot buy land, but you can reclaim sea tiles next to it (dearer each time) to grow it.' };
   function openNewGame() {
+    var inRegion = !!region, r = inRegion ? regionById(region) : null;
+    $('dlgSetup').hidden = inRegion; // a region keeps its own map and animals: New only restarts it
+    $('newTitle').textContent = inRegion ? 'Restart ' + r.icon + ' ' + r.name : 'New game';
     dlg.map = mapPref(); dlg.bears = !bearsPref() ? 'off' : wildPref() ? 'wild' : 'classic'; dlg.foxes = foxesPref(); dlg.title = titlePref();
     // a game in progress would be erased: say so loudly, with what is at stake, and make the button say it too
     var inProgress = !state.over && state.turn > 0, warn = $('newWarn');
@@ -922,9 +956,11 @@
   document.querySelectorAll('#newGame .opt[data-map]').forEach(function (b) { b.addEventListener('click', function () { dlg.map = b.dataset.map; showDialog(); }); });
   document.querySelectorAll('#newGame .opt[data-bears]').forEach(function (b) { b.addEventListener('click', function () { dlg.bears = b.dataset.bears; showDialog(); }); });
   document.querySelectorAll('#newGame .opt[data-foxes]').forEach(function (b) { b.addEventListener('click', function () { dlg.foxes = b.dataset.foxes === 'on'; showDialog(); }); });
-    $('newStart').addEventListener('click', function () {
-    store.set('tt-map', dlg.map); store.set('tt-wild', dlg.bears === 'wild'); store.set('tt-bears', dlg.bears !== 'off'); store.set('tt-foxes', dlg.foxes); store.set('tt-title', dlg.title);
+  $('newStart').addEventListener('click', function () {
+    store.set('tt-title', dlg.title);
     $('newGame').classList.add('hidden');
+    if (region) { startNew(0, Object.assign({ title: dlg.title }, regionOptions(regionById(region)))); return; } // restart the region on its own map
+    store.set('tt-map', dlg.map); store.set('tt-wild', dlg.bears === 'wild'); store.set('tt-bears', dlg.bears !== 'off'); store.set('tt-foxes', dlg.foxes);
     startNew(0, { wild: dlg.bears === 'wild', map: dlg.map, bears: dlg.bears !== 'off', foxes: dlg.foxes, title: dlg.title });
   });
   $('shopBtn').addEventListener('click', openShop);
@@ -994,6 +1030,41 @@
     if (window.caches && caches.keys) jobs.push(caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); }));
     Promise.all(jobs).catch(function () {}).then(function () { location.reload(); });
   });
+  // ---- the world screen: switch between the regions (and back to the free game); every region keeps its own save
+  function enterRegion(id) {
+    var r = id ? regionById(id) : null;
+    if (id && (!r || !regionOpen(r))) { toast('🔒 Not open yet', 0.4); return; }
+    $('world').classList.add('hidden'); closeBank(); closeShop();
+    if (id === region) return;
+    save(); // the game on screen stays in its own slot
+    region = id; store.set('tt-region', id);
+    var s = loadSaved();
+    sel = -1; hover = -1; mode = null; moveFrom = -1;
+    if (s) { state = s; state.vault = accounts(); $('overlay').classList.add('hidden'); render([]); }
+    else startNew(0, Object.assign({ noBank: true, title: '' }, id ? regionOptions(r) : {}));
+  }
+  function buildWorld() {
+    var grid = $('worldGrid'), tops = worldTops();
+    grid.textContent = '';
+    ['nw', 'n', 'ne', 'w', 'c', 'e', 'sw', 's', 'se'].forEach(function (id) {
+      var r = regionById(id), open = regionOpen(r, tops), b = document.createElement('button'), mini = document.createElement('span'), s = store.get(saveKey(id), null);
+      b.className = 'opt regioncard'; b.dataset.region = id; b.disabled = !open; b.setAttribute('aria-pressed', id === region);
+      mini.className = 'mini'; mini.setAttribute('aria-hidden', 'true'); miniMap(r.map, r.seed, mini);
+      var name = document.createElement('span'), info = document.createElement('small');
+      name.textContent = r.icon + ' ' + r.name + (r.wild ? ' ' + em(TT.BEAR) : '');
+      info.textContent = !open ? '🔒 ' + em(r.need) + ' in ' + r.needs.map(function (n) { return regionById(n).name; }).join(' or ')
+        : s && s.turn ? (s.over ? '🏁 ' : '') + 'T' + s.turn + ' · ' + em(s.top) : 'New';
+      b.appendChild(mini); b.appendChild(name); b.appendChild(info);
+      b.addEventListener('click', function () { enterRegion(id); });
+      grid.appendChild(b);
+    });
+    $('worldNote').textContent = region ? 'You are in ' + regionById(region).icon + ' ' + regionById(region).name + '.' : 'You are in the free game.';
+    $('worldFree').setAttribute('aria-pressed', !region);
+  }
+  $('worldLink').addEventListener('click', function (e) { e.preventDefault(); closeShop(); buildWorld(); $('world').classList.remove('hidden'); });
+  $('worldClose').addEventListener('click', function () { $('world').classList.add('hidden'); });
+  $('worldFree').addEventListener('click', function () { enterRegion(''); });
+  $('world').addEventListener('click', function (e) { if (e.target === this) $('world').classList.add('hidden'); });
   $('guideLink').addEventListener('click', function (e) { e.preventDefault(); $('guide').classList.remove('hidden'); });
   $('guideClose').addEventListener('click', function () { $('guide').classList.add('hidden'); });
   $('hapticLink').addEventListener('click', function (e) {
@@ -1033,6 +1104,7 @@
     { target: '.panel', title: '🌱 Place and Next', text: '<b>Place</b> is the item you will put down now, <b>Next</b> is the one after it. <b>Tap the ⇄ button between them to swap them</b> (tapping the Next item works too): free, as often as you like.' },
     { target: '#holdBtn', title: '📦 Reserve', text: 'Store the current item here for later. Tap it again to swap with what is stored. Also free.' },
     { target: '.hud .stat', title: '⭐ Score and coins', text: 'Every merge adds to your <b>score</b> and pays 🪙 <b>coins</b> (bigger groups pay more). Coins buy things in the shop. <b>Best</b> is your top score on this map.' },
+    { target: '#worldLink', title: '🗺️ World', text: 'Nine regions in a 3×3 grid, each its own game with its own save: the calm Meadow in the middle, harder ones further out. Build a 🏘️ village in the Meadow to open the next regions. <b>Free game</b> there is the normal New game.', when: function () { return $('worldLink').offsetParent !== null; } },
     { target: '#newBtn', title: '⟳ New game', text: 'Starts a new game: choose the <b>map</b> (Easy, Standard, Medium, Hard) the <b>bear mode</b> (Classic, Wild or No bears) and whether <b>foxes</b> appear. Switch both animals off for a calm game. It erases the game you are playing, and warns you first.' },
     { target: '.topinfo', title: '📋 Turn, rules and settings', text: 'The turn counter with the 📅 calendar and, once you own a bank, the ⏱ clock speed (tap to cycle 1×, 2×, 3×, paused) (10 turns = a month, 12 months = a year) and game seed, <b>How to play</b> (the rules and this tour), the <b>Item guide</b> (every item and what it merges into), the <b>🎨 Season</b> theme (Auto follows the calendar; tap to cycle spring, summer, autumn, winter), the 🏞️ <b>lake quest</b> line (tap it to open the shop) and, on phones with vibration, the <b>📳 Haptics</b> switch.' },
     { target: '#undoBtn', title: '↶ Undo', text: 'Takes back your last move, or your last 🚚 mover, 🔨 hammer or 🪤 trap use (a mover drop that merges at once, say). It costs a few coins, and only one step can be undone.' },
@@ -1101,7 +1173,7 @@
 
   // ---- start: ?#seed=N forces a reproducible game, otherwise resume the saved one
   var forced = seedFromHash();
-  if (forced) startNew(forced, { title: '' }); // a shared seed is the same game for everybody: no title
+  if (forced) { region = ''; store.set('tt-region', ''); startNew(forced, { title: '' }); } // a shared seed is the same free game for everybody: no title, no region
   else {
     state = loadSaved();
     if (state) render([]); else startNew();

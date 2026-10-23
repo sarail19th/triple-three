@@ -41,6 +41,10 @@ URL = f'http://localhost:{server.server_address[1]}/index.html'
 rng = random.Random(args.seed)
 
 
+def json_turn(page, key):
+    return page.evaluate('k => JSON.parse(localStorage.getItem(k)).turn', key)
+
+
 def state(page):
     return page.evaluate('window.ttDebug.state()')
 
@@ -917,6 +921,69 @@ with sync_playwright() as p:
     page.evaluate("localStorage.setItem('tt-title', JSON.stringify('hunter'))")
     page.tap('#newBtn'); page.tap('#newStart')
     assert state(page)['title'] == '', 'a remembered title that is locked again is not applied'
+
+    # ---- the world: a 3x3 grid of regions, each its own game and save; the Meadow is open, the rest unlock by building tiers in the neighbours
+    page.evaluate("localStorage.removeItem('tt-world'); localStorage.removeItem('tt-region'); ['c','n','e','s','w','nw','ne','sw','se'].forEach(k => localStorage.removeItem('tt-save-' + k))")
+    load([0] * 36, coins=50, top=3)
+    free_before = page.evaluate("(() => { const s = JSON.parse(localStorage.getItem('tt-save')); return [s.turn, s.coins, s.top, s.grid.join(',')].join('|'); })()")
+    page.tap('#worldLink')
+    assert page.locator('#world').is_visible() and page.locator('#worldGrid .regioncard').count() == 9
+    order = page.evaluate("[...document.querySelectorAll('#worldGrid .regioncard')].map(b => b.dataset.region)")
+    assert order == ['nw', 'n', 'ne', 'w', 'c', 'e', 'sw', 's', 'se'], order
+    opened = page.evaluate("[...document.querySelectorAll('#worldGrid .regioncard')].filter(b => !b.disabled).map(b => b.dataset.region)")
+    assert opened == ['c'], f'only the Meadow is open at the start: {opened}'
+    assert '🔒' in page.inner_text('#worldGrid .regioncard[data-region="n"]') and 'Meadow' in page.inner_text('#worldGrid .regioncard[data-region="n"]')
+    assert '🔒' in page.inner_text('#worldGrid .regioncard[data-region="nw"]') and 'Orchard or Isle' in page.inner_text('#worldGrid .regioncard[data-region="nw"]')
+    page.tap('#worldGrid .regioncard[data-region="c"]')
+    mead = check_consistent(page, 'meadow')
+    assert mead['map'] == 'easy' and mead['bears'] is False and mead['foxes'] is False and mead['turn'] == 0 and 'Meadow' in page.inner_text('#seed')
+    assert page.evaluate("JSON.parse(localStorage.getItem('tt-region'))") == 'c' and page.evaluate("(() => { const s = JSON.parse(localStorage.getItem('tt-save')); return [s.turn, s.coins, s.top, s.grid.join(',')].join('|'); })()") == free_before, 'the free game keeps its own slot'
+    assert page.locator('#world').is_hidden()
+    # play a turn in the Meadow: it lands in the Meadow's slot
+    tap_cell(page, 14, True)
+    assert state(page)['turn'] == 1 and json_turn(page, 'tt-save-c') == 1
+    # a village in the Meadow opens the four side regions (the toast says so); the corners stay shut until a school stands beside them
+    gc = [0] * 36; gc[0] = 7
+    page.evaluate("s => localStorage.setItem('tt-save-c', JSON.stringify(s))", {'ver': 2, 'wild': False, 'bridges': [], 'w': 6, 'h': 6, 'land': [], 'top': 7, 'grid': gc, 'cur': 1, 'next': 2, 'hold': 0, 'score': 0, 'coins': 30, 'turn': 3, 'over': False, 'rng': 77, 'seed': 77, 'undo': None, 'map': 'easy', 'bears': False, 'foxes': False})
+    page.reload(); page.wait_for_selector('#board .cell')
+    tap_cell(page, 20, True)
+    assert 'is open' in page.inner_text('#fx'), 'a toast announces the newly opened regions'
+    page.tap('#worldLink')
+    opened = page.evaluate("[...document.querySelectorAll('#worldGrid .regioncard')].filter(b => !b.disabled).map(b => b.dataset.region)")
+    assert opened == ['n', 'w', 'c', 'e', 's'], opened
+    assert 'T4' in page.inner_text('#worldGrid .regioncard[data-region="c"]')
+    # the Orchard: its own game (standard map, classic bears), a separate save; the Meadow game is untouched
+    page.tap('#worldGrid .regioncard[data-region="n"]')
+    orch = check_consistent(page, 'orchard')
+    assert orch['map'] == 'standard' and orch['bears'] is True and orch['wild'] is False and 'Orchard' in page.inner_text('#seed') and sum(1 for v in orch['grid'] if v) == 5
+    tap_cell(page, 0, True)
+    assert json_turn(page, 'tt-save-n') == 1 and json_turn(page, 'tt-save-c') == 4
+    page.tap('#worldLink'); page.tap('#worldGrid .regioncard[data-region="c"]')
+    back = check_consistent(page, 'back in the meadow')
+    assert back['turn'] == 4 and back['map'] == 'easy' and 'Meadow' in page.inner_text('#seed'), 'the Meadow is exactly where it was'
+    page.tap('#worldLink'); page.tap('#worldGrid .regioncard[data-region="n"]')
+    assert state(page)['turn'] == 1 and state(page)['map'] == 'standard', 'and so is the Orchard'
+    # a corner opens from a school in a side region; New game inside a region only restarts it on its own map
+    page.evaluate("localStorage.setItem('tt-world', JSON.stringify({ tops: { c: 7, n: 8 } }))")
+    page.tap('#worldLink')
+    opened = page.evaluate("[...document.querySelectorAll('#worldGrid .regioncard')].filter(b => !b.disabled).map(b => b.dataset.region)")
+    assert opened == ['nw', 'n', 'ne', 'w', 'c', 'e', 's'], opened
+    page.tap('#worldGrid .regioncard[data-region="nw"]')
+    corner = check_consistent(page, 'thornwood')
+    assert corner['map'] == 'hard' and corner['wild'] is True and corner['bears'] is True and 'Thornwood' in page.inner_text('#seed')
+    page.tap('#newBtn')
+    assert page.locator('#dlgSetup').is_hidden() and 'Restart' in page.inner_text('#newTitle') and 'Thornwood' in page.inner_text('#newTitle')
+    page.tap('#newStart')
+    again = state(page)
+    assert again['map'] == 'hard' and again['wild'] is True and again['turn'] == 0 and again['seed'] != corner['seed'], 'restarted on the same map with a new seed'
+    # back to the free game: the normal New game dialog again
+    page.tap('#worldLink'); page.tap('#worldFree')
+    assert page.evaluate("JSON.parse(localStorage.getItem('tt-region'))") == '' and page.evaluate("(() => { const s = JSON.parse(localStorage.getItem('tt-save')); return [s.turn, s.coins, s.top, s.grid.join(',')].join('|'); })()") == free_before
+    page.tap('#newBtn'); assert page.locator('#dlgSetup').is_visible() and page.inner_text('#newTitle') == 'New game'; page.tap('#newCancel')
+    # a locked region refuses
+    page.evaluate("localStorage.removeItem('tt-world')")
+    page.tap('#worldLink'); assert page.locator('#worldGrid .regioncard[data-region="se"]').is_disabled(); page.tap('#worldClose'); assert page.locator('#world').is_hidden()
+    page.evaluate("localStorage.removeItem('tt-region')")
 
     # ---- shop: higher tiers unlock once built; stock runs out -> price doubles (shown on the button)
     load([0] * 36, coins=500)

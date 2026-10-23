@@ -214,6 +214,11 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 .overlay { position: fixed; inset: 0; background: #000b; display: flex; align-items: center; justify-content: center; z-index: 10; padding: 16px; }
 .trbtns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 4px 0; } /* bank dialog: deposit row, then withdraw row */
 .trbtns .btn { padding: 8px 2px; font-size: 12px; }
+.worldgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 8px 0; }
+.regioncard { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 7px 2px 8px; font-size: 12px; line-height: 1.15; }
+.regioncard small { font-size: 10px; opacity: .85; }
+.regioncard:disabled { opacity: .5; }
+.regioncard:disabled .mini { filter: grayscale(.8) brightness(.7); }
 .dlgbtns { position: sticky; bottom: -20px; margin: 8px -20px -20px; padding: 10px 20px 20px; background: #14301f; } /* New game: Start stays in reach while the long dialog scrolls */
 .card { background: #14301f; border: 2px solid var(--accent); border-radius: 18px; padding: 20px; max-width: 380px; width: 100%; text-align: center; max-height: 100%; overflow: auto; }
 .card h2 { margin: 0 0 8px; font-size: 24px; }
