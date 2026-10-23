@@ -71,7 +71,7 @@ def check_consistent(page, where):
     assert len(tools) == max(3, st['top']) + 7 + len(bank), f'{where}: one button per unlocked tier + crystal (+ bank) + trap + hammer + mover + bridge + pond + reclaim, got {tools}'
     for tool in tools:
         slots = st['grid'].count(22) + [st['cur'], st['next'], st['hold']].count(22)
-        want = f"×{5 - len(st['bridges'])}" if tool == 'bridge' else f"×{16 - len(st['ponds'])}" if tool == 'pond' else f"×{28 - st['reclaimed']}" if tool == 'reclaim' else f"×{3 - slots}" if tool == '22' else f"×{max(0, st['stock'][tool])}"
+        want = f"×{5 - len(st['bridges'])}" if tool == 'bridge' else '∞' if tool == 'pond' else f"×{48 - st['reclaimed']}" if tool == 'reclaim' else f"×{3 - slots}" if tool == '22' else f"×{max(0, st['stock'][tool])}"
         assert page.inner_text(f'.tool[data-tool="{tool}"] .tb') == want, f'{where}: badge {tool}'
     return st
 
@@ -663,13 +663,13 @@ with sync_playwright() as p:
     # sample maps: every card has a 6x6 thumbnail; the selected category lists examples (3 for the random maps, 1 for the fixed ones)
     cnt = lambda sel: page.evaluate("s => [...document.querySelectorAll(s)].map(e => e.children.length)", sel)
     assert cnt('#newGame .mapcard .mini') == [36] * 4 + [64], 'a 6x6 sample on each map card (the island is 8x8)'
-    assert page.evaluate("[...document.querySelectorAll('#newGame .mapcard')].map(c => c.querySelectorAll('.mini span.w').length)") == [0, 0, 7, page.evaluate("document.querySelectorAll('#newGame .mapcard[data-map=hard] .mini span.w').length"), 28]
+    assert page.evaluate("[...document.querySelectorAll('#newGame .mapcard')].map(c => c.querySelectorAll('.mini span.w').length)")[:3] == [0, 0, 7]
     waters = {}
-    for m, n in [('easy', 1), ('standard', 3), ('medium', 1), ('hard', 3), ('island', 1)]:
+    for m, n in [('easy', 1), ('standard', 3), ('medium', 1), ('hard', 3), ('island', 3)]:
         page.tap(f'.opt[data-map="{m}"]')
         assert cnt('#mapSamples .mini') == [64 if m == 'island' else 36] * n, (m, cnt('#mapSamples .mini'))
         waters[m] = page.evaluate("[...document.querySelectorAll('#mapSamples .mini')].map(e => e.querySelectorAll('span.w').length)")
-    assert waters['easy'] == [0] and waters['standard'] == [0, 0, 0] and waters['medium'] == [7] and waters['island'] == [28] and all(6 <= w <= 9 for w in waters['hard']), waters
+    assert waters['easy'] == [0] and waters['standard'] == [0, 0, 0] and waters['medium'] == [7] and all(44 <= w <= 48 for w in waters['island']) and all(6 <= w <= 9 for w in waters['hard']), waters
     page.tap('.opt[data-map="hard"]')
     assert page.evaluate("new Set([...document.querySelectorAll('#mapSamples .mini')].map(e => e.textContent + [...e.children].map(c => c.className).join())).size") == 3, 'the hard samples differ'
     page.tap('.opt[data-map="standard"]'); page.tap('#newStart')
@@ -731,8 +731,8 @@ with sync_playwright() as p:
     g = [0] * 36; g[0] = 5
     load(g, coins=1000, top=4, score=0, milestone=0)
     open_shop(page)
-    assert page.locator('#pondBtn').is_visible() and page.inner_text('#pondBtn .tp') == '🪙60' and page.inner_text('#pondBtn .tb') == '×16'
-    assert 'Ponds 0/16' in page.inner_text('#pondNote') and '2×2' in page.inner_text('#pondNote') and '🪙200' in page.inner_text('#pondNote')
+    assert page.locator('#pondBtn').is_visible() and page.inner_text('#pondBtn .tp') == '🪙60' and page.inner_text('#pondBtn .tb') == '∞'
+    assert 'Ponds 0 ' in page.inner_text('#pondNote') and '3×3 block' in page.inner_text('#pondNote') and '2×2' in page.inner_text('#pondNote') and '🪙200' in page.inner_text('#pondNote')
     assert page.locator('#bridgeBtn').is_hidden(), 'no water on this map: no bridge tool'
     shop_tap(page, '#pondBtn')
     assert page.get_attribute('#pondBtn', 'aria-pressed') == 'true', page.get_attribute('#pondBtn', 'aria-pressed')
@@ -745,11 +745,11 @@ with sync_playwright() as p:
     assert page.locator('#board .cell.pond').count() == 1 and page.get_attribute('#board .cell[data-i="14"]', 'aria-label').endswith('water')
     assert page.get_attribute('#pondBtn', 'aria-pressed') == 'false' and page.locator('#board svg.water').count() == 1
     page.tap('#board .cell[data-i="14"]'); assert state(page)['turn'] == 3, 'nothing happens on a pond'
-    open_shop(page); assert page.inner_text('#pondBtn .tp') == '🪙80' and page.inner_text('#pondBtn .tb') == '×15' and 'Ponds 1/16' in page.inner_text('#pondNote')
+    open_shop(page); assert page.inner_text('#pondBtn .tp') == '🪙80' and page.inner_text('#pondBtn .tb') == '∞' and 'Ponds 1 · none pay yet' in page.inner_text('#pondNote')
     page.tap('#shopClose')
     before = state(page)['score']
     tap_cell(page, 20, True)
-    assert state(page)['score'] - before >= 4 * 0 + 14, 'the pond pays points every turn'   # ceil(BASE[4] / 20) = 14
+    assert state(page)['score'] == before, 'a lone pond pays nothing'
     # a poor player cannot dig
     assert page.evaluate("document.getElementById('bridgeBtn').hidden"), 'a dug pond cannot be bridged, so the tool stays hidden'
     # the lake quest is always in view at the top; tapping it opens the shop
@@ -757,6 +757,21 @@ with sync_playwright() as p:
     qb = page.evaluate("[document.getElementById('questLine').getBoundingClientRect().bottom, document.querySelector('.panel').getBoundingClientRect().top]")
     assert qb[0] <= qb[1], f'the quest line sits above the Place row: {qb}'
     page.tap('#questLine'); assert page.locator('#shopSheet').is_visible(); page.tap('#shopClose')
+    # eight ponds and the ninth one dug: the 3x3 block pays points and coins every turn (ceil(BASE[4] / 20) = 14 points, 1 coin each)
+    gb = [0] * 36
+    for i in (0, 1, 2, 6, 7, 8, 12, 13): gb[i] = 21
+    load(gb, coins=1000, top=4, score=0, milestone=0, lake=3, ponds=[0, 1, 2, 6, 7, 8, 12, 13])
+    open_shop(page); assert 'none pay yet' in page.inner_text('#pondNote'); page.tap('#shopClose')
+    shop_tap(page, '#pondBtn')
+    page.tap('#board .cell[data-i="14"]'); assert '+' in page.inner_text('#note') and 'pts' in page.inner_text('#note'), page.inner_text('#note')
+    page.tap('#board .cell[data-i="14"]')
+    block = check_consistent(page, 'pond block')
+    assert len(block['ponds']) == 9
+    open_shop(page); assert '9 pay' in page.inner_text('#pondNote'), page.inner_text('#pondNote'); page.tap('#shopClose')
+    before = state(page)
+    tap_cell(page, 35, True)
+    after9 = check_consistent(page, 'pond block pays')
+    assert after9['score'] - before['score'] == 9 * 14 and after9['coins'] - before['coins'] == 9, (before['score'], after9['score'], before['coins'], after9['coins'])
     # completing a 2x2 lake pays coins and points
     gq = [0] * 36; gq[0] = 21; gq[1] = 21; gq[6] = 21
     load(gq, coins=1000, top=4, score=0, milestone=0)
@@ -774,17 +789,18 @@ with sync_playwright() as p:
     assert page.locator('#bridgeBtn').is_hidden(), 'no water, no bridge tool'
     assert page.locator('#board svg.water').count() == 0 and page.evaluate('window.ttDebug.critters()') == [], 'no water, no water layer and no swans'
 
-    # ---- island: the biggest board with a ring of sea, no land to buy, reclaim sea next to the field
+    # ---- island: the biggest board, a small random island in the sea, no land to buy, reclaim sea next to the land
     page.tap('#newBtn'); page.tap('.opt[data-map="island"]'); page.tap('.opt[data-bears="classic"]'); page.tap('#newStart')
     isl = check_consistent(page, 'island map')
     assert isl['map'] == 'island' and isl['w'] == 8 and isl['h'] == 8 and isl['land'] == ['top', 'bottom', 'left', 'right'] and isl['reclaimed'] == 0
-    assert [i for i, v in enumerate(isl['grid']) if v == 21] == [i for i in range(64) if i < 8 or i >= 56 or i % 8 in (0, 7)], 'sea on the border only'
+    land = [i for i, v in enumerate(isl['grid']) if v == 0]
+    assert 16 <= len(land) <= 20 and isl['grid'].count(21) == 64 - len(land) and all(1 <= i // 8 <= 6 and 1 <= i % 8 <= 6 for i in land), 'a 16-20 tile island inside the sea'
     assert page.locator('#board .cell').count() == 64 and 'island map' in page.inner_text('#seed')
     assert page.evaluate("JSON.parse(localStorage.getItem('tt-map'))") == 'island'
     open_shop(page)
     assert page.evaluate("[...document.querySelectorAll('.tool.land')].every(b => b.offsetParent === null)"), 'no land buttons on the island'
     assert page.locator('#reclaimBtn').is_visible() and page.locator('#reclaimBtn').is_disabled() and page.evaluate("document.getElementById('bridgeBtn').hidden")
-    assert page.inner_text('#reclaimBtn .tp') == '🪙100' and page.inner_text('#reclaimBtn .tb') == '×28' and 'sea reclaimed 0/28' in page.inner_text('#landNote'), page.inner_text('#landNote')
+    assert page.inner_text('#reclaimBtn .tp') == '🪙60' and page.inner_text('#reclaimBtn .tb') == '×48' and 'sea reclaimed 0/48' in page.inner_text('#landNote'), page.inner_text('#landNote')
     page.tap('#shopClose')
     gi = [0] * 64
     for i in range(64):
@@ -799,15 +815,15 @@ with sync_playwright() as p:
     assert state(page)['reclaimed'] == 0 and state(page)['coins'] == 1000, 'a corner and a built tile are not targets'
     tap_cell(page, 3, True)
     rec = check_consistent(page, 'reclaim')
-    assert rec['reclaimed'] == 1 and rec['grid'][3] == 0 and rec['coins'] == 900 and rec['turn'] == 3, 'a free action that costs the first price'
+    assert rec['reclaimed'] == 1 and rec['grid'][3] == 0 and rec['coins'] == 940 and rec['turn'] == 3, 'a free action that costs the first price'
     assert page.get_attribute('#board .cell[data-i="3"]', 'aria-label').endswith('empty') or 'water' not in page.get_attribute('#board .cell[data-i="3"]', 'aria-label')
     assert page.get_attribute('#reclaimBtn', 'aria-pressed') == 'false'
-    open_shop(page); assert page.inner_text('#reclaimBtn .tp') == '🪙120' and page.inner_text('#reclaimBtn .tb') == '×27' and 'sea reclaimed 1/28' in page.inner_text('#landNote'); page.tap('#shopClose')
+    open_shop(page); assert page.inner_text('#reclaimBtn .tp') == '🪙70' and page.inner_text('#reclaimBtn .tb') == '×47' and 'sea reclaimed 1/48' in page.inner_text('#landNote'); page.tap('#shopClose')
     tap_cell(page, 3, True)
     built = check_consistent(page, 'build on reclaimed ground')
     assert built['grid'][3] == 1 and built['turn'] == 4, 'the new tile takes a building like any other'
     # a poor player cannot reclaim
-    load(gi, map='island', w=8, h=8, land=['top', 'bottom', 'left', 'right'], coins=99, top=4)
+    load(gi, map='island', w=8, h=8, land=['top', 'bottom', 'left', 'right'], coins=59, top=4)
     open_shop(page); assert page.locator('#reclaimBtn').is_disabled(); page.tap('#shopClose')
 
     # ---- treasury: 2% of a left game is saved; New game starts with None / Half / All of it

@@ -1223,12 +1223,24 @@ t('ponds: dug on an empty tile, dearer each time, pay points every turn, never t
   assert.strictEqual(TT.buyPond(withGrid({ [I(1, 1)]: 3 }, { coins: 100000 }), I(1, 1)), null);
   assert.strictEqual(TT.buyPond(r.state, I(2, 2)), null);
   assert.strictEqual(TT.buyPond(withGrid({}, { coins: TT.POND_PRICE[0] - 1 }), I(0, 0)), null);
-  // income: ponds x ceil(BASE[top] / 20) every turn, on top of what the merges pay
+  // income: a lone pond pays nothing, only dug ponds inside a 3x3 block of dug ponds pay (paying ponds x ceil(BASE[top] / 20) points and
+  // x max(1, round(PRICE[top] / 400)) coins every turn, on top of what the merges pay)
   s = r.state; s.cur = 1; s.next = 1;
   const t = TT.place(s, I(5, 5));
-  assert.strictEqual(t.state.score - s.score, TT.pondPoints(s)); assert.strictEqual(TT.pondPoints(s), Math.ceil(TT.BASE[4] / 20));
-  assert(t.events.some((e) => e.type === 'pondpts' && e.points === TT.pondPoints(s) && e.coins === TT.pondCoins(s)));
-  assert.strictEqual(t.state.coins - s.coins, TT.pondCoins(s)); assert.strictEqual(TT.pondCoins(s), Math.max(1, Math.round(TT.PRICE[4] / 400)), 'one pond pays coins too');
+  assert.strictEqual(TT.payingPonds(s), 0); assert.strictEqual(TT.pondPoints(s), 0); assert.strictEqual(TT.pondCoins(s), 0);
+  assert.strictEqual(t.state.score, s.score); assert.strictEqual(t.state.coins, s.coins); assert(!t.events.some((e) => e.type === 'pondpts'), 'one pond earns nothing');
+  const blockCells = [0, 1, 2, 6, 7, 8, 12, 13, 14], gw = {}; blockCells.forEach((i) => { gw[i] = TT.WATER; });
+  const pb = withGrid(gw, { coins: 100000, top: 4, ponds: blockCells.slice(), cur: 1, next: 1 });
+  assert.deepStrictEqual(TT.validate(pb), []); assert.strictEqual(TT.payingPonds(pb), 9);
+  assert.strictEqual(TT.pondPoints(pb), 9 * Math.ceil(TT.BASE[4] / 20)); assert.strictEqual(TT.pondCoins(pb), 9 * Math.max(1, Math.round(TT.PRICE[4] / 400)));
+  const tp = TT.place(pb, I(5, 5));
+  assert.strictEqual(tp.state.score - pb.score, TT.pondPoints(pb)); assert.strictEqual(tp.state.coins - pb.coins, TT.pondCoins(pb));
+  assert(tp.events.some((e) => e.type === 'pondpts' && e.points === TT.pondPoints(pb) && e.coins === TT.pondCoins(pb)));
+  // eight ponds round a hole pay nothing, a 3x4 block pays all twelve, and the map's own water never pays
+  const ring8 = withGrid({}, { ponds: [0, 1, 2, 6, 8, 12, 13, 14] }); assert.strictEqual(TT.payingPonds(ring8), 0);
+  assert.strictEqual(TT.payingPonds(withGrid({}, { ponds: [0, 1, 2, 3, 6, 7, 8, 9, 12, 13, 14, 15] })), 12);
+  const river = withGrid({ [I(0, 0)]: TT.WATER, [I(0, 1)]: TT.WATER, [I(0, 2)]: TT.WATER, [I(1, 0)]: TT.WATER, [I(1, 1)]: TT.WATER, [I(1, 2)]: TT.WATER, [I(2, 0)]: TT.WATER, [I(2, 1)]: TT.WATER, [I(2, 2)]: TT.WATER }, { top: 4 });
+  assert.strictEqual(TT.payingPonds(river), 0, 'water that was not dug never pays');
   // never the last free tile (a fuller board than that would end the game by your own hand)
   const g = {}; for (let i = 0; i < 34; i++) g[i] = (i % 2) ? 5 : 6;
   const tight = withGrid(g, { coins: 100000 });
@@ -1261,7 +1273,10 @@ t('lake quests: the pond that completes a 2x2, 3x3, 4x4 block of water pays a on
   [[0, 3], [1, 3], [2, 3], [3, 0], [3, 1], [3, 2], [3, 3]].forEach(([r, c]) => dig(r, c)); // 4x4
   assert.strictEqual(s.lake, 3); assert.strictEqual(TT.bestLake(s), 4); assert.strictEqual(s.ponds.length, 16);
   assert.strictEqual(ev.filter((e) => e.type === 'lake').length, 3, 'each quest pays once');
-  assert.strictEqual(TT.buyPond(s, I(5, 5)), null, 'at most ' + TT.MAX_PONDS + ' ponds');
+  // there is no limit any more: after the quests ponds go on, a gentler x1.15 per pond past the sixteenth
+  const more = TT.buyPond(s, I(5, 5)); assert(more, 'more water after every lake is built'); assert.strictEqual(more.events[0].price, TT.pondPriceAt(16));
+  assert(TT.pondPriceAt(16) > TT.POND_PRICE[15] && TT.pondPriceAt(16) < TT.POND_PRICE[15] * 1.2 && TT.pondPriceAt(17) > TT.pondPriceAt(16));
+  assert.strictEqual(more.state.lake, 3); assert.deepStrictEqual(TT.validate(more.state), []); assert.strictEqual(TT.payingPonds(s), 16, 'a 4x4 block pays all sixteen');
   assert.deepStrictEqual(TT.validate(s), []);
 });
 
@@ -1411,8 +1426,8 @@ t('loans: a stuck board is not over while a defaulted lot can be paid for or a l
 });
 
 t('pond income and lake bonuses add to the score but never trigger shop restocks', () => {
-  const g = {}; for (let i = 0; i < 6; i++) g[i] = TT.WATER;
-  const rich = withGrid(g, { top: 10, ponds: [0, 1, 2, 3, 4, 5], score: 399, cur: 1, next: 1 });
+  const g = {}, blk = [0, 1, 2, 6, 7, 8, 12, 13, 14]; blk.forEach((i) => { g[i] = TT.WATER; });
+  const rich = withGrid(g, { top: 10, ponds: blk, score: 399, cur: 1, next: 1 });
   assert.deepStrictEqual(TT.validate(rich), []);
   const r = TT.place(rich, I(5, 5));
   assert(r.state.score - rich.score === TT.pondPoints(rich) && TT.pondPoints(rich) > 10000, 'the ponds paid a lot');
@@ -1499,66 +1514,87 @@ t('animals can be switched off per game: no bears, no foxes, or calm (neither)',
 // ---- island map, reclaiming sea, the treasury
 const I8 = (r, c) => r * 8 + c;
 const island = (over = {}, seed = 3) => Object.assign(TT.newGame(seed, { map: 'island' }), { cur: 1, next: 1 }, over);
-t('island: the biggest board, a ring of sea, every side of land already bought', () => {
+// the original island (a ring of sea round the 6x6 field) still exists in old saves: a helper builds one
+const ringIsland = (over = {}) => { const s = island(over); s.grid = s.grid.map((v, i) => { const r = (i / 8) | 0, c = i % 8; return r === 0 || c === 0 || r === 7 || c === 7 ? TT.WATER : 0; }); return s; };
+t('island: the biggest board, all sea except a small random island of 16-20 tiles, every side of land already bought', () => {
   const s = TT.newGame(5, { map: 'island' });
   assert.strictEqual(s.map, 'island'); assert.strictEqual(s.w, 8); assert.strictEqual(s.h, 8); assert.strictEqual(s.w, TT.ISLAND_SIZE); assert.strictEqual(s.grid.length, 64);
   assert.deepStrictEqual(s.land, TT.SIDES); assert.deepStrictEqual(TT.validate(s), []);
-  s.grid.forEach((v, i) => { const r = (i / 8) | 0, c = i % 8; assert.strictEqual(v === TT.WATER, r === 0 || c === 0 || r === 7 || c === 7, 'sea only on the border, tile ' + i); });
-  assert.strictEqual(TT.freeCount(s), 36);
-  assert.strictEqual(JSON.stringify(s), JSON.stringify(TT.newGame(5, { map: 'island' })), 'same seed, same game');
+  const shape = (g) => g.map((v) => (v === TT.WATER ? '~' : '.')).join('');
+  const sizes = new Set(), shapes = new Set();
+  for (let seed = 1; seed <= 60; seed++) {
+    const o = TT.newGame(seed, { map: 'island' }), land = [];
+    o.grid.forEach((v, i) => { if (v === TT.EMPTY) land.push(i); else assert.strictEqual(v, TT.WATER, 'only land and sea'); });
+    assert(land.length >= 16 && land.length <= 20, 'island size ' + land.length); sizes.add(land.length); shapes.add(shape(o.grid));
+    assert.strictEqual(TT.freeCount(o), land.length); assert.deepStrictEqual(TT.validate(o), []);
+    land.forEach((i) => { const r = (i / 8) | 0, c = i % 8; assert(r >= 1 && r <= 6 && c >= 1 && c <= 6, 'the island keeps a tile of sea around the middle 6x6'); });
+    const seen = new Set([land[0]]), stack = [land[0]]; // one connected piece
+    while (stack.length) { const c = stack.pop(); [c - 8, c + 8, c % 8 ? c - 1 : -1, c % 8 < 7 ? c + 1 : -1].forEach((j) => { if (j >= 0 && j < 64 && o.grid[j] === TT.EMPTY && !seen.has(j)) { seen.add(j); stack.push(j); } }); }
+    assert.strictEqual(seen.size, land.length, 'the island is connected');
+    assert.strictEqual(JSON.stringify(o), JSON.stringify(TT.newGame(seed, { map: 'island' })), 'same seed, same island');
+  }
+  assert.deepStrictEqual([...sizes].sort((a, b) => a - b), [16, 17, 18, 19, 20], 'every size from 16 to 20 turns up'); assert(shapes.size > 30, 'different seeds, different shapes: ' + shapes.size);
   for (const side of TT.SIDES) assert.strictEqual(TT.buyLand(Object.assign(s, { coins: 99999 }), side), null, 'no land can be bought on the island');
   assert.strictEqual(TT.landPrice(s), null); assert.strictEqual(TT.canLand(s), false);
   assert.deepStrictEqual(TT.bridgeSpots(Object.assign({}, s, { coins: 99999 })), [], 'no bridges over the sea');
   assert.strictEqual(TT.validate(Object.assign({}, s, { w: 6, h: 6, grid: s.grid.slice(0, 36) })).length > 0, true);
+  assert.deepStrictEqual(TT.validate(ringIsland()), [], 'the old ring island is still a valid game');
   // the other maps are untouched by the island code
   ['easy', 'standard', 'medium', 'hard'].forEach((m) => { const o = TT.newGame(5, { map: m }); assert.strictEqual(o.w, 6); assert.strictEqual(o.reclaimed, 0); assert.strictEqual(TT.reclaimSpots(Object.assign(o, { coins: 99999 })).length, 0); assert.strictEqual(TT.canReclaim(o), false); });
 });
 
 t('island: reclaiming a sea tile next to the land is a free action that costs coins, dearer every time', () => {
-  let s = island({ coins: 5000 });
+  let s = ringIsland({ coins: 5000 });
   const spots = TT.reclaimSpots(s);
   assert.strictEqual(spots.length, 24, 'the four corners touch no land: 6 + 6 + 6 + 6 sea tiles next to the field');
   [0, 7, 56, 63].forEach((c) => assert(!spots.includes(c), 'a corner of the sea is not next to the land'));
   assert(spots.every((i) => s.grid[i] === TT.WATER));
-  assert.strictEqual(TT.reclaimPrice(s), TT.RECLAIM_PRICE[0]); assert.strictEqual(TT.RECLAIM_PRICE[0], 100);
+  assert.strictEqual(TT.reclaimPrice(s), TT.RECLAIM_PRICE[0]); assert.strictEqual(TT.RECLAIM_PRICE[0], 60);
   assert.strictEqual(TT.buyReclaim(s, 9), null, 'a land tile is refused'); assert.strictEqual(TT.buyReclaim(s, 0), null, 'a corner is refused');
   const r = TT.buyReclaim(s, 3);
-  assert(r); assert.strictEqual(r.state.grid[3], TT.EMPTY); assert.strictEqual(r.state.coins, 5000 - 100); assert.strictEqual(r.state.reclaimed, 1);
+  assert(r); assert.strictEqual(r.state.grid[3], TT.EMPTY); assert.strictEqual(r.state.coins, 5000 - 60); assert.strictEqual(r.state.reclaimed, 1);
   assert.strictEqual(r.state.turn, s.turn, 'a free action'); assert.strictEqual(r.state.rng, s.rng, 'no random numbers');
-  assert.strictEqual(r.events[0].type, 'reclaim'); assert.strictEqual(r.events[0].at, 3); assert.strictEqual(r.events[0].price, 100);
+  assert.strictEqual(r.events[0].type, 'reclaim'); assert.strictEqual(r.events[0].at, 3); assert.strictEqual(r.events[0].price, 60);
   assert.deepStrictEqual(TT.validate(r.state), []); assert.strictEqual(TT.freeCount(r.state), 37);
-  assert.strictEqual(TT.reclaimPrice(r.state), TT.RECLAIM_PRICE[1]); assert(TT.RECLAIM_PRICE[1] > 100);
+  assert.strictEqual(TT.reclaimPrice(r.state), TT.RECLAIM_PRICE[1]); assert(TT.RECLAIM_PRICE[1] > 60);
   // the new tile is land: it is a legal place to build, and its sea neighbours next to it are new spots (the corner stays out of reach until then)
   assert(TT.reclaimSpots(r.state).includes(2) && TT.reclaimSpots(r.state).includes(4));
   const built = TT.place(r.state, 3); assert(built); assert.strictEqual(built.state.grid[3], 1);
   s = r.state;
   const c = TT.buyReclaim(Object.assign({}, s, { coins: 5000 }), 8); assert(c, 'the tile left of the first reclaimed one on the second row of the sea (row 1, col 0)');
   // a poor player, and a game that is over, cannot reclaim
-  assert.strictEqual(TT.buyReclaim(island({ coins: 99 }), 3), null); assert.strictEqual(TT.canReclaim(island({ coins: 99 })), false);
-  assert.strictEqual(TT.buyReclaim(island({ coins: 5000, over: true }), 3), null);
+  assert.strictEqual(TT.buyReclaim(ringIsland({ coins: 59 }), 3), null); assert.strictEqual(TT.canReclaim(ringIsland({ coins: 59 })), false);
+  assert.strictEqual(TT.buyReclaim(ringIsland({ coins: 5000, over: true }), 3), null);
   // dug ponds are not sea
-  const pd = TT.buyPond(island({ coins: 5000 }), I8(1, 1)); assert(pd); assert(!TT.reclaimSpots(pd.state).includes(I8(1, 1)));
+  const pd = TT.buyPond(ringIsland({ coins: 5000 }), I8(1, 1)); assert(pd); assert(!TT.reclaimSpots(pd.state).includes(I8(1, 1)));
   // undo takes the reclaimed tile back together with the step before it
-  const placed = TT.place(island({ coins: 5000 }), I8(3, 3));
+  const placed = TT.place(ringIsland({ coins: 5000 }), I8(3, 3));
   const rr = TT.buyReclaim(placed.state, 3); const un = TT.undo(rr.state);
   assert(un && un.grid[3] === TT.WATER && un.reclaimed === 0, 'undo restores the sea');
-  // there are only 28 sea tiles, and the price list has 28 entries
-  assert.strictEqual(TT.MAX_RECLAIM, 28); assert.strictEqual(TT.RECLAIM_PRICE.length, 28);
-  let all = island({ coins: 10 ** 9 }), guard = 0, spot;
+  // the whole board minus the smallest island (48) can be reclaimed: the price list has that many entries
+  assert.strictEqual(TT.MAX_RECLAIM, 48); assert.strictEqual(TT.RECLAIM_PRICE.length, 48);
+  let all = ringIsland({ coins: 10 ** 9 }), guard = 0, spot;
   while ((spot = TT.reclaimSpots(all)[0]) !== undefined && guard++ < 100) { all = TT.buyReclaim(all, spot).state; assert.deepStrictEqual(TT.validate(all), []); }
-  assert.strictEqual(all.reclaimed, 28); assert(all.grid.every((v) => v === 0)); assert.strictEqual(TT.reclaimPrice(all), null); assert.strictEqual(TT.canReclaim(all), false);
+  assert.strictEqual(all.reclaimed, 28, 'the ring has 28 sea tiles'); assert(all.grid.every((v) => v === 0)); assert.strictEqual(TT.canReclaim(all), false);
+  // a random island grows tile by tile until the whole 8x8 board is land
+  let big = island({ coins: 10 ** 9 }); const start = big.grid.filter((v) => v === 0).length; guard = 0;
+  while ((spot = TT.reclaimSpots(big)[0]) !== undefined && guard++ < 100) { big = TT.buyReclaim(big, spot).state; assert.deepStrictEqual(TT.validate(big), []); }
+  assert.strictEqual(big.reclaimed, 64 - start); assert(big.reclaimed >= 44 && big.reclaimed <= 48); assert(big.grid.every((v) => v === 0)); assert.strictEqual(TT.reclaimPrice(big), big.reclaimed < 48 ? TT.RECLAIM_PRICE[big.reclaimed] : null);
+  // a freshly drawn island: spots are exactly the sea tiles that touch the land
+  const fresh = island({ coins: 1000 }), sp = TT.reclaimSpots(fresh);
+  const touching = fresh.grid.map((v, i) => i).filter((i) => fresh.grid[i] === TT.WATER && [i - 8, i + 8, i % 8 ? i - 1 : -1, i % 8 < 7 ? i + 1 : -1].some((j) => j >= 0 && j < 64 && fresh.grid[j] === 0));
+  assert.deepStrictEqual(sp, touching); assert(sp.length >= 8);
 });
 t('island: a full board with coins for the sea is not over (reclaiming is a way out), without them it is', () => {
-  const g = {}; for (let i = 0; i < 64; i++) { const r = (i / 8) | 0, c = i % 8; if (r > 0 && c > 0 && r < 7 && c < 7) g[i] = ((r + c) % 2) ? 5 : 6; }
-  const full = (coins, stock) => { const s = island({ coins }); for (const k in g) s.grid[k] = g[k]; s.stock.hammer = stock; return s; };
-  const rich = full(100, 0);
-  assert.strictEqual(TT.freeCount(rich), 0); assert.strictEqual(TT.isOver(rich), false, '100 coins buys the first tile of sea');
-  const poor = full(99, 0); assert.strictEqual(TT.isOver(poor), true);
-  assert.strictEqual(TT.isOver(full(99, 5)), false, 'a hammer (20 coins) is still a way out');
+  const full = (coins, stock) => { const s = island({ coins }); s.grid = s.grid.map((v, i) => (v === 0 ? ((i % 2) ? 5 : 6) : v)); s.stock.hammer = stock; return s; };
+  const rich = full(60, 0);
+  assert.strictEqual(TT.freeCount(rich), 0); assert.strictEqual(TT.isOver(rich), false, '60 coins buys the first tile of sea');
+  assert.strictEqual(TT.isOver(full(59, 0)), true);
+  assert.strictEqual(TT.isOver(full(59, 5)), false, 'a hammer (20 coins) is still a way out');
 });
 
 t('island: lake quests only count the ponds you dug, never the sea around the island', () => {
-  const s = island({ coins: 100000 });
+  const s = ringIsland({ coins: 100000 });
   assert.strictEqual(TT.bestLake(s), 0, 'the sea ring is no lake');
   // two ponds next to the sea would complete a 2x2 block of water if the sea counted
   let r = TT.buyPond(s, I8(1, 3)); r = TT.buyPond(r.state, I8(1, 4));
@@ -1574,7 +1610,7 @@ t('island: old saves and other maps gain reclaimed / boost = 0, and validate gua
   const legacy = JSON.parse(JSON.stringify(TT.newGame(2))); delete legacy.reclaimed; delete legacy.boost;
   const m = TT.migrate(legacy); assert.strictEqual(m.reclaimed, 0); assert.strictEqual(m.boost, 0); assert.deepStrictEqual(TT.validate(m), []);
   assert(TT.validate(Object.assign({}, TT.newGame(2), { reclaimed: 1 })).length, 'only an island can have reclaimed sea');
-  assert(TT.validate(Object.assign({}, island(), { reclaimed: 29 })).length);
+  assert(TT.validate(Object.assign({}, island(), { reclaimed: 49 })).length);
   assert(TT.validate(Object.assign({}, TT.newGame(2), { boost: -1 })).length); assert(TT.validate(Object.assign({}, TT.newGame(2), { boost: 1001 })).length);
 });
 
