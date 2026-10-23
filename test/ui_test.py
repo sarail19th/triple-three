@@ -13,7 +13,7 @@ from playwright.sync_api import sync_playwright
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 DIST = os.path.join(ROOT, 'dist')
-EMOJI = ['', '🌱', '🌿', '🌳', '🏕️', '🛖', '🏠', '🏘️', '🏫', '🏥', '🏬', '💵', '🐻', '🪦', '⛪', '🕌', '💎', '💰', '🦊', '🐻', '🐻', '', '🏦', '🏚️']
+EMOJI = ['', '🌱', '🌿', '🌳', '🏕️', '🛖', '🏠', '🏘️', '🏫', '🏥', '🏬', '💵', '🐻', '🪦', '⛪', '🕌', '💎', '💰', '🦊', '🐻', '🐻', '', '🏦', '🏚️', '⛰️', '🕳️']
 BEAR, TOMB, CHURCH, CRYSTAL, TREASURE, FOX = 12, 13, 14, 16, 17, 18
 LAND_PRICE = [150, 400, 1000, 2500]
 MIN_TURNS = 50   # random turns that must be played
@@ -67,11 +67,11 @@ def check_consistent(page, where):
     assert dom['undoDisabled'] == (st['undo'] is None or st['undo']['coins'] < 5), f'{where}: undo button state'
     tools = page.evaluate("[...document.querySelectorAll('.tool[data-tool]')].map(b => b.dataset.tool)")
     bank = ['22'] if st['top'] >= 7 else []   # the bank is sold once a village has stood on the board
-    assert tools[:3] == ['1', '2', '3'] and tools[-(7 + len(bank)):] == ['16'] + bank + ['trap', 'hammer', 'move', 'bridge', 'pond', 'reclaim'], f'{where}: shop items {tools}'
-    assert len(tools) == max(3, st['top']) + 7 + len(bank), f'{where}: one button per unlocked tier + crystal (+ bank) + trap + hammer + mover + bridge + pond + reclaim, got {tools}'
+    assert tools[:3] == ['1', '2', '3'] and tools[-(8 + len(bank)):] == ['16'] + bank + ['trap', 'hammer', 'move', 'bridge', 'pond', 'reclaim', 'level'], f'{where}: shop items {tools}'
+    assert len(tools) == max(3, st['top']) + 8 + len(bank), f'{where}: one button per unlocked tier + crystal (+ bank) + trap + hammer + mover + bridge + pond + reclaim + level, got {tools}'
     for tool in tools:
         slots = st['grid'].count(22) + [st['cur'], st['next'], st['hold']].count(22)
-        want = f"×{8 - len(st['bridges'])}" if tool == 'bridge' else '∞' if tool == 'pond' else f"×{48 - st['reclaimed']}" if tool == 'reclaim' else f"×{3 - slots}" if tool == '22' else f"×{max(0, st['stock'][tool])}"
+        want = f"×{8 - len(st['bridges'])}" if tool == 'bridge' else '∞' if tool == 'pond' else f"×{48 - st['reclaimed']}" if tool == 'reclaim' else f"×{st['grid'].count(24)}" if tool == 'level' else f"×{3 - slots}" if tool == '22' else f"×{max(0, st['stock'][tool])}"
         assert page.inner_text(f'.tool[data-tool="{tool}"] .tb') == want, f'{where}: badge {tool}'
     return st
 
@@ -205,7 +205,7 @@ with sync_playwright() as p:
             assert after['undo'] is None and page.locator('#undoBtn').is_disabled(), 'single-level undo'
             continue
         if roll < 0.20:  # shop: buy grass / bush / tree if enabled
-            tool = rng.choice([t for t in page.evaluate("[...document.querySelectorAll('.tool[data-tool]')].map(b => b.dataset.tool)") if t not in ('trap', 'hammer', 'move', 'bridge', 'pond', 'reclaim')])
+            tool = rng.choice([t for t in page.evaluate("[...document.querySelectorAll('.tool[data-tool]')].map(b => b.dataset.tool)") if t not in ('trap', 'hammer', 'move', 'bridge', 'pond', 'reclaim', 'level')])
             btn = page.locator(f'.tool[data-tool="{tool}"]')
             price = page.evaluate('([s, t]) => TT.priceOf(s, +t)', [st, tool])
             if btn.is_enabled():
@@ -656,19 +656,19 @@ with sync_playwright() as p:
     page.tap('#newBtn')
     assert state(page)['turn'] == 0 and page.locator('#newWarn').is_hidden(), 'nothing to lose on a fresh game: no warning'
     assert page.inner_text('#newStart') == 'Start' and 'danger' not in page.get_attribute('#newStart', 'class')
-    for m in ['easy', 'standard', 'medium', 'hard', 'island']:
+    for m in ['easy', 'standard', 'medium', 'hard', 'highlands', 'island']:
         page.tap(f'.opt[data-map="{m}"]')
         assert page.get_attribute(f'.opt[data-map="{m}"]', 'aria-pressed') == 'true' and page.inner_text('#mapNote') != ''
     # sample maps: every card has a 6x6 thumbnail; the selected category lists examples (3 for the random maps, 1 for the fixed ones)
     cnt = lambda sel: page.evaluate("s => [...document.querySelectorAll(s)].map(e => e.children.length)", sel)
-    assert cnt('#newGame .mapcard .mini') == [36] * 4 + [64], 'a 6x6 sample on each map card (the island is 8x8)'
+    assert cnt('#newGame .mapcard .mini') == [36] * 5 + [64], 'a 6x6 sample on each map card (the island is 8x8)'
     assert page.evaluate("[...document.querySelectorAll('#newGame .mapcard')].map(c => c.querySelectorAll('.mini span.w').length)")[:3] == [0, 0, 7]
     waters = {}
-    for m, n in [('easy', 1), ('standard', 3), ('medium', 1), ('hard', 3), ('island', 3)]:
+    for m, n in [('easy', 1), ('standard', 3), ('medium', 1), ('hard', 3), ('highlands', 3), ('island', 3)]:
         page.tap(f'.opt[data-map="{m}"]')
         assert cnt('#mapSamples .mini') == [64 if m == 'island' else 36] * n, (m, cnt('#mapSamples .mini'))
         waters[m] = page.evaluate("[...document.querySelectorAll('#mapSamples .mini')].map(e => e.querySelectorAll('span.w').length)")
-    assert waters['easy'] == [0] and waters['standard'] == [0, 0, 0] and waters['medium'] == [7] and all(44 <= w <= 48 for w in waters['island']) and all(6 <= w <= 9 for w in waters['hard']), waters
+    assert waters['easy'] == [0] and waters['standard'] == [0, 0, 0] and waters['medium'] == [7] and waters['highlands'] == [0, 0, 0] and all(44 <= w <= 48 for w in waters['island']) and all(6 <= w <= 9 for w in waters['hard']), waters
     page.tap('.opt[data-map="hard"]')
     assert page.evaluate("new Set([...document.querySelectorAll('#mapSamples .mini')].map(e => e.textContent + [...e.children].map(c => c.className).join())).size") == 3, 'the hard samples differ'
     page.tap('.opt[data-map="standard"]'); page.tap('#newStart')
@@ -796,6 +796,31 @@ with sync_playwright() as p:
     assert easy['map'] == 'easy' and easy['grid'] == [0] * 36 and 'map' not in page.inner_text('#seed')
     assert page.locator('#bridgeBtn').is_hidden(), 'no water, no bridge tool'
     assert page.locator('#board svg.water').count() == 0 and page.evaluate('window.ttDebug.critters()') == [], 'no water, no water layer and no swans'
+
+    # ---- highlands: mountains (levelled with the Level tool) and holes (swallow an item, then flat)
+    page.tap('#newBtn'); page.tap('.opt[data-map="highlands"]'); page.tap('.opt[data-bears="classic"]'); page.tap('#newStart')
+    hl = check_consistent(page, 'highlands map')
+    assert hl['map'] == 'highlands' and 4 <= hl['grid'].count(24) <= 6 and 3 <= hl['grid'].count(25) <= 5 and 'highlands map' in page.inner_text('#seed')
+    assert page.locator('#board .cell[data-c="24"]').count() == hl['grid'].count(24) and page.locator('#board .cell[data-c="25"]').count() == hl['grid'].count(25)
+    open_shop(page)
+    assert page.locator('#levelBtn').is_visible() and page.inner_text('#levelBtn .tp') == '🪙150' and page.inner_text('#levelBtn .tb') == f"×{hl['grid'].count(24)}" and page.locator('#levelBtn').is_disabled(), 'visible, but 10 coins is too little'
+    page.tap('#shopClose')
+    gh = [0] * 36; gh[8] = 24; gh[20] = 24; gh[14] = 25; gh[15] = 25
+    load(gh, map='highlands', coins=1000, top=3, cur=2, next=1)
+    page.tap('#board .cell[data-i="8"]'); page.tap('#board .cell[data-i="8"]')
+    assert state(page)['grid'][8] == 24 and state(page)['turn'] == 3, 'nothing can be placed on a mountain'
+    tap_cell(page, 14, True)                                   # the hole swallows the bush
+    fill = check_consistent(page, 'fill a hole')
+    assert fill['grid'][14] == 0 and fill['turn'] == 4 and fill['grid'].count(25) == 1 and fill['cur'] == 1, 'a hole swallows the item, the tile is flat, a turn passes'
+    shop_tap(page, '#levelBtn')
+    assert page.get_attribute('#levelBtn', 'aria-pressed') == 'true' and page.locator('#board .cell.spot').count() == 2 and 'mountain' in page.inner_text('#note'), page.inner_text('#note')
+    page.tap('#board .cell[data-i="15"]')                      # a hole is not a level target
+    assert state(page)['leveled'] == 0
+    tap_cell(page, 8, True)
+    lev = check_consistent(page, 'level a mountain')
+    assert lev['leveled'] == 1 and lev['grid'][8] == 0 and lev['coins'] == 850 and lev['turn'] == 4, 'a free action that costs the first price'
+    open_shop(page); assert page.inner_text('#levelBtn .tp') == '🪙190' and page.inner_text('#levelBtn .tb') == '×1'; page.tap('#shopClose')
+    open_shop(page); assert page.locator('#hammerBtn').is_disabled(), 'only a mountain is left: the hammer has nothing to smash'; page.tap('#shopClose')
 
     # ---- island: the biggest board, a small random island in the sea, no land to buy, reclaim sea next to the land
     page.tap('#newBtn'); page.tap('.opt[data-map="island"]'); page.tap('.opt[data-bears="classic"]'); page.tap('#newStart')

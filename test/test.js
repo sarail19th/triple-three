@@ -1665,6 +1665,63 @@ t('long bridge: 3 or more bridged tiles in a straight line pay coins every turn'
   assert(!TT.place(medium({ cur: 1, next: 1 }), I(0, 0)).events.some((e) => e.type === 'bridgepay'));
 });
 
+t('highlands: mountains and holes on a 6x6 field, reproducible per seed', () => {
+  const sizes = new Set();
+  for (let seed = 1; seed <= 60; seed++) {
+    const h = TT.newGame(seed, { map: 'highlands' });
+    const m = h.grid.filter((v) => v === TT.MOUNTAIN).length, o = h.grid.filter((v) => v === TT.HOLE).length;
+    assert(m >= 4 && m <= 6 && o >= 3 && o <= 5, `seed ${seed}: ${m} mountains, ${o} holes`); sizes.add(m + ',' + o);
+    assert.strictEqual(h.w, 6); assert.strictEqual(h.leveled, 0); assert.deepStrictEqual(TT.validate(h), []);
+    assert.strictEqual(h.grid.filter((v) => v !== 0 && v !== TT.MOUNTAIN && v !== TT.HOLE).length, 0, 'nothing else on the map');
+    assert.strictEqual(JSON.stringify(h), JSON.stringify(TT.newGame(seed, { map: 'highlands' })));
+  }
+  assert(sizes.size >= 6, 'the counts vary: ' + sizes.size);
+  assert.strictEqual(TT.EMOJI[TT.MOUNTAIN], '⛰️'); assert.strictEqual(TT.EMOJI[TT.HOLE], '🕳️'); assert.strictEqual(TT.NAME[TT.MOUNTAIN], 'mountain'); assert.strictEqual(TT.NAME[TT.HOLE], 'hole');
+  assert(TT.MAPS.includes('highlands'));
+});
+
+t('highlands: a hole swallows the placed item and becomes flat; a mountain is a wall until it is levelled', () => {
+  const cells = { [I(2, 2)]: TT.HOLE, [I(3, 3)]: TT.MOUNTAIN, [I(0, 0)]: 3 };
+  const s = withGrid(cells, { cur: 2, next: 1, coins: 1000 });
+  // the hole
+  const pv = TT.preview(s, I(2, 2)); assert(pv && pv.fill === true && pv.final === TT.EMPTY && !pv.merged);
+  const r = TT.place(s, I(2, 2));
+  assert(r); assert.strictEqual(r.state.grid[I(2, 2)], TT.EMPTY, 'flat now'); assert.strictEqual(r.state.turn, s.turn + 1, 'a turn passes'); assert.strictEqual(r.state.cur, 1);
+  assert(r.events.some((e) => e.type === 'fill' && e.at === I(2, 2) && e.item === 2)); assert(!r.events.some((e) => e.type === 'merge'), 'no merge: the item is used up');
+  assert.deepStrictEqual(TT.validate(r.state), []); assert.strictEqual(TT.undo(r.state).grid[I(2, 2)], TT.HOLE, 'undo gives the hole back');
+  // anything can fall in: a bear, a bank, a gem
+  [TT.BEAR, TT.BANK, TT.CRYSTAL, TT.FOX].forEach((it) => { const t2 = TT.place(withGrid({ [I(2, 2)]: TT.HOLE }, { cur: it, next: 1, top: 7 }), I(2, 2)); assert(t2, 'item ' + it); assert.strictEqual(TT.bankCount(t2.state), 0, 'a bank that falls in is gone'); assert(!t2.state.grid.some((v) => v === TT.HOLE), 'the hole is filled'); assert.deepStrictEqual(TT.validate(t2.state), []); });
+  // the mountain: no place, no preview, no hammer, no mover, no animals
+  assert.strictEqual(TT.place(s, I(3, 3)), null); assert.strictEqual(TT.preview(s, I(3, 3)), null);
+  assert.strictEqual(TT.hammer(s, I(3, 3)), null, 'the hammer leaves mountains alone'); assert.strictEqual(TT.hammer(s, I(2, 2)), null, 'and holes');
+  assert.strictEqual(TT.move(s, I(3, 3), I(5, 5)), null); assert.strictEqual(TT.move(s, I(0, 0), I(2, 2)), null, 'nothing is moved into a hole'); assert(!TT.isMovable(TT.MOUNTAIN) && !TT.isMovable(TT.HOLE) && TT.isTerrain(TT.HOLE));
+  // levelling
+  assert.deepStrictEqual(TT.levelSpots(s), [I(3, 3)]); assert.strictEqual(TT.levelPrice(s), 150);
+  const lv = TT.buyLevel(s, I(3, 3));
+  assert(lv); assert.strictEqual(lv.state.grid[I(3, 3)], TT.EMPTY); assert.strictEqual(lv.state.coins, 850); assert.strictEqual(lv.state.leveled, 1); assert.strictEqual(lv.state.turn, s.turn, 'free action');
+  assert.deepStrictEqual(lv.events, [{ type: 'level', at: I(3, 3), price: 150 }]); assert.deepStrictEqual(TT.validate(lv.state), []);
+  assert.strictEqual(TT.levelPrice(lv.state), 190, 'dearer every time: 150, 190, 230, ...'); assert(TT.levelPrice({ leveled: 2 }) > TT.levelPrice({ leveled: 1 }));
+  assert.strictEqual(TT.buyLevel(s, I(0, 0)), null); assert.strictEqual(TT.buyLevel(withGrid(cells, { coins: 149 }), I(3, 3)), null, 'too poor');
+  assert.strictEqual(TT.canLevel(withGrid({ [I(0, 0)]: 3 }, { coins: 9999 })), false, 'no mountain, no level');
+  // animals walk around mountains and holes (they are walls) and a pocket sealed by them is trapped
+  const sealed = withGrid({ [I(0, 0)]: TT.BEAR, [I(0, 1)]: TT.MOUNTAIN, [I(1, 0)]: TT.HOLE }, { cur: 1, next: 1 });
+  const tr = TT.place(sealed, I(5, 5)); assert(tr.events.some((e) => e.type === 'trapped' && e.at === I(0, 0)), 'a bear boxed in by a mountain and a hole is trapped');
+  // old saves
+  const legacy = JSON.parse(JSON.stringify(TT.newGame(2))); delete legacy.leveled; const mg = TT.migrate(legacy); assert.strictEqual(mg.leveled, 0); assert.deepStrictEqual(TT.validate(mg), []);
+  assert(TT.validate(Object.assign({}, TT.newGame(2), { leveled: -1 })).length); assert(TT.validate(Object.assign(TT.newGame(2), { grid: new Array(36).fill(26) })).length, 'unknown code');
+});
+
+t('highlands: a full board is not over while a hole can take an item or a mountain can be levelled', () => {
+  const full = (over = {}, extra = {}) => { const g = {}; for (let i = 0; i < 36; i++) g[i] = (((i / 6) | 0) + (i % 6)) % 2 ? 5 : 6; Object.assign(g, extra); return withGrid(g, Object.assign({ stock: Object.assign({}, blank().stock, { hammer: 0 }), coins: 0 }, over)); };
+  assert.strictEqual(TT.isOver(full()), true, 'the control: full, no hammer, no coins');
+  assert.strictEqual(TT.isOver(full({}, { 7: TT.HOLE })), false, 'a hole can take an item');
+  assert.strictEqual(TT.isOver(full({ coins: 150 }, { 7: TT.MOUNTAIN })), false, '150 coins levels the mountain');
+  assert.strictEqual(TT.isOver(full({ coins: 149 }, { 7: TT.MOUNTAIN })), true, 'one coin short');
+  const lastHole = TT.place(full({}, { 7: TT.HOLE, 8: 0 }), 8); assert(lastHole); assert.strictEqual(lastHole.state.over, false, 'the hole is still there to play');
+  const filled = TT.place(withGrid(Object.assign({}, ...Array.from({ length: 36 }, (_, i) => ({ [i]: (((i / 6) | 0) + (i % 6)) % 2 ? 5 : 6 })), { 7: TT.HOLE }), { cur: 1, next: 1, coins: 0, stock: Object.assign({}, blank().stock, { hammer: 0 }) }), 7);
+  assert(filled); assert.strictEqual(filled.state.over, false, 'filling the hole leaves an empty tile');
+});
+
 t('treasury: a bank lets you deposit coins (5% fee, cap 10000) and withdraw them in any game', () => {
   assert.strictEqual(TT.TREASURY_FEE, 0.05); assert.strictEqual(TT.TREASURY_CAP, 10000);
   assert.strictEqual(TT.treasuryNet(1000), 950); assert.strictEqual(TT.treasuryNet(19), 19, 'a deposit under 20 coins pays no fee'); assert.strictEqual(TT.treasuryNet(20), 19);
@@ -1698,7 +1755,7 @@ t('treasury: a bank lets you deposit coins (5% fee, cap 10000) and withdraw them
 });
 
 t('fuzz: 400 random games keep state valid and always terminate', () => {
-  let loansUsed = 0, defaults = 0, banksBought = 0, maxTurns = 0, merges = 0, trapped = 0, churches = 0, hammers = 0, lands = 0, foxMoves = 0, maxTier = 0, moves = 0, growls = 0, mauls = 0, cubs = 0, bridges = 0, reclaims = 0;
+  let loansUsed = 0, defaults = 0, banksBought = 0, maxTurns = 0, merges = 0, trapped = 0, churches = 0, hammers = 0, lands = 0, foxMoves = 0, maxTier = 0, moves = 0, growls = 0, mauls = 0, cubs = 0, bridges = 0, reclaims = 0, levels = 0, fills = 0;
   for (let seed = 1; seed <= 400; seed++) {
     let s = TT.newGame(seed, { wild: seed % 2 === 0, map: TT.MAPS[((seed / 2) | 0) % TT.MAPS.length] });
     if (seed % 5 === 0) { s.top = 7; s.coins = 60000; } // banks need a village in the past and the money
@@ -1715,7 +1772,7 @@ t('fuzz: 400 random games keep state valid and always terminate', () => {
         if (b) { s = b; assert.deepStrictEqual(TT.validate(s), []); continue; }
       }
       const empties = [], occupied = [];
-      s.grid.forEach((v, i) => { if (v === 0) { if (!s.bridges.includes(i)) empties.push(i); } else if (v !== TT.WATER) occupied.push(i); });
+      s.grid.forEach((v, i) => { if (v === 0 || v === TT.HOLE) { if (!s.bridges.includes(i)) empties.push(i); } else if (v !== TT.WATER) occupied.push(i); }); // a hole swallows an item: a place to play too
       if (TT.rand(pick) < 0.02 && empties.length && occupied.length) { // the mover, now and then
         const mv = TT.move(s, occupied[Math.floor(TT.rand(pick) * occupied.length)], empties[Math.floor(TT.rand(pick) * empties.length)]);
         if (mv) { moves++; s = mv.state; assert.deepStrictEqual(TT.validate(s), []); continue; }
@@ -1741,6 +1798,10 @@ t('fuzz: 400 random games keep state valid and always terminate', () => {
         const spots = TT.bridgeSpots(s), b = spots.length ? TT.buyBridge(s, spots[Math.floor(TT.rand(pick) * spots.length)]) : null;
         if (b) { bridges++; s = b.state; assert.deepStrictEqual(TT.validate(s), []); continue; }
       }
+      if (TT.levelSpots(s).length && TT.rand(pick) < 0.03) { // level a mountain now and then
+        const lv = TT.levelSpots(s), lr = TT.buyLevel(s, lv[Math.floor(TT.rand(pick) * lv.length)]);
+        if (lr) { levels++; s = lr.state; assert.deepStrictEqual(TT.validate(s), []); continue; }
+      }
       if (s.map === 'island' && TT.rand(pick) < 0.03) { // reclaim some sea now and then
         const rs = TT.reclaimSpots(s), rc = rs.length ? TT.buyReclaim(s, rs[Math.floor(TT.rand(pick) * rs.length)]) : null;
         if (rc) { reclaims++; s = rc.state; assert.deepStrictEqual(TT.validate(s), []); continue; }
@@ -1759,6 +1820,8 @@ t('fuzz: 400 random games keep state valid and always terminate', () => {
           for (let li = 0; li < s.loans.length && !esc; li++) if (s.loans[li].defaulted) esc = TT.repay(s, li);
           if (!esc && s.stock.hammer > 0 && s.coins < TT.PRICE.hammer) for (const bk2 of s.bankOrder) if (!esc) esc = TT.borrow(s, bk2);
           if (esc) { loansUsed++; s = esc.state; assert.deepStrictEqual(TT.validate(s), []); continue; }
+          const lvs = TT.levelSpots(s);
+          if (lvs.length && TT.canLevel(s)) { s = TT.buyLevel(s, lvs[0]).state; levels++; assert.deepStrictEqual(TT.validate(s), []); continue; }
           const rcs = TT.reclaimSpots(s);
           if (rcs.length && TT.canReclaim(s)) { s = TT.buyReclaim(s, rcs[0]).state; reclaims++; assert.deepStrictEqual(TT.validate(s), []); continue; }
           const side = TT.SIDES.find((x) => TT.buyLand(s, x));
@@ -1767,8 +1830,9 @@ t('fuzz: 400 random games keep state valid and always terminate', () => {
         }
       }
       const idx = empties[Math.floor(TT.rand(pick) * empties.length)];
-      const r = TT.place(s, idx);
+      const wasHole = s.grid[idx] === TT.HOLE, r = TT.place(s, idx);
       assert(r, 'legal move rejected');
+      if (wasHole) { fills++; assert(r.state.grid[idx] === TT.EMPTY || TT.isBear(r.state.grid[idx]) || r.state.grid[idx] === TT.FOX, 'a filled hole is flat ground (an animal may step onto it at once)'); assert(r.events.some((e) => e.type === 'fill')); }
       const prob = TT.validate(r.state);
       assert.deepStrictEqual(prob, [], `seed ${seed} turn ${s.turn}: ${prob.join(', ')}`);
       assert(r.state.score >= s.score);
@@ -1783,9 +1847,9 @@ t('fuzz: 400 random games keep state valid and always terminate', () => {
     maxTurns = Math.max(maxTurns, s.turn);
   }
   assert(banksBought > 0 && loansUsed > 0 && defaults > 0, 'the fuzz bought banks, used loans and saw defaults: ' + [banksBought, loansUsed, defaults]);
-  assert(reclaims > 0, 'the fuzz reclaimed sea on the island map');
+  assert(reclaims > 0, 'the fuzz reclaimed sea on the island map'); assert(levels > 0 && fills > 0, 'the fuzz levelled mountains and filled holes: ' + [levels, fills]);
   assert(merges > 0 && trapped > 0 && foxMoves > 0, 'fuzz exercised merges, trapped bears and fox warps');
-  console.log(`  fuzz: ${banksBought} banks, ${loansUsed} loan actions, ${defaults} defaults, max ${maxTurns} turns, ${merges} merges, ${trapped} trapped bears, ${churches} churches, ${hammers} hammers, ${lands} land purchases, ${moves} moves, ${foxMoves} fox warps, ${growls} growls, ${mauls} mauls, ${cubs} cubs, ${bridges} bridges, ${reclaims} reclaimed, best tier ${maxTier}`);
+  console.log(`  fuzz: ${banksBought} banks, ${loansUsed} loan actions, ${defaults} defaults, max ${maxTurns} turns, ${merges} merges, ${trapped} trapped bears, ${churches} churches, ${hammers} hammers, ${lands} land purchases, ${moves} moves, ${foxMoves} fox warps, ${growls} growls, ${mauls} mauls, ${cubs} cubs, ${bridges} bridges, ${reclaims} reclaimed, ${levels} levelled, ${fills} holes filled, best tier ${maxTier}`);
 });
 
 console.log(`OK: ${n} logic tests passed`);

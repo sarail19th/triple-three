@@ -66,6 +66,7 @@
           <button class="tool" data-tool="bridge" id="bridgeBtn" aria-pressed="false" aria-label="Bridge: join two banks across water" hidden><span class="te">🌉</span><span class="tp"></span><span class="tb"></span></button>
           <button class="tool" data-tool="pond" id="pondBtn" aria-pressed="false" aria-label="Pond: dig a pond on an empty tile; ponds in a 3 by 3 block of dug ponds pay points and coins every turn"><span class="te">💧</span><span class="tp"></span><span class="tb"></span></button>
           <button class="tool" data-tool="reclaim" id="reclaimBtn" aria-pressed="false" aria-label="Reclaim: turn a sea tile next to the land into new ground (island map)" hidden><span class="te">🏝️</span><span class="tp"></span><span class="tb"></span></button>
+          <button class="tool" data-tool="level" id="levelBtn" aria-pressed="false" aria-label="Level: flatten a mountain so it can be built on (Highlands map)" hidden><span class="te">⛏️</span><span class="tp"></span><span class="tb"></span></button>
           <button class="tool land" data-land="top" aria-label="Buy land: a new row on top"><span class="te">⬆️</span><span class="tp"></span></button>
           <button class="tool land" data-land="bottom" aria-label="Buy land: a new row at the bottom"><span class="te">⬇️</span><span class="tp"></span></button>
           <button class="tool land" data-land="left" aria-label="Buy land: a new column on the left"><span class="te">⬅️</span><span class="tp"></span></button>
@@ -101,11 +102,12 @@
   <div class="card">
     <h2>New game</h2>
     <h3>Map</h3>
-    <div class="opts five">
+    <div class="opts six">
       <button class="opt mapcard" data-map="easy" aria-pressed="true"><span class="mini" aria-hidden="true"></span><span>Easy</span></button>
       <button class="opt mapcard" data-map="standard" aria-pressed="false"><span class="mini" aria-hidden="true"></span><span>Standard</span></button>
       <button class="opt mapcard" data-map="medium" aria-pressed="false"><span class="mini" aria-hidden="true"></span><span>Medium</span></button>
       <button class="opt mapcard" data-map="hard" aria-pressed="false"><span class="mini" aria-hidden="true"></span><span>Hard</span></button>
+      <button class="opt mapcard" data-map="highlands" aria-pressed="false"><span class="mini" aria-hidden="true"></span><span>Highlands</span></button>
       <button class="opt mapcard" data-map="island" aria-pressed="false"><span class="mini" aria-hidden="true"></span><span>Island</span></button>
     </div>
     <div id="mapSamples" class="samples" aria-label="Sample maps"></div>
@@ -207,8 +209,9 @@
       <section class="helppage" data-title="Maps and water" hidden>
         <h3>Maps and water</h3>
         <ul>
-        <li>🗺️ <b>Maps</b> (also in <b>New</b>): Easy is a plain field, Standard starts with a few plants, Medium has a river across the field, Hard has random ponds, Island is the biggest board, mostly sea (see below). Blue tiles are <b>water</b>: nothing can be placed, merged, moved or smashed there, and animals cannot enter it. Use the 🌉 <b>bridge</b> tool (up to 8, dearer each time) on a water tile that has land on both sides, up/down or left/right (never a corner or the middle of wide water; a bridge counts as land, so wide water opens up one tile at a time): it becomes a road that bears can walk over, but nothing can be built on it. <b>Three or more bridged tiles in a straight line are a long bridge</b>: it glows gold and pays coins every turn (about 1/400 of your best building's shop price per tile).</li>
+        <li>🗺️ <b>Maps</b> (also in <b>New</b>): Easy is a plain field, Standard starts with a few plants, Medium has a river across the field, Hard has random ponds, Highlands has mountains and holes, Island is the biggest board, mostly sea (see below). Blue tiles are <b>water</b>: nothing can be placed, merged, moved or smashed there, and animals cannot enter it. Use the 🌉 <b>bridge</b> tool (up to 8, dearer each time) on a water tile that has land on both sides, up/down or left/right (never a corner or the middle of wide water; a bridge counts as land, so wide water opens up one tile at a time): it becomes a road that bears can walk over, but nothing can be built on it. <b>Three or more bridged tiles in a straight line are a long bridge</b>: it glows gold and pays coins every turn (about 1/400 of your best building's shop price per tile).</li>
         <li>💧 <b>Ponds</b> (shop): dig a pond on an empty tile. It stays for the whole game, takes a tile away, and pays <b>points and coins every turn</b>, but only while it is inside a <b>3×3 block of dug ponds</b> (a 4×4 pays all 16; the map's own water never pays): points about 5% of your best building's value per paying pond, coins about 1/400 of its shop price. <b>Lake quests</b>: the pond that completes a 2×2, then a 3×3, then a 4×4 block of water pays a one-off bonus of <b>coins and points</b>. The first pond costs only 60 coins, then each one is dearer; there is no limit once the lakes are built, only your coins and free tiles. Animals cannot cross water, and a bear or fox shut in by ponds is trapped like anywhere else.</li>
+        <li>⛰️ <b>Highlands</b>: <b>mountains</b> ⛰️ are walls (nothing can be built on them, the hammer and the mover leave them alone, animals cannot enter) until you flatten one with the ⛏️ <b>Level</b> tool for coins (🪙150, then dearer each time). A <b>hole</b> 🕳️ is a wall for animals, but you can place any item into it: the item is used up, the tile becomes flat ground and a turn passes.</li>
         <li>🏝️ <b>Island</b>: the biggest board (8×8), all sea except a small island of 16 to 20 tiles (a new shape every game). Land cannot be bought and the sea cannot be bridged, but the <b>Reclaim</b> tool (shop) turns a sea tile next to the land into new ground: glowing tiles show where, each one dearer than the last (🪙60, then ×1.1). Only the ponds you dig count for lake quests there, not the sea.</li>
         </ul>
       </section>
