@@ -71,7 +71,7 @@ def check_consistent(page, where):
     assert len(tools) == max(3, st['top']) + 7 + len(bank), f'{where}: one button per unlocked tier + crystal (+ bank) + trap + hammer + mover + bridge + pond + reclaim, got {tools}'
     for tool in tools:
         slots = st['grid'].count(22) + [st['cur'], st['next'], st['hold']].count(22)
-        want = f"×{5 - len(st['bridges'])}" if tool == 'bridge' else '∞' if tool == 'pond' else f"×{48 - st['reclaimed']}" if tool == 'reclaim' else f"×{3 - slots}" if tool == '22' else f"×{max(0, st['stock'][tool])}"
+        want = f"×{8 - len(st['bridges'])}" if tool == 'bridge' else '∞' if tool == 'pond' else f"×{48 - st['reclaimed']}" if tool == 'reclaim' else f"×{3 - slots}" if tool == '22' else f"×{max(0, st['stock'][tool])}"
         assert page.inner_text(f'.tool[data-tool="{tool}"] .tb') == want, f'{where}: badge {tool}'
     return st
 
@@ -712,7 +712,7 @@ with sync_playwright() as p:
     load(g, map='medium', coins=1000)
     open_shop(page)
     assert page.locator('#bridgeBtn').is_visible() and page.locator('#bridgeBtn').is_enabled()
-    assert page.inner_text('#bridgeBtn .tp') == '🪙300' and page.inner_text('#bridgeBtn .tb') == '×5'
+    assert page.inner_text('#bridgeBtn .tp') == '🪙300' and page.inner_text('#bridgeBtn .tb') == '×8' and 'Bridges 0/8' in page.inner_text('#bridgeNote') and '3+ bridged tiles' in page.inner_text('#bridgeNote')
     shop_tap(page, '#bridgeBtn')
     assert page.get_attribute('#bridgeBtn', 'aria-pressed') == 'true' and page.locator('#board .cell.spot').count() == 5, 'five glowing spots on the river'
     page.tap('#board .cell[data-i="14"]')   # the middle of the double-wide river: not a spot
@@ -724,7 +724,16 @@ with sync_playwright() as p:
     assert page.get_attribute('#bridgeBtn', 'aria-pressed') == 'false' and page.locator('#board svg.water').count() == 1, 'the river still runs under the bridge'
     page.tap('#board .cell[data-i="8"]'); page.tap('#board .cell[data-i="8"]')   # nothing can be built on a bridge
     assert state(page)['grid'][8] == 0 and state(page)['turn'] == 3
-    assert page.inner_text('#bridgeBtn .tp') == '🪙700' and page.inner_text('#bridgeBtn .tb') == '×4', 'the next bridge costs more'
+    assert page.inner_text('#bridgeBtn .tp') == '🪙700' and page.inner_text('#bridgeBtn .tb') == '×7', 'the next bridge costs more'
+    # three bridged tiles in a line are a long bridge: gold planks, and it pays every turn (1/400 of the best tier's price per tile)
+    gl = [0] * 36
+    for i in (2, 8, 14, 15): gl[i] = 21
+    load(gl, map='medium', coins=1000, top=6, bridges=[21, 27, 33])
+    assert page.locator('#board .cell.bridge.long').count() == 3 and page.locator('#board .cell.bridge').count() == 3
+    open_shop(page); assert 'long bridge of 3 tiles pays +🪙3' in page.inner_text('#bridgeNote'), page.inner_text('#bridgeNote'); page.tap('#shopClose')
+    before = state(page); tap_cell(page, 0, True)
+    assert state(page)['coins'] - before['coins'] == 3, 'the long bridge pays 1 coin per tile (PRICE[6] / 400 rounds to 1)'
+    check_consistent(page, 'long bridge')
 
 
     # ---- ponds: dug on any empty tile, a free action; permanent, pay points each turn, lake quest shown in the shop
