@@ -14,7 +14,7 @@
   --g1: #84c660; --g2: #7bbd57; --line: #3f7a2a; --edge: #1d4a30;
   --deco: linear-gradient(transparent, transparent); /* extra speckle layer on the grass (flowers, leaves, frost) */
   --w1: #6cc3f4; --w2: #4aa3e4; --w3: #3a86cc; --bank: #e3f0b4; /* water */
-  --h-rim: #5e4228; --h-out: #2c1d11; --h-in: #0a0604; --h-crack: #2a1a0e; /* holes: a dark brown to black pit with a cracked floor */
+  --h-rim: #a9de7c; --h-lip: #1e4416; --h-out: #2f6a22; --h-in: #10290b; --h-crack: #1c3d14; /* holes (summer): a sunken green patch with a raised ridge and cracks; the seasons below recolour it */
   /* board side: as wide as the phone allows, as tall as the screen allows after the controls underneath */
   --bs: max(280px, min(100vw - 12px, calc(100dvh - 330px), 640px));
 }
@@ -278,13 +278,16 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 /* seasons: the same tokens, different colours (summer is the default look); ambient petals / leaves / snow fall over the page */
 :root[data-season="spring"] { --bg: #12261c; --bg2: #1a3626; --g1: #92d672; --g2: #86cd66; --line: #4f8f38; --edge: #2b5a3c; --muted: #9bc4a6;
   --deco: radial-gradient(circle at 30% 40%, #fff 0 1.5px, transparent 2.3px) 0 0 / 37px 41px, radial-gradient(circle at 70% 70%, #ffb3d4 0 1.7px, transparent 2.5px) 0 0 / 53px 47px, radial-gradient(circle at 20% 80%, #ffe27a 0 1.4px, transparent 2.2px) 0 0 / 61px 57px;
-  --w1: #7fd0f8; --w2: #58b2ea; --w3: #4796d6; }
+  --w1: #7fd0f8; --w2: #58b2ea; --w3: #4796d6;
+  --h-rim: #bdeb97; --h-lip: #1d4a18; --h-out: #3d7c31; --h-in: #153713; --h-crack: #214d1c; }
 :root[data-season="autumn"] { --bg: #26180e; --bg2: #38220f; --g1: #b8b04a; --g2: #ada543; --line: #7d7424; --edge: #5b3b1b; --muted: #c9ab88;
   --deco: radial-gradient(circle at 30% 40%, #e0762a 0 1.7px, transparent 2.5px) 0 0 / 41px 43px, radial-gradient(circle at 70% 70%, #a8501f 0 1.8px, transparent 2.6px) 0 0 / 57px 49px, radial-gradient(circle at 20% 80%, #f2b63c 0 1.5px, transparent 2.3px) 0 0 / 67px 59px;
-  --w1: #7cc4cf; --w2: #55a3b5; --w3: #438a9f; --bank: #d9c78a; }
+  --w1: #7cc4cf; --w2: #55a3b5; --w3: #438a9f; --bank: #d9c78a;
+  --h-rim: #cfa465; --h-lip: #3a2410; --h-out: #6a4526; --h-in: #1b0f07; --h-crack: #2b1a0d; }
 :root[data-season="winter"] { --bg: #0d1927; --bg2: #16293d; --g1: #f1f7fb; --g2: #e1edf5; --line: #a9c3d6; --edge: #2c4a63; --muted: #93b0c6;
   --deco: radial-gradient(circle at 30% 40%, #ffffff 0 1.6px, transparent 2.4px) 0 0 / 31px 33px, radial-gradient(circle at 70% 70%, #b9d6ea 0 1.8px, transparent 2.6px) 0 0 / 47px 43px;
-  --w1: #d2f0fc; --w2: #aadcf2; --w3: #8cc7e6; --bank: #ffffff; }
+  --w1: #d2f0fc; --w2: #aadcf2; --w3: #8cc7e6; --bank: #ffffff;
+  --h-rim: #ffffff; --h-lip: #6fa8cf; --h-out: #a9d9f1; --h-in: #2d78b4; --h-crack: #84b8d8; }
 .season-fx { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 4; }
 .season-fx i { position: absolute; top: -8vh; font-style: normal; opacity: .6; animation: sfall linear infinite; will-change: transform; }
 @keyframes sfall { 0% { transform: translate(0, -8vh) rotate(0deg); } 50% { transform: translate(var(--sway), 55vh) rotate(180deg); } 100% { transform: translate(0, 110vh) rotate(360deg); } }
@@ -299,7 +302,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   background: linear-gradient(var(--g1), var(--g2)); box-shadow: 0 0 0 1.5px var(--edge); }
 .mini span { display: flex; align-items: center; justify-content: center; font-size: 6px; line-height: 1; box-shadow: inset 0 0 0 .5px #0000001c; }
 .mini span.w { background: linear-gradient(var(--w1), var(--w3)); box-shadow: none; }
-.mini span.o { background: radial-gradient(circle, var(--h-in), var(--h-out) 65%, var(--h-rim)); }
+.mini span.o { background: radial-gradient(circle, var(--h-in), var(--h-out) 62%, var(--h-rim)); }
 .samples { display: flex; justify-content: center; gap: 12px; margin: 8px 0 2px; }
 .samples .mini { width: 68px; height: 68px; border-radius: 7px; }
 .samples .mini span { font-size: 9px; }
@@ -549,7 +552,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       </section>
     </div>
     <div class="pager"><button id="helpPrev" class="btn" aria-label="Previous page">‹ Back</button><span id="helpPageLabel" aria-live="polite"></span><button id="helpNext" class="btn" aria-label="Next page">Next ›</button></div>
-    <p class="gnote">Version <b id="buildId">cae3f946</b> · <a href="#" id="updateLink">↻ Get the latest version</a><br>(keeps your saved game and best scores)</p>
+    <p class="gnote">Version <b id="buildId">8b8d2cff</b> · <a href="#" id="updateLink">↻ Get the latest version</a><br>(keeps your saved game and best scores)</p>
     <div class="helpbtns"><button id="helpTour" class="btn">▶ Quick tour</button><button id="helpClose" class="btn primary">Got it</button></div>
   </div>
 </div>
@@ -1974,8 +1977,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     waterEl = svg;
   }
 
-  // Highlands holes, drawn like the water: ONE soft SVG layer above the water and under the tiles. Neighbouring holes fuse into one dark pit with a rim, a
-  // black middle and cracks running out across the floor. Mountains are only their emoji (⛰️, white 🏔️ in winter) with no tile behind them. The hole tiles
+  // Highlands holes, drawn like the water: ONE soft SVG layer above the water and under the tiles. Neighbouring holes fuse into one pit with a raised ridge, a
+  // deep middle and cracks running out across the floor, all in the colours of the season (the --h-* tokens). Mountains are only their emoji (⛰️, white 🏔️ in winter) with no tile behind them. The hole tiles
   // keep their emoji in the text for tests and screen readers (the CSS hides it).
   function drawTerrain() {
     var g = state.grid, w = state.w, h = state.h;
@@ -2014,9 +2017,10 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       filter('thskirt', 0.3, 4, -0.8) + filter('thrim', 0.24, 8, -2.6) + filter('thbody', 0.24, 9, -4.1) +
       mask('hkskirt', 'thskirt') + mask('hkrim', 'thrim') + mask('hkbody', 'thbody') +
       '<radialGradient id="hgrad"><stop offset="0" style="stop-color:var(--h-in)"/><stop offset="1" style="stop-color:var(--h-out)" stop-opacity="0"/></radialGradient></defs>' +
-      '<rect ' + box + ' style="fill:var(--h-out)" fill-opacity="0.35" mask="url(#hkskirt)"/>' +
+      '<rect ' + box + ' style="fill:var(--h-lip)" fill-opacity="0.3" mask="url(#hkskirt)"/>' +
       '<g fill="none" style="stroke:var(--h-crack)" stroke-width="0.04" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.95">' + cracks + '</g>' +
-      '<rect ' + box + ' style="fill:var(--h-rim)" mask="url(#hkrim)"/>' +
+      '<rect ' + box + ' style="fill:var(--h-rim)" mask="url(#hkrim)"/>' + // the raised ridge round the pit, in the colour of the season
+      '<g transform="translate(-0.03 -0.04)"><rect ' + box + ' style="fill:var(--h-lip)" mask="url(#hkbody)"/></g>' + // the inner wall in shade
       '<rect ' + box + ' style="fill:var(--h-out)" mask="url(#hkbody)"/>' + pits;
     boardEl.insertBefore(svg, boardEl.querySelector('.cell')); // above the water layer, under the tiles
     terrainEl = svg;

@@ -347,8 +347,8 @@
     waterEl = svg;
   }
 
-  // Highlands holes, drawn like the water: ONE soft SVG layer above the water and under the tiles. Neighbouring holes fuse into one dark pit with a rim, a
-  // black middle and cracks running out across the floor. Mountains are only their emoji (⛰️, white 🏔️ in winter) with no tile behind them. The hole tiles
+  // Highlands holes, drawn like the water: ONE soft SVG layer above the water and under the tiles. Neighbouring holes fuse into one pit with a raised ridge, a
+  // deep middle and cracks running out across the floor, all in the colours of the season (the --h-* tokens). Mountains are only their emoji (⛰️, white 🏔️ in winter) with no tile behind them. The hole tiles
   // keep their emoji in the text for tests and screen readers (the CSS hides it).
   function drawTerrain() {
     var g = state.grid, w = state.w, h = state.h;
@@ -387,9 +387,10 @@
       filter('thskirt', 0.3, 4, -0.8) + filter('thrim', 0.24, 8, -2.6) + filter('thbody', 0.24, 9, -4.1) +
       mask('hkskirt', 'thskirt') + mask('hkrim', 'thrim') + mask('hkbody', 'thbody') +
       '<radialGradient id="hgrad"><stop offset="0" style="stop-color:var(--h-in)"/><stop offset="1" style="stop-color:var(--h-out)" stop-opacity="0"/></radialGradient></defs>' +
-      '<rect ' + box + ' style="fill:var(--h-out)" fill-opacity="0.35" mask="url(#hkskirt)"/>' +
+      '<rect ' + box + ' style="fill:var(--h-lip)" fill-opacity="0.3" mask="url(#hkskirt)"/>' +
       '<g fill="none" style="stroke:var(--h-crack)" stroke-width="0.04" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.95">' + cracks + '</g>' +
-      '<rect ' + box + ' style="fill:var(--h-rim)" mask="url(#hkrim)"/>' +
+      '<rect ' + box + ' style="fill:var(--h-rim)" mask="url(#hkrim)"/>' + // the raised ridge round the pit, in the colour of the season
+      '<g transform="translate(-0.03 -0.04)"><rect ' + box + ' style="fill:var(--h-lip)" mask="url(#hkbody)"/></g>' + // the inner wall in shade
       '<rect ' + box + ' style="fill:var(--h-out)" mask="url(#hkbody)"/>' + pits;
     boardEl.insertBefore(svg, boardEl.querySelector('.cell')); // above the water layer, under the tiles
     terrainEl = svg;
