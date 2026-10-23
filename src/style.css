@@ -219,6 +219,19 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 .regioncard small { font-size: 10px; opacity: .85; }
 .regioncard:disabled { opacity: .5; }
 .regioncard:disabled .mini { filter: grayscale(.8) brightness(.7); }
+.updaterow { display: flex; justify-content: center; margin: 2px 0 4px; }
+.updatebtn { background: #16301f; color: var(--ink); border: 2px solid var(--accent); border-radius: 999px; padding: 6px 16px; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.updatebtn:disabled { opacity: .6; }
+.updatebtn.ready { background: var(--accent); color: #1b1b12; animation: updpulse 1.2s ease-in-out infinite alternate; } /* a newer version is out */
+@keyframes updpulse { from { box-shadow: 0 0 0 0 #ffd45a99; } to { box-shadow: 0 0 0 7px #ffd45a00; } }
+.questrow { text-align: left; background: #0e2217; border: 2px solid #ffffff1c; border-radius: 12px; padding: 8px 10px; margin: 6px 0; }
+.questrow.done { border-color: var(--accent); }
+.questrow .qh { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+.questrow .qh .qi { font-size: 22px; }
+.questrow .qh .qs { margin-left: auto; font-size: 13px; opacity: .9; }
+.questrow small { display: block; opacity: .85; margin-top: 2px; font-size: 12px; line-height: 1.25; }
+.questrow .qbar { height: 6px; border-radius: 3px; background: #ffffff1c; margin-top: 6px; overflow: hidden; }
+.questrow .qbar i { display: block; height: 100%; background: var(--accent); }
 .dlgbtns { position: sticky; bottom: -20px; margin: 8px -20px -20px; padding: 10px 20px 20px; background: #14301f; } /* New game: Start stays in reach while the long dialog scrolls */
 .card { background: #14301f; border: 2px solid var(--accent); border-radius: 18px; padding: 20px; max-width: 380px; width: 100%; text-align: center; max-height: 100%; overflow: auto; }
 .card h2 { margin: 0 0 8px; font-size: 24px; }

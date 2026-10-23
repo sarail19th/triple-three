@@ -1722,6 +1722,38 @@ t('highlands: a full board is not over while a hole can take an item or a mounta
   assert(filled); assert.strictEqual(filled.state.over, false, 'filling the hole leaves an empty tile');
 });
 
+t('titles: Hawkeyes (foxes), Master of Tides (lucky drops beside water) and Gold Keeper (no fee, double interest)', () => {
+  assert.deepStrictEqual(Object.keys(TT.TITLES), ['hunter', 'hawkeye', 'tides', 'gold']);
+  ['hawkeye', 'tides', 'gold'].forEach((id) => { assert.deepStrictEqual(TT.validate(TT.newGame(4, { title: id })), []); assert.strictEqual(TT.newGame(4, { title: id }).title, id); });
+  // Hawkeyes: the fox counter lives in the state (a trapped fox, the trap tool), a bear does not count for it, undo takes it back
+  const full = (cells) => { const g = {}; for (let i = 0; i < 36; i++) g[i] = (((i / 6) | 0) + (i % 6)) % 2 ? 5 : 6; g[0] = TT.FOX; g[1] = 0; return withGrid(Object.assign(g, cells), { cur: 1, next: 1, coins: 100 }); };
+  const r = TT.place(full({}), 1); assert.strictEqual(r.state.grid[0], TT.TOMB); assert.strictEqual(r.state.foxesTrapped, 1); assert.strictEqual(r.state.bearsTrapped, 0); assert.strictEqual(TT.undo(r.state).foxesTrapped, 0);
+  const t1 = TT.trap(withGrid({ [I(2, 2)]: TT.FOX, [I(4, 4)]: TT.BEAR }, { coins: 100 }), I(2, 2)); assert.strictEqual(t1.state.foxesTrapped, 1); assert.strictEqual(t1.state.bearsTrapped, 0);
+  const t2 = TT.trap(withGrid({ [I(4, 4)]: TT.BEAR }, { coins: 100 }), I(4, 4)); assert.strictEqual(t2.state.foxesTrapped, 0); assert.strictEqual(t2.state.bearsTrapped, 1);
+  const share = (title, what) => { let n = 0, tot = 0; for (let seed = 1; seed <= 150; seed++) { let g = TT.newGame(seed, { title }); for (let k = 0; k < 40; k++) { g = TT.place(Object.assign(g, { grid: new Array(36).fill(0) }), 0).state; tot++; if (g.next === what) n++; if (g.over) break; } } return n / tot; };
+  const foxBase = share('', TT.FOX), foxHawk = share('hawkeye', TT.FOX);
+  assert(foxBase > 0.01 && foxBase < 0.035, 'about 2% foxes: ' + foxBase); assert(foxHawk < foxBase * 0.75, 'half the foxes: ' + foxBase + ' -> ' + foxHawk);
+  // the other titles do not touch the queue: the same draws as no title for the animals
+  const bearBase = share('', TT.BEAR); assert(Math.abs(share('hawkeye', TT.BEAR) - bearBase) < 0.03 && Math.abs(share('gold', TT.BEAR) - bearBase) < 0.03 && Math.abs(share('tides', TT.BEAR) - bearBase) < 0.03);
+  // Master of Tides: lucky drops are rarer / absent without it; with it they come more often and higher on maps with their own water, and not on the dry maps
+  const lucky = (map, title) => { let n = 0, tot = 0, maxT = 0; for (let seed = 1; seed <= 120; seed++) { let g = TT.newGame(seed, { map, title }); g.top = 9; for (let k = 0; k < 30; k++) { g = TT.place(Object.assign(g, { grid: g.grid.map((v) => (v === TT.WATER ? v : 0)) }), g.grid.indexOf(0)).state; tot++; if (g.next >= 4 && g.next <= 7) { n++; maxT = Math.max(maxT, g.next); } if (g.over) break; } } return { rate: n / tot, maxT }; };
+  const hardBase = lucky('hard', ''), hardTides = lucky('hard', 'tides'), medBase = lucky('medium', ''), medTides = lucky('medium', 'tides'), islTides = lucky('island', 'tides');
+  assert.strictEqual(hardBase.rate, 0, 'never on Hard without the title'); assert(hardTides.rate > 0.04, 'Hard with the title: ' + hardTides.rate);
+  assert(medTides.rate > medBase.rate + 0.03, 'Medium: ' + medBase.rate + ' -> ' + medTides.rate); assert(islTides.rate > 0.04, 'Island: ' + islTides.rate);
+  assert.strictEqual(medBase.maxT <= 6, true); assert(medTides.maxT === 7 || hardTides.maxT === 7, 'a village (7) can drop with the title');
+  const easyBase = lucky('easy', ''), easyTides = lucky('easy', 'tides'); assert(Math.abs(easyTides.rate - easyBase.rate) < 0.03 && easyTides.maxT <= 6, 'no water, no bonus');
+  // Gold Keeper: no deposit fee and double interest
+  const B = I(2, 2), bank = (title) => withGrid({ [B]: TT.BANK }, { coins: 5000, top: 7, banksBought: 1, bankOrder: [B], cur: 1, next: 1, title, vault: [100000, 0, 0] });
+  assert.strictEqual(TT.treasuryNet(1000, 'gold'), 1000); assert.strictEqual(TT.treasuryNet(1000, 'hunter'), 950); assert.strictEqual(TT.treasuryNet(1000), 950);
+  const dg = TT.deposit(bank('gold'), B, 1000, 0), dn = TT.deposit(bank(''), B, 1000, 0);
+  assert.strictEqual(dg.net, 1000); assert.strictEqual(dg.fee, 0); assert.strictEqual(dn.net, 950); assert.strictEqual(dg.state.vault[0], 1000);
+  const ig = TT.place(bank('gold'), I(5, 5)).events.find((e) => e.type === 'bankpay'), inn = TT.place(bank(''), I(5, 5)).events.find((e) => e.type === 'bankpay');
+  assert.deepStrictEqual(inn.interest, [30]); assert.deepStrictEqual(ig.interest, [60], 'double interest');
+  // old saves: a foxes counter of 0
+  const legacy = JSON.parse(JSON.stringify(TT.newGame(2))); delete legacy.foxesTrapped; const mg = TT.migrate(legacy); assert.strictEqual(mg.foxesTrapped, 0); assert.deepStrictEqual(TT.validate(mg), []);
+  assert(TT.validate(Object.assign({}, TT.newGame(2), { foxesTrapped: -1 })).length);
+});
+
 t('deposit interest: a paying bank also pays 0.03% of its own account every tick, on top of its flat income', () => {
   assert.strictEqual(TT.TREASURY_INTEREST, 0.0003);
   const B1 = I(0, 0), B2 = I(0, 2);
