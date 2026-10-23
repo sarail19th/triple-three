@@ -223,6 +223,14 @@
     link.setAttribute('aria-pressed', haptics);
   }
 
+  // Visual extras that can be switched off in the menu (all default on): the little critters, the falling petals / leaves / snow ("Weather"), and every CSS animation.
+  var showCritters = store.get('tt-critters', true) !== false, showWeather = store.get('tt-weather', true) !== false, showMotion = store.get('tt-motion', true) !== false;
+  function showToggles() {
+    [['critterLink', showCritters, '🐇 Critters'], ['weatherLink', showWeather, '🌦️ Weather'], ['motionLink', showMotion, '✨ Animations']].forEach(function (t) {
+      var el = $(t[0]); el.textContent = t[2] + ': ' + (t[1] ? 'on' : 'off'); el.setAttribute('aria-pressed', t[1]);
+    });
+    document.documentElement.classList.toggle('no-anim', !showMotion);
+  }
   // Seasons: a colour theme (`data-season` on <html>, CSS tokens) plus a few petals / leaves / snowflakes drifting over the page. 'auto' follows
   // the calendar month. Purely cosmetic (never in the game state); the falling bits use Math.random, which is fine outside the logic.
   // Natural items change with the season: the three plant tiers, and the little critters (who lives around the homes / on the water).
@@ -273,7 +281,7 @@
     if (typeof AREAS !== 'undefined') { AREAS[0].kinds = CRITTERS[cur].home; AREAS[1].kinds = CRITTERS[cur].grave; AREAS[2].kinds = CRITTERS[cur].water; }
     $('seasonLink').textContent = SEASON_LABEL[season];
     fx.innerHTML = '';
-    if (!bits.length) return;
+    if (!bits.length || !showWeather) return;
     for (var i = 0; i < 16; i++) {
       var b = document.createElement('i');
       b.textContent = bits[i % bits.length];
@@ -889,7 +897,7 @@
     return best[Math.floor(Math.random() * best.length)];
   }
   function syncCritters() {
-    if (reduceMotion) return;
+    if (reduceMotion || !showCritters) return;
     critters.slice().forEach(function (c) { if (c.area.kinds.indexOf(c.kind) < 0) { c.el.remove(); critters.splice(critters.indexOf(c), 1); } }); // another season's animals leave
     AREAS.forEach(function (area) {
       var list = areaCells(area), want = Math.min(3, Math.floor(list.length / 2));
@@ -1221,6 +1229,10 @@
     vibrate(20); // switching it on gives a sample buzz
   });
   showHaptics();
+  $('critterLink').addEventListener('click', function () { showCritters = !showCritters; store.set('tt-critters', showCritters); showToggles(); if (showCritters) syncCritters(); else clearCritters(); });
+  $('weatherLink').addEventListener('click', function () { showWeather = !showWeather; store.set('tt-weather', showWeather); showToggles(); applySeason(); });
+  $('motionLink').addEventListener('click', function () { showMotion = !showMotion; store.set('tt-motion', showMotion); showToggles(); });
+  showToggles();
   $('seasonLink').addEventListener('click', function (e) {
     e.preventDefault();
     season = SEASONS[(SEASONS.indexOf(season) + 1) % SEASONS.length]; store.set('tt-season', season); applySeason();

@@ -218,6 +218,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 .regioncard small { font-size: 10px; opacity: .85; }
 .regioncard:disabled { opacity: .5; }
 .regioncard:disabled .mini { filter: grayscale(.8) brightness(.7); }
+.no-anim *:not(.pts), .no-anim *:not(.pts)::before, .no-anim *:not(.pts)::after { animation: none !important; transition: none !important; } /* Animations: off (the floating +coins numbers still show) */
 .menugrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 8px 0; }
 .menuitem { position: relative; margin: 0; padding: 12px 6px; font-size: 14px; }
 .menuitem[hidden] { display: none; }

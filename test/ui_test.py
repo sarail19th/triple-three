@@ -415,6 +415,41 @@ with sync_playwright() as p:
     tap_cell(page, 7, True)
     assert page.evaluate('window.__vib.length') >= 1
 
+    # ---- the visual extras can be switched off in the menu (Critters, Weather = falling petals / snow, Animations); the picks are remembered
+    g = [0] * 36
+    for i in (0, 2, 4, 18, 20, 22): g[i] = 6      # houses that do not touch, so nothing merges and the critters have homes
+    load(g)
+    page.wait_for_timeout(800)
+    crit = lambda: page.evaluate('window.ttDebug.critters().length')
+    assert crit() > 0, 'critters live on the houses'
+    menu_tap(page, '#critterLink')
+    assert 'off' in page.inner_text('#critterLink') and page.evaluate("JSON.parse(localStorage.getItem('tt-critters'))") is False and crit() == 0 and page.locator('#critters .crit').count() == 0
+    page.tap('#menuClose'); tap_cell(page, 0, True)
+    assert crit() == 0, 'still none after a move'
+    page.reload(); page.wait_for_selector('#board .cell'); page.wait_for_timeout(500)
+    assert crit() == 0 and 'off' in page.inner_text('#critterLink'), 'the choice survives a reload'
+    menu_tap(page, '#critterLink'); page.tap('#menuClose')
+    assert 'on' in page.inner_text('#critterLink') and crit() > 0, 'switching them back on brings them back'
+    page.evaluate("localStorage.setItem('tt-season', JSON.stringify('winter'))"); page.reload(); page.wait_for_selector('#board .cell')
+    flakes = lambda: page.locator('#seasonFx i').count()
+    assert flakes() > 0, 'snow falls in winter'
+    menu_tap(page, '#weatherLink')
+    assert 'off' in page.inner_text('#weatherLink') and flakes() == 0 and page.evaluate("JSON.parse(localStorage.getItem('tt-weather'))") is False, 'no snowfall'
+    page.tap('#menuClose'); page.reload(); page.wait_for_selector('#board .cell')
+    assert flakes() == 0, 'the choice survives a reload'
+    menu_tap(page, '#weatherLink'); assert flakes() > 0 and 'on' in page.inner_text('#weatherLink')
+    html_class = lambda: page.evaluate("document.documentElement.classList.contains('no-anim')")
+    anim = lambda: page.evaluate("getComputedStyle(document.querySelector('#seasonFx i')).animationName")
+    assert not html_class() and anim() == 'sfall'
+    menu_tap(page, '#motionLink')
+    assert html_class() and anim() == 'none' and 'off' in page.inner_text('#motionLink') and page.evaluate("JSON.parse(localStorage.getItem('tt-motion'))") is False, 'animations off'
+    page.tap('#menuClose'); page.reload(); page.wait_for_selector('#board .cell')
+    assert html_class(), 'the choice survives a reload'
+    menu_tap(page, '#motionLink'); page.tap('#menuClose')
+    assert not html_class() and anim() == 'sfall'
+    page.evaluate("localStorage.setItem('tt-season', JSON.stringify('summer')); ['tt-critters', 'tt-weather', 'tt-motion'].forEach(k => localStorage.removeItem(k))")
+    page.reload(); page.wait_for_selector('#board .cell')
+
     # ---- tapping Next swaps it with Place: free, as often as you like
     g = [0] * 36
     load(g, cur=2, next=3, hold=0)
