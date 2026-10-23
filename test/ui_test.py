@@ -883,6 +883,18 @@ with sync_playwright() as p:
     page.tap('#bankClose')
     assert 'treasury coins' in page.inner_text('#seed'), page.inner_text('#seed')
 
+    # ---- interest: a bank pays 0.03% of its own account on top of its flat income (900 / 100 = 9 coins at the village tier) every turn
+    g = [0] * 36; g[14] = 22
+    page.evaluate("localStorage.setItem('tt-treasury', JSON.stringify([100000, 0, 0]))")
+    load(g, coins=0, top=7, banksBought=1, bankOrder=[14])
+    page.tap('#board .cell[data-i="14"]')
+    assert 'interest on its treasury account' in page.inner_text('#bankInfo') and '🪙30' in page.inner_text('#bankInfo'), page.inner_text('#bankInfo')
+    page.tap('#bankClose')
+    tap_cell(page, 35, True)
+    paid = check_consistent(page, 'interest')
+    assert paid['coins'] == 9 + 30 and paid['vault'] == [100000, 0, 0], (paid['coins'], paid['vault'])
+    assert '39' in page.inner_text('#fx'), 'the bank floats its flat income and its interest together'
+
     # ---- titles: 100 bears trapped across games earn Bears Hunter (counted when a game is left), picked per game in New game
     page.evaluate("localStorage.setItem('tt-stats', JSON.stringify({ bears: 70 }))")
     load([0] * 36, coins=50, top=4, bearsTrapped=20)
