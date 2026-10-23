@@ -59,6 +59,7 @@
       wild: o.wild === undefined ? wildPref() : o.wild, map: o.map === undefined ? mapPref() : o.map,
       bears: o.bears === undefined ? bearsPref() : o.bears, foxes: o.foxes === undefined ? foxesPref() : o.foxes,
       title: titleUnlocked(want, now) ? want : '' });
+    state.vault = accounts();
     sel = -1; hover = -1; mode = null; moveFrom = -1;
     $('overlay').classList.add('hidden');
     save();
@@ -190,7 +191,7 @@
     var rate = TT.bankRate(state, bankAt), box = $('bankLoans'), mine = [];
     state.loans.forEach(function (l, i) { if (l.bank === bankAt) mine.push(i); });
     $('bankTitle').textContent = '🏦 Bank ' + (state.bankOrder.indexOf(bankAt) + 1);
-    $('bankInfo').textContent = 'Interest ' + Math.round(rate * 100) + '% a year (simple, counted by the month) · pays 🪙' + fmt(TT.bankIncome(state)) + ' every turn (at 1× speed) while no loan is in default. A loan is half the shop price of the dearest building next to the bank, which is locked until you repay. A year unpaid and that building and its tile are seized.';
+    $('bankInfo').textContent = 'Interest ' + Math.round(rate * 100) + '% a year (simple, counted by the month) · pays 🪙' + fmt(TT.bankIncome(state)) + ' every turn (at 1× speed)' + (accounts()[TT.treasuryRank(state, bankAt)] ? ' plus 🪙' + fmt(Math.floor(accounts()[TT.treasuryRank(state, bankAt)] * TT.TREASURY_INTEREST_PPM / 1e6)) + ' interest on its treasury account (' + (TT.TREASURY_INTEREST * 100).toFixed(2) + '% a turn)' : ' (plus ' + (TT.TREASURY_INTEREST * 100).toFixed(2) + '% a turn interest on what you deposit in it)') + ' while no loan is in default. A loan is half the shop price of the dearest building next to the bank, which is locked until you repay. A year unpaid and that building and its tile are seized.';
     box.textContent = '';
     mine.forEach(function (i) {
       var l = state.loans[i], owed = TT.loanOwed(state, l), row = document.createElement('div');
@@ -263,6 +264,7 @@
   var lockedNow = {}; // cells a loan has locked (rebuilt on every render)
   function isBridgeTile(i) { return state.bridges.indexOf(i) >= 0; }
   function doAction(idx) {
+    if (!mode) state.vault = accounts(); // the saved bank accounts earn interest inside the turn: hand the logic their current balances
     return mode === 'hammer' ? TT.hammer(state, idx) : mode === 'trap' ? TT.trap(state, idx) : mode === 'bridge' ? TT.buyBridge(state, idx) : mode === 'pond' ? TT.buyPond(state, idx) : mode === 'reclaim' ? TT.buyReclaim(state, idx) : mode === 'level' ? TT.buyLevel(state, idx) : TT.place(state, idx);
   }
 
@@ -725,7 +727,7 @@
       } else if (ev.type === 'bridgepay') { // a long bridge pays each of its tiles
         ev.at.forEach(function (bt) { floatAt(bt, '🌉 +' + fmt(ev.each) + '🪙'); });
       } else if (ev.type === 'bankpay') {
-        ev.at.forEach(function (bk) { floatAt(bk, '🏦 +' + fmt(ev.each) + '🪙'); cells[bk].classList.add('drop'); }); // each bank shows its own income
+        ev.at.forEach(function (bk, k) { floatAt(bk, '🏦 +' + fmt(ev.each + (ev.interest ? ev.interest[k] : 0)) + '🪙'); cells[bk].classList.add('drop'); }); // each bank shows its own income (flat + the interest on its account)
       } else if (ev.type === 'bonus') {
         toast('🪤 A free trap!', 0.2);
       } else if (ev.type === 'unlock') {

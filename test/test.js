@@ -1722,6 +1722,32 @@ t('highlands: a full board is not over while a hole can take an item or a mounta
   assert(filled); assert.strictEqual(filled.state.over, false, 'filling the hole leaves an empty tile');
 });
 
+t('deposit interest: a paying bank also pays 0.03% of its own account every tick, on top of its flat income', () => {
+  assert.strictEqual(TT.TREASURY_INTEREST, 0.0003);
+  const B1 = I(0, 0), B2 = I(0, 2);
+  const two = (over = {}) => withGrid({ [B1]: TT.BANK, [B2]: TT.BANK }, Object.assign({ coins: 0, top: 7, banksBought: 2, bankOrder: [B2, B1], cur: 1, next: 1, vault: [100000, 20000, 0] }, over));
+  const flat = TT.bankIncome(two());
+  const r = TT.place(two(), I(5, 5)), ev = r.events.find((e) => e.type === 'bankpay');
+  // bankOrder [B2, B1]: B2 is Bank 1 (100000 -> 30), B1 is Bank 2 (20000 -> 6)
+  assert.deepStrictEqual(ev.at, [B1, B2]); assert.deepStrictEqual(ev.interest, [6, 30]); assert.strictEqual(ev.each, flat);
+  assert.strictEqual(ev.coins, 2 * flat + 36); assert.strictEqual(r.state.coins, 2 * flat + 36);
+  assert.strictEqual(TT.place(two({ speed: 2 }), I(5, 5)).state.coins, 4 * flat + 72, 'both pay for every tick');
+  assert(!TT.place(two({ speed: 0 }), I(5, 5)).events.some((e) => e.type === 'bankpay'), 'nothing while paused');
+  // a bank with a defaulted loan pays neither
+  const bad = two(); bad.grid[I(0, 1)] = TT.SEIZED; bad.loans = [{ bank: B2, at: I(0, 1), tier: 6, principal: 100, rate: 0.15, since: 0, defaulted: true }];
+  const pb = TT.place(bad, I(5, 5)).events.find((e) => e.type === 'bankpay'); assert.deepStrictEqual(pb.at, [B1]); assert.deepStrictEqual(pb.interest, [6]);
+  // an empty account earns no interest; small balances round down
+  assert.deepStrictEqual(TT.place(two({ vault: [0, 0, 0] }), I(5, 5)).events.find((e) => e.type === 'bankpay').interest, [0, 0]);
+  assert.deepStrictEqual(TT.place(two({ vault: [3333, 0, 0] }), I(5, 5)).events.find((e) => e.type === 'bankpay').interest, [0, 0], '3333 * 0.0003 = 0.99 rounds down to 0');
+  // deposit / withdraw keep the mirror in step with the account
+  const d = TT.deposit(two({ coins: 5000 }), B2, 1000, 400000); assert.strictEqual(d.state.vault[0], 400950, 'Bank 1 = the bank built first'); assert.deepStrictEqual(d.state.vault.slice(1), [20000, 0]);
+  const w = TT.withdraw(two({ coins: 5000 }), B1, 5000, 20000); assert.deepStrictEqual(w.state.vault, [100000, 15000, 0]);
+  // an old save has an empty mirror; validate guards it
+  const legacy = JSON.parse(JSON.stringify(two())); delete legacy.vault; const m = TT.migrate(legacy); assert.deepStrictEqual(m.vault, [0, 0, 0]); assert.deepStrictEqual(TT.validate(m), []);
+  assert(TT.validate(Object.assign({}, two(), { vault: [1, 2] })).length); assert(TT.validate(Object.assign({}, two(), { vault: [-1, 0, 0] })).length); assert(TT.validate(Object.assign({}, two(), { vault: [1000001, 0, 0] })).length);
+  assert.deepStrictEqual(TT.newGame(3).vault, [0, 0, 0]);
+});
+
 t('treasury: every bank has its own account (5% fee, 1M each): deposit and withdraw through that bank in any game', () => {
   assert.strictEqual(TT.TREASURY_FEE, 0.05); assert.strictEqual(TT.TREASURY_BANK_CAP, 1000000);
   assert.strictEqual(TT.treasuryNet(1000), 950); assert.strictEqual(TT.treasuryNet(19), 19, 'a deposit under 20 coins pays no fee'); assert.strictEqual(TT.treasuryNet(20), 19);
