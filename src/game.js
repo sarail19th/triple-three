@@ -19,7 +19,7 @@
     return m ? (parseInt(m[1], 10) >>> 0) || 1 : 0;
   }
   function randomSeed() { return ((Math.random() * 4294967295) >>> 0) || 1; }
-  function fmt(n) { return n >= 10000 ? Math.round(n / 1000) + 'k' : n >= 1000 ? (Math.round(n / 100) / 10) + 'k' : String(n); }
+  function fmt(n) { return n >= 1000000 ? (Math.round(n / 100000) / 10) + 'M' : n >= 10000 ? Math.round(n / 1000) + 'k' : n >= 1000 ? (Math.round(n / 100) / 10) + 'k' : String(n); }
 
   // best scores are kept per map and bear mode: harder games get their own board (easy + classic keeps the original key)
   function bestKey() {
