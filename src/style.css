@@ -3,8 +3,7 @@
   --g1: #84c660; --g2: #7bbd57; --line: #3f7a2a; --edge: #1d4a30;
   --deco: linear-gradient(transparent, transparent); /* extra speckle layer on the grass (flowers, leaves, frost) */
   --w1: #6cc3f4; --w2: #4aa3e4; --w3: #3a86cc; --bank: #e3f0b4; /* water */
-  --m-mid: #7b8a45; --m-hi: #a6bd64; --m-sh: #2a4a1c; /* mountains: an earthy green and brown mound under the emoji */
-  --h-rim: #b0925f; --h-out: #6b4d2e; /* holes: a soft brown pit under the emoji */
+  --h-rim: #5e4228; --h-out: #2c1d11; --h-in: #0a0604; --h-crack: #2a1a0e; /* holes: a dark brown to black pit with a cracked floor */
   /* board side: as wide as the phone allows, as tall as the screen allows after the controls underneath */
   --bs: max(280px, min(100vw - 12px, calc(100dvh - 330px), 640px));
 }
@@ -84,6 +83,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
    rounded banks that blend into the grass; the water tiles themselves are transparent and only refuse taps */
 #board { position: relative; }
 .water, .terrain { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.cell[data-c="25"] .e { visibility: hidden; } /* a hole is drawn by the terrain layer; its emoji stays in the text for tests and screen readers */
+[data-season="winter"] .cell[data-c="24"] .e { filter: brightness(1.2) saturate(.7) drop-shadow(0 0 3px #fff); } /* a white mountain in winter */
 .water .ripples { animation: ripples 7s ease-in-out infinite alternate; }
 @keyframes ripples { from { transform: translate(-0.2px, 0); } to { transform: translate(0.2px, 0.08px); } }
 .cell[data-c="21"], .cell[data-c="24"] { cursor: not-allowed; outline: none; }
@@ -287,8 +288,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   background: linear-gradient(var(--g1), var(--g2)); box-shadow: 0 0 0 1.5px var(--edge); }
 .mini span { display: flex; align-items: center; justify-content: center; font-size: 6px; line-height: 1; box-shadow: inset 0 0 0 .5px #0000001c; }
 .mini span.w { background: linear-gradient(var(--w1), var(--w3)); box-shadow: none; }
-.mini span.m { background: radial-gradient(circle at 40% 35%, var(--m-hi), var(--m-mid) 70%, var(--m-sh)); }
-.mini span.o { background: radial-gradient(circle, var(--h-out), var(--h-rim)); }
+.mini span.o { background: radial-gradient(circle, var(--h-in), var(--h-out) 65%, var(--h-rim)); }
 .samples { display: flex; justify-content: center; gap: 12px; margin: 8px 0 2px; }
 .samples .mini { width: 68px; height: 68px; border-radius: 7px; }
 .samples .mini span { font-size: 9px; }

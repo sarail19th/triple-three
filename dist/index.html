@@ -14,8 +14,7 @@
   --g1: #84c660; --g2: #7bbd57; --line: #3f7a2a; --edge: #1d4a30;
   --deco: linear-gradient(transparent, transparent); /* extra speckle layer on the grass (flowers, leaves, frost) */
   --w1: #6cc3f4; --w2: #4aa3e4; --w3: #3a86cc; --bank: #e3f0b4; /* water */
-  --m-mid: #7b8a45; --m-hi: #a6bd64; --m-sh: #2a4a1c; /* mountains: an earthy green and brown mound under the emoji */
-  --h-rim: #b0925f; --h-out: #6b4d2e; /* holes: a soft brown pit under the emoji */
+  --h-rim: #5e4228; --h-out: #2c1d11; --h-in: #0a0604; --h-crack: #2a1a0e; /* holes: a dark brown to black pit with a cracked floor */
   /* board side: as wide as the phone allows, as tall as the screen allows after the controls underneath */
   --bs: max(280px, min(100vw - 12px, calc(100dvh - 330px), 640px));
 }
@@ -95,6 +94,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
    rounded banks that blend into the grass; the water tiles themselves are transparent and only refuse taps */
 #board { position: relative; }
 .water, .terrain { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.cell[data-c="25"] .e { visibility: hidden; } /* a hole is drawn by the terrain layer; its emoji stays in the text for tests and screen readers */
+[data-season="winter"] .cell[data-c="24"] .e { filter: brightness(1.2) saturate(.7) drop-shadow(0 0 3px #fff); } /* a white mountain in winter */
 .water .ripples { animation: ripples 7s ease-in-out infinite alternate; }
 @keyframes ripples { from { transform: translate(-0.2px, 0); } to { transform: translate(0.2px, 0.08px); } }
 .cell[data-c="21"], .cell[data-c="24"] { cursor: not-allowed; outline: none; }
@@ -298,8 +299,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   background: linear-gradient(var(--g1), var(--g2)); box-shadow: 0 0 0 1.5px var(--edge); }
 .mini span { display: flex; align-items: center; justify-content: center; font-size: 6px; line-height: 1; box-shadow: inset 0 0 0 .5px #0000001c; }
 .mini span.w { background: linear-gradient(var(--w1), var(--w3)); box-shadow: none; }
-.mini span.m { background: radial-gradient(circle at 40% 35%, var(--m-hi), var(--m-mid) 70%, var(--m-sh)); }
-.mini span.o { background: radial-gradient(circle, var(--h-out), var(--h-rim)); }
+.mini span.o { background: radial-gradient(circle, var(--h-in), var(--h-out) 65%, var(--h-rim)); }
 .samples { display: flex; justify-content: center; gap: 12px; margin: 8px 0 2px; }
 .samples .mini { width: 68px; height: 68px; border-radius: 7px; }
 .samples .mini span { font-size: 9px; }
@@ -549,7 +549,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       </section>
     </div>
     <div class="pager"><button id="helpPrev" class="btn" aria-label="Previous page">‹ Back</button><span id="helpPageLabel" aria-live="polite"></span><button id="helpNext" class="btn" aria-label="Next page">Next ›</button></div>
-    <p class="gnote">Version <b id="buildId">cdb6396e</b> · <a href="#" id="updateLink">↻ Get the latest version</a><br>(keeps your saved game and best scores)</p>
+    <p class="gnote">Version <b id="buildId">d20e97a0</b> · <a href="#" id="updateLink">↻ Get the latest version</a><br>(keeps your saved game and best scores)</p>
     <div class="helpbtns"><button id="helpTour" class="btn">▶ Quick tour</button><button id="helpClose" class="btn primary">Got it</button></div>
   </div>
 </div>
@@ -1763,6 +1763,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     autumn: { bear: ['🐗', 'boar'], fox: ['🦝', 'raccoon'] }, winter: { bear: ['🐺', 'wolf'], fox: ['🐇', 'rabbit'] } };
   var curSeason = 'summer';
   function em(code) { // the emoji to show for an item code
+    if (code === TT.MOUNTAIN && curSeason === 'winter') return '🏔️'; // snow-capped: the mountain turns white in winter
     var p = PLANTS[curSeason];
     if (p && p[code]) return p[code];
     if (TT.isBear(code)) return SKINS[curSeason].bear[0];
@@ -1964,26 +1965,32 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     waterEl = svg;
   }
 
-  // Highlands terrain, drawn like the water: ONE soft SVG layer above the water and under the tiles. Mountains fuse into a ridge with a shaded
-  // skirt and a lit top (the emoji is the peak, drawn on top by the tile); holes fuse into a pit with a rim (the emoji sits in it).
+  // Highlands holes, drawn like the water: ONE soft SVG layer above the water and under the tiles. Neighbouring holes fuse into one dark pit with a rim, a
+  // black middle and cracks running out across the floor. Mountains are only their emoji (⛰️, white 🏔️ in winter) with no tile behind them. The hole tiles
+  // keep their emoji in the text for tests and screen readers (the CSS hides it).
   function drawTerrain() {
     var g = state.grid, w = state.w, h = state.h;
-    var key = w + 'x' + h + ':' + g.map(function (v) { return v === TT.MOUNTAIN ? 'm' : v === TT.HOLE ? 'h' : '.'; }).join('');
+    var key = w + 'x' + h + ':' + g.map(function (v) { return v === TT.HOLE ? 'h' : '.'; }).join('');
     if (key === terrainKey) return;
     terrainKey = key;
     if (terrainEl) { terrainEl.remove(); terrainEl = null; }
-    if (!/[mh]/.test(key)) return;
-    var mrects = '', hrects = '';
+    if (key.indexOf('h') < 0) return;
+    var hrects = '', cracks = '', pits = '';
+    function rect(cc, rr) { return '<rect x="' + (cc - 0.01) + '" y="' + (rr - 0.01) + '" width="1.02" height="1.02"/>'; }
     g.forEach(function (v, i) {
-      var c = i % w, r = (i / w) | 0, cell = '<rect x="' + (c - 0.01) + '" y="' + (r - 0.01) + '" width="1.02" height="1.02"/>';
-      var rect = function (cc, rr) { return '<rect x="' + (cc - 0.01) + '" y="' + (rr - 0.01) + '" width="1.02" height="1.02"/>'; };
-      if (v === TT.MOUNTAIN || v === TT.HOLE) { // at the board edge the terrain runs on past it, like a river does
-        if (c === 0) cell += rect(-1, r); if (c === w - 1) cell += rect(w, r); if (r === 0) cell += rect(c, -1); if (r === h - 1) cell += rect(c, h);
-      }
-      if (v === TT.MOUNTAIN) {
-        mrects += cell;
-      } else if (v === TT.HOLE) {
-        hrects += cell;
+      if (v !== TT.HOLE) return;
+      var c = i % w, r = (i / w) | 0, cx = c + 0.5, cy = r + 0.5;
+      hrects += rect(c, r);
+      if (c === 0) hrects += rect(-1, r); // at the board edge the pit runs on past it, like a river does
+      if (c === w - 1) hrects += rect(w, r);
+      if (r === 0) hrects += rect(c, -1);
+      if (r === h - 1) hrects += rect(c, h);
+      pits += '<ellipse cx="' + cx + '" cy="' + (cy + 0.02) + '" rx="0.25" ry="0.22" fill="url(#hgrad)"/>';
+      // cracks: jagged lines from the edge of the pit out across the floor, a little different for every hole
+      for (var k = 0; k < 6; k++) {
+        var a = ((i * 53 + k * 61) % 360) * Math.PI / 180 + k * 1.0472, len = 0.4 + (((i + k * 7) * 29) % 10) / 60, d = 'M' + (cx + Math.cos(a) * 0.36).toFixed(3) + ' ' + (cy + Math.sin(a) * 0.36).toFixed(3);
+        for (var q = 1; q <= 3; q++) { var jit = ((((i + q) * 17 + k * 13) % 7) - 3) * 0.045; d += ' L' + (cx + Math.cos(a + jit) * (0.36 + len * q / 3)).toFixed(3) + ' ' + (cy + Math.sin(a + jit) * (0.36 + len * q / 3)).toFixed(3); }
+        cracks += '<path d="' + d + '"/>';
       }
     });
     var x0 = -2, y0 = -2, W = w + 4, H = h + 4, box = 'x="' + x0 + '" y="' + y0 + '" width="' + W + '" height="' + H + '"';
@@ -1991,21 +1998,17 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       return '<filter id="' + id + '" filterUnits="userSpaceOnUse" ' + box + ' color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="' + std + '"/>' +
         '<feColorMatrix values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 ' + slope + ' ' + offset + '"/></filter>';
     }
-    function mask(id, fid, cellsId) { return '<mask id="' + id + '" maskUnits="userSpaceOnUse" ' + box + '><g filter="url(#' + fid + ')" fill="#fff"><use href="#' + cellsId + '"/></g></mask>'; }
+    function mask(id, fid) { return '<mask id="' + id + '" maskUnits="userSpaceOnUse" ' + box + '><g filter="url(#' + fid + ')" fill="#fff"><use href="#thcells"/></g></mask>'; }
     var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('class', 'terrain'); svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h); svg.setAttribute('preserveAspectRatio', 'none'); svg.setAttribute('aria-hidden', 'true');
-    svg.innerHTML = '<defs><g id="tmcells">' + mrects + '</g><g id="thcells">' + hrects + '</g>' +
-      filter('tmskirt', 0.3, 4, -0.7) + filter('tmbody', 0.25, 8, -3.2) + filter('tmhi', 0.25, 8, -4.5) +
+    svg.innerHTML = '<defs><g id="thcells">' + hrects + '</g>' +
       filter('thskirt', 0.3, 4, -0.8) + filter('thrim', 0.24, 8, -2.6) + filter('thbody', 0.24, 9, -4.1) +
-      mask('mkskirt', 'tmskirt', 'tmcells') + mask('mkbody', 'tmbody', 'tmcells') + mask('mkhi', 'tmhi', 'tmcells') +
-      mask('hkskirt', 'thskirt', 'thcells') + mask('hkrim', 'thrim', 'thcells') + mask('hkbody', 'thbody', 'thcells') +
-      '</defs>' +
-      '<rect ' + box + ' style="fill:var(--m-sh)" fill-opacity="0.35" mask="url(#mkskirt)"/>' +
-      '<rect ' + box + ' style="fill:var(--m-mid)" mask="url(#mkbody)"/>' +
-      '<g transform="translate(-0.05 -0.07)"><rect ' + box + ' style="fill:var(--m-hi)" fill-opacity="0.7" mask="url(#mkhi)"/></g>' +
-      '<rect ' + box + ' style="fill:var(--m-sh)" fill-opacity="0.3" mask="url(#hkskirt)"/>' +
-      '<rect ' + box + ' style="fill:var(--h-rim)" fill-opacity="0.9" mask="url(#hkrim)"/>' +
-      '<rect ' + box + ' style="fill:var(--h-out)" mask="url(#hkbody)"/>';
+      mask('hkskirt', 'thskirt') + mask('hkrim', 'thrim') + mask('hkbody', 'thbody') +
+      '<radialGradient id="hgrad"><stop offset="0" style="stop-color:var(--h-in)"/><stop offset="1" style="stop-color:var(--h-out)" stop-opacity="0"/></radialGradient></defs>' +
+      '<rect ' + box + ' style="fill:var(--h-out)" fill-opacity="0.35" mask="url(#hkskirt)"/>' +
+      '<g fill="none" style="stroke:var(--h-crack)" stroke-width="0.04" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.95">' + cracks + '</g>' +
+      '<rect ' + box + ' style="fill:var(--h-rim)" mask="url(#hkrim)"/>' +
+      '<rect ' + box + ' style="fill:var(--h-out)" mask="url(#hkbody)"/>' + pits;
     boardEl.insertBefore(svg, boardEl.querySelector('.cell')); // above the water layer, under the tiles
     terrainEl = svg;
   }
@@ -2479,7 +2482,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     into.style.gridTemplate = 'repeat(' + side + ', 1fr) / repeat(' + side + ', 1fr)'; // the island is 8x8
     g.forEach(function (v) {
       var c = document.createElement('span');
-      if (v === TT.WATER) c.className = 'w'; else if (v === TT.MOUNTAIN) c.className = 'm'; else if (v === TT.HOLE) c.className = 'o'; else if (v) c.textContent = em(v);
+      if (v === TT.WATER) c.className = 'w'; else if (v === TT.HOLE) c.className = 'o'; else if (v) c.textContent = em(v);
       into.appendChild(c);
     });
     return into;

@@ -509,6 +509,7 @@ with sync_playwright() as p:
         seen[cur] = page.evaluate("[document.querySelectorAll('#seasonFx i').length, [1, 2, 3].map(c => window.ttDebug.emoji(c))]")
         tree_ok = {PLANTS[cur][2], '🍁'} if cur == 'autumn' else {PLANTS[cur][2]}   # 🪾 falls back to 🍁 where the font lacks it (as in this headless browser)
         assert seen[cur][1][:2] == PLANTS[cur][:2] and seen[cur][1][2] in tree_ok, (cur, seen[cur])
+        assert page.evaluate('window.ttDebug.emoji(24)') == ('🏔️' if cur == 'winter' else '⛰️'), f'the mountain is white (snow-capped) in winter only: {cur}'
         cells = page.evaluate("[30, 31, 32].map(i => document.querySelector('#board .cell[data-i=\"' + i + '\"]').firstChild.textContent)")
         assert cells == seen[cur][1], f'the board shows the {cur} plants: {cells} vs {seen[cur][1]}'
         assert page.inner_text('#curItem') == page.evaluate('window.ttDebug.emoji(window.ttDebug.state().cur)')
