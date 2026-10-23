@@ -381,8 +381,8 @@
       } else if (t === 'pond') {
         b.disabled = !TT.canPond(state);
         b.setAttribute('aria-pressed', mode === 'pond');
-        b.querySelector('.tp').textContent = TT.pondPrice(state) === null ? 'max' : '🪙' + fmt(TT.pondPrice(state));
-        b.querySelector('.tb').textContent = '×' + (TT.MAX_PONDS - state.ponds.length);
+        b.querySelector('.tp').textContent = '🪙' + fmt(TT.pondPrice(state));
+        b.querySelector('.tb').textContent = '∞'; // no limit: only free tiles and coins
         return;
       } else if (t === 'reclaim') {
         b.hidden = state.map !== 'island'; // the island's answer to buying land
@@ -427,7 +427,8 @@
       b.querySelector('.tp').textContent = owned ? '✓' : '🪙' + fmt(lp);
     });
     var nq = state.lake < TT.LAKE_SIZES.length ? TT.LAKE_SIZES[state.lake] : 0, bl = TT.bestLake(state);
-    $('pondNote').textContent = 'Ponds ' + state.ponds.length + '/' + TT.MAX_PONDS + (state.ponds.length ? ' · +' + fmt(TT.pondPoints(state)) + ' pts + 🪙' + fmt(TT.pondCoins(state)) + ' per turn' : '') +
+    var paying = TT.payingPonds(state);
+    $('pondNote').textContent = 'Ponds ' + state.ponds.length + ' · ' + (paying ? paying + ' pay +' + fmt(TT.pondPoints(state)) + ' pts + 🪙' + fmt(TT.pondCoins(state)) + ' per turn' : 'none pay yet: dug ponds pay once they fill a 3×3 block') +
       (nq ? ' · 🏞️ quest: a ' + nq + '×' + nq + ' lake (biggest now ' + bl + '×' + bl + ') pays 🪙' + fmt(TT.LAKE_COINS[state.lake]) + ' + points' : ' · 🏞️ all lakes built');
     var ql = $('questLine');
     ql.textContent = nq ? '🏞️ Lake quest ' + nq + '×' + nq + ': biggest ' + bl + '×' + bl + ' · reward 🪙' + fmt(TT.LAKE_COINS[state.lake]) + ' + points' : '🏞️ All lakes built';
@@ -471,7 +472,8 @@
       var pp = TT.pondPrice(state);
       if (pi >= 0 && targetOk(pi)) {
         cells[pi].classList.add('target');
-        note = (sel === pi ? 'Tap again to dig' : 'Dig') + ' a pond here (-' + pp + ' coins, +' + TT.pondPoints(Object.assign({}, state, { ponds: state.ponds.concat([pi]) })) + ' pts + 🪙' + TT.pondCoins(Object.assign({}, state, { ponds: state.ponds.concat([pi]) })) + ' per turn)'; hot = sel === pi;
+        var more = Object.assign({}, state, { ponds: state.ponds.concat([pi]) }), gp = TT.pondPoints(more) - TT.pondPoints(state), gc = TT.pondCoins(more) - TT.pondCoins(state);
+        note = (sel === pi ? 'Tap again to dig' : 'Dig') + ' a pond here (-' + pp + ' coins' + (gp ? ', +' + gp + ' pts + 🪙' + gc + ' per turn' : ', pays once it is in a 3×3 block') + ')'; hot = sel === pi;
       } else note = '💧 Tap an empty tile to dig a pond (-' + pp + ' coins)';
     } else if (mode === 'reclaim') {
       var rs = TT.reclaimSpots(state), rpr = TT.reclaimPrice(state);
@@ -732,7 +734,7 @@
   // New game: pick the map and the bear mode in a small dialog (the last picks are remembered); Play again repeats both
   var dlg = { map: 'easy', bears: 'classic', foxes: true, take: 'all' };
   // sample maps: the real generator with fixed seeds, drawn as tiny boards (water blue, plants as emoji). Easy and Medium are the same every game.
-  var SAMPLE_SEEDS = { easy: [1], standard: [3, 8, 21], medium: [1], hard: [4, 9, 17], island: [1] }, CARD_SEED = { easy: 1, standard: 3, medium: 1, hard: 4, island: 1 };
+  var SAMPLE_SEEDS = { easy: [1], standard: [3, 8, 21], medium: [1], hard: [4, 9, 17], island: [1, 5, 9] }, CARD_SEED = { easy: 1, standard: 3, medium: 1, hard: 4, island: 1 };
   function miniMap(map, seed, into) {
     var g = TT.newGame(seed, { map: map }).grid, side = Math.round(Math.sqrt(g.length));
     into.textContent = '';
@@ -770,7 +772,7 @@
     $('foxNote').textContent = dlg.foxes ? 'Foxes warp around the board; walls or a full box trap them.' : 'No foxes in the item queue.';
     $('bearNote').textContent = dlg.bears === 'off' ? 'No bears in the item queue' + (dlg.foxes ? '.' : ' (calm mode: no animals at all, nothing to interrupt you).') : dlg.bears === 'wild' ? 'Boxed-in bears growl, get angry, then maul a 🌱🌿🌳🏕️🛖 next to them (one tier down). Bears breed in small pens. Own best scores.' : 'Bears wander and get trapped into tombstones.';
   }
-  var MAP_NOTES = { easy: 'A plain grass field.', standard: 'A plain field with a few grass, bushes and trees already growing (different every game, e.g. these).', medium: 'A river runs across the field and splits it in two (the same map every game).', hard: 'Random ponds eat into the field (different every game, e.g. these).', island: 'The biggest board, with the sea all around it. You cannot buy land, but you can reclaim sea tiles next to the field (dearer each time) to grow it.' };
+  var MAP_NOTES = { easy: 'A plain grass field.', standard: 'A plain field with a few grass, bushes and trees already growing (different every game, e.g. these).', medium: 'A river runs across the field and splits it in two (the same map every game).', hard: 'Random ponds eat into the field (different every game, e.g. these).', island: 'The biggest board, all sea except a small island (a different shape every game, e.g. these). You cannot buy land, but you can reclaim sea tiles next to it (dearer each time) to grow it.' };
   function openNewGame() {
     dlg.map = mapPref(); dlg.bears = !bearsPref() ? 'off' : wildPref() ? 'wild' : 'classic'; dlg.foxes = foxesPref(); dlg.take = takePref();
     // a game in progress would be erased: say so loudly, with what is at stake, and make the button say it too
@@ -909,8 +911,8 @@
     { target: '#bridgeBtn', sheet: true, title: '🌉 Bridge', text: 'On maps with water: turns a water tile that has land on both sides into a road bears can cross. Glowing tiles show where it can go. Up to 5, dearer each time.', when: function () { return !$('bridgeBtn').hidden; } },
     { target: '.tools.shop .tool[data-tool="22"]', sheet: true, title: '🏦 Bank', text: 'Appears once you have built a village. A bank is placed like an item, is a dead tile that animals cannot cross, and pays <b>coins every turn</b> (the 📅 calendar at the top counts 10 turns to a month). At most 3, dearer each time; it cannot go in the reserve. Three connected banks merge into 💵 cash.', when: function () { return !!document.querySelector('.tools.shop .tool[data-tool="22"]'); } },
     { target: '#speedLink', title: '⏱ Clock speed', text: 'Appears once you own a bank. Each turn adds this many ticks to the calendar (10 ticks = a month): faster means bank income per turn, loan interest and the repayment deadline all come sooner; paused stops them all. Tap to cycle 1×, 2×, 3×, paused. <b>Tap a bank</b> on the map to borrow against the dearest building next to it.', when: function () { return !$('speedBox').hidden; } },
-    { target: '#pondBtn', sheet: true, title: '💧 Pond', text: 'Digs a pond on an empty tile. It takes the tile for good, but pays <b>points every turn</b>, and dearer ponds pay more in total. Dig a 2×2, then 3×3 and 4×4 block of water for <b>lake quests</b>: each pays coins and points (see the line under the tools, and at the top of the screen).' },
-    { target: '#reclaimBtn', sheet: true, title: '🏝️ Reclaim', text: 'Island map only: land cannot be bought here, but this turns a sea tile next to the field into new ground. Glowing tiles show where. 28 in all, each one dearer than the last.', when: function () { return !$('reclaimBtn').hidden; } },
+    { target: '#pondBtn', sheet: true, title: '💧 Pond', text: 'Digs a pond on an empty tile. It takes the tile for good and there is no limit, but a pond only pays <b>points and coins every turn</b> once it sits inside a <b>3×3 block of dug ponds</b> (the map\'s own water never pays). Dig a 2×2, then 3×3 and 4×4 block of water for <b>lake quests</b>: each pays coins and points (see the line under the tools, and at the top of the screen).' },
+    { target: '#reclaimBtn', sheet: true, title: '🏝️ Reclaim', text: 'Island map only: land cannot be bought here, but this turns a sea tile next to the field into new ground. Glowing tiles show where. as many as the sea has, each one dearer than the last.', when: function () { return !$('reclaimBtn').hidden; } },
     { target: '.tool.land', sheet: true, title: '⬆️⬇️⬅️➡️ Land', text: 'Adds one more row or column on that side of the map (each side once, dearer every time). Water that touches that edge carries on into it. Handy when the map is nearly full.', when: function () { return state.map !== 'island'; } },
     { title: '🎉 You are ready', text: 'The <b>Item guide</b> at the top lists every item and what it merges into, and <b>How to play</b> repeats the rules and this tour. Your game is saved automatically. Have fun!' }
   ];

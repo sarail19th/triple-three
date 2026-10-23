@@ -24,9 +24,10 @@
   // Maps (chosen when a game starts, kept in state.map): easy = plain field, standard = a few random grass/bush/tree, medium = a
   // river across the field, hard = random ponds. Water tiles are fixed for the whole game.
   var MAPS = ['easy', 'standard', 'medium', 'hard', 'island'];
-  // Island: the biggest board (every side of land already bought) with a ring of sea around the 6x6 field. Land cannot be bought, but the
-  // shop reclaims a sea tile next to the land (state.reclaimed counts them), dearer every time.
-  var ISLAND_SIZE = DEFAULT_W + 2, MAX_RECLAIM = 28, RECLAIM_PRICE = []; (function () { for (var n = 0, p = 100; n < MAX_RECLAIM; n++, p *= 1.2) RECLAIM_PRICE.push(Math.round(p / 10) * 10); })();
+  // Island: the biggest board (every side of land already bought), all sea except a small random island of ISLAND_MIN..ISLAND_MAX tiles
+  // inside the middle 6x6. Land cannot be bought, but the shop reclaims a sea tile next to the land (state.reclaimed counts them), dearer
+  // every time; at most MAX_RECLAIM = the whole board minus the smallest island.
+  var ISLAND_SIZE = DEFAULT_W + 2, ISLAND_MIN = 16, ISLAND_MAX = 20, MAX_RECLAIM = ISLAND_SIZE * ISLAND_SIZE - ISLAND_MIN, RECLAIM_PRICE = []; (function () { for (var n = 0, p = 60; n < MAX_RECLAIM; n++, p *= 1.1) RECLAIM_PRICE.push(Math.round(p / 10) * 10); })();
   // Treasury: when a game is left, TREASURY_SHARE of its coins go into a saved treasury (at most TREASURY_CAP), which can be spent as
   // the starting coins of the next game (state.boost; those games have their own best-score board).
   var TREASURY_SHARE = 0.02, TREASURY_CAP = 1000;
@@ -40,10 +41,12 @@
   // placed) doubles the previous rate. A year without repaying: the building is lost and its tile is seized (dead) until the debt is paid,
   // and that bank stops paying.
   var LOAN_RATE = 0.15, LOAN_TICKS = TICKS_PER_MONTH * MONTHS_PER_YEAR;
-  // Ponds: a shop tool (any map). Turns one empty tile into permanent water (state.ponds) that pays points every turn, scaled to your best
-  // building tier; dearer every time. Lake quests: the first pond that completes a 2x2 / 3x3 / 4x4 block of water pays a one-off bonus (state.lake).
-  var MAX_PONDS = 16, POND_COIN_DIV = 400; // each pond also pays PRICE[top] / POND_COIN_DIV coins (min 1) every turn
-  var POND_PRICE = []; (function () { for (var n = 0, p = 60; n < MAX_PONDS; n++, p *= 1.3) POND_PRICE.push(Math.round(p / 10) * 10); })();
+  // Ponds: a shop tool (any map). Turns one empty tile into permanent water (state.ponds); a dug pond pays points and coins every turn,
+  // scaled to your best building tier, only while it sits in a 3x3 (or bigger) block made of dug ponds (the map's own water never pays); dearer every time. Lake quests: the first pond that completes a 2x2 / 3x3 / 4x4 block of water pays a one-off bonus (state.lake).
+  var POND_COIN_DIV = 400; // each paying pond also pays PRICE[top] / POND_COIN_DIV coins (min 1) every turn
+  // The first POND_TABLE ponds follow x1.3; every pond after that (there is no limit, only free tiles) rises x1.15.
+  var POND_TABLE = 16, POND_PRICE = []; (function () { for (var n = 0, p = 60; n < POND_TABLE; n++, p *= 1.3) POND_PRICE.push(Math.round(p / 10) * 10); })();
+  function pondPriceAt(n) { return n < POND_TABLE ? POND_PRICE[n] : Math.round(POND_PRICE[POND_TABLE - 1] * Math.pow(1.15, n - POND_TABLE + 1) / 10) * 10; }
   var LAKE_SIZES = [2, 3, 4], LAKE_BONUS = [30, 100, 300], LAKE_COINS = [200, 1200, 8000]; // a quest pays points (BASE[top] * LAKE_BONUS) AND coins
   // Bridges: a shop tool for maps with water. A bridge turns one water tile into a walkable tile (bears and foxes cross it, nothing can
   // be built on it) and is remembered in state.bridges. At most MAX_BRIDGES per game, dearer every time.
@@ -158,7 +161,20 @@
     if (s.map === 'standard') scatter(s, STANDARD_ITEMS);
     else if (s.map === 'medium') for (i = 0; i < MEDIUM_WATER.length; i++) s.grid[MEDIUM_WATER[i]] = WATER;
     else if (s.map === 'hard') ponds(s);
-    else if (s.map === 'island') for (i = 0; i < N; i++) { var r = (i / W) | 0, c = i % W; if (r === 0 || c === 0 || r === H - 1 || c === W - 1) s.grid[i] = WATER; } // the sea around the field
+    else if (s.map === 'island') island(s);
+  }
+  // all sea, then a connected random island of ISLAND_MIN..ISLAND_MAX tiles that keeps one tile of sea around the middle 6x6
+  function island(s) {
+    var i, inside = function (j) { var r = (j / W) | 0, c = j % W; return r > 0 && c > 0 && r < H - 1 && c < W - 1; };
+    for (i = 0; i < N; i++) s.grid[i] = WATER;
+    var size = ISLAND_MIN + randInt(s, ISLAND_MAX - ISLAND_MIN + 1), start = (2 + randInt(s, 4)) * W + 2 + randInt(s, 4), cells = [start];
+    s.grid[start] = EMPTY;
+    while (cells.length < size) {
+      var free = neighbors(cells[randInt(s, cells.length)]).filter(function (j) { return inside(j) && s.grid[j] === WATER; });
+      if (!free.length) continue;
+      var j = free[randInt(s, free.length)];
+      s.grid[j] = EMPTY; cells.push(j);
+    }
   }
   // a few random grass / bush / tree on the empty field (never three of a kind touching)
   function scatter(s, count) {
@@ -661,10 +677,23 @@
     var s = clone(state); s.speed = n; return s;
   }
 
-  function pondPrice(s) { return s.ponds.length < MAX_PONDS ? POND_PRICE[s.ponds.length] : null; }
-  function pondPoints(s) { return s.ponds.length ? s.ponds.length * Math.ceil(BASE[s.top] / 20) : 0; } // per turn
-  function pondCoins(s) { return s.ponds.length ? s.ponds.length * Math.max(1, Math.round(PRICE[Math.min(s.top || 1, LAST_BUILDING)] / POND_COIN_DIV)) : 0; } // per turn, next to the points
-  function canPond(s) { dim(s); return !s.over && s.ponds.length < MAX_PONDS && s.coins >= POND_PRICE[s.ponds.length] && freeCount(s) >= 2; }
+  function pondPrice(s) { return pondPriceAt(s.ponds.length); }
+  // dug ponds that sit inside a full 3x3 block of dug ponds (blocks may overlap and grow: a 4x4 pays all 16)
+  function payingPonds(s) {
+    dim(s);
+    var dug = {}, paying = {}, n = 0, r, c, a, b, ok;
+    s.ponds.forEach(function (p) { dug[p] = true; });
+    for (r = 0; r + 3 <= H; r++) for (c = 0; c + 3 <= W; c++) {
+      ok = true;
+      for (a = 0; a < 3 && ok; a++) for (b = 0; b < 3; b++) if (!dug[(r + a) * W + c + b]) { ok = false; break; }
+      if (ok) for (a = 0; a < 3; a++) for (b = 0; b < 3; b++) paying[(r + a) * W + c + b] = true;
+    }
+    for (var k in paying) n++;
+    return n;
+  }
+  function pondPoints(s) { return payingPonds(s) * Math.ceil(BASE[s.top] / 20); } // per turn
+  function pondCoins(s) { return payingPonds(s) * Math.max(1, Math.round(PRICE[Math.min(s.top || 1, LAST_BUILDING)] / POND_COIN_DIV)); } // per turn, next to the points
+  function canPond(s) { dim(s); return !s.over && s.coins >= pondPriceAt(s.ponds.length) && freeCount(s) >= 2; }
   // Is there a k x k block of water containing idx?
   function squareAt(grid, idx, k) {
     var r = (idx / W) | 0, c = idx % W;
@@ -691,7 +720,7 @@
   function buyPond(state, idx) {
     dim(state);
     if (!canPond(state) || !(idx >= 0 && idx < N) || state.grid[idx] !== EMPTY || state.bridges.indexOf(idx) >= 0) return null;
-    var s = clone(state), price = POND_PRICE[state.ponds.length], events = [{ type: 'pond', at: idx, price: price }];
+    var s = clone(state), price = pondPriceAt(state.ponds.length), events = [{ type: 'pond', at: idx, price: price }];
     s.coins -= price;
     s.grid[idx] = WATER; s.ponds.push(idx); s.ponds.sort(function (a, b) { return a - b; });
     var lg = lakeGrid(s);
@@ -875,7 +904,7 @@
       if (bi !== (bi | 0) || bi < 0 || bi >= N || seenB[bi] || s.grid[bi] === WATER) return ['bad bridge at ' + bi];
       seenB[bi] = true;
     }
-    if (!Array.isArray(s.ponds) || s.ponds.length > MAX_PONDS || !(s.lake >= 0 && s.lake <= LAKE_SIZES.length) || s.lake !== (s.lake | 0)) return ['bad ponds'];
+    if (!Array.isArray(s.ponds) || !(s.lake >= 0 && s.lake <= LAKE_SIZES.length) || s.lake !== (s.lake | 0)) return ['bad ponds'];
     var seenP = {};
     for (i = 0; i < s.ponds.length; i++) {
       var pi = s.ponds[i];
@@ -963,7 +992,7 @@
     RESTOCK: RESTOCK, MILESTONES: MILESTONES, milestoneScore: milestoneScore, milestoneProgress: milestoneProgress, canUndo: canUndo, canHammer: canHammer, migrate: migrate,
     rand: rand, drawItem: drawItem, newGame: newGame, neighbors: neighbors, group: group,
     place: place, swap: swap, swapNext: swapNext, undo: undo, validate: validate, emptyCount: emptyCount,
-    buy: buy, hammer: hammer, trap: trap, move: move, open: open, buyLand: buyLand, buyBridge: buyBridge, borrow: borrow, repay: repay, setSpeed: setSpeed, lockedCells: lockedCells, loanOptions: loanOptions, loanOwed: loanOwed, loanMonthsLeft: loanMonthsLeft, bankRate: bankRate, SEIZED: SEIZED, LOAN_RATE: LOAN_RATE, LOAN_TICKS: LOAN_TICKS, MAX_SPEED: MAX_SPEED, buyBank: buyBank, bankPrice: bankPrice, bankCount: bankCount, bankSlots: bankSlots, bankIncome: bankIncome, canBuyBank: canBuyBank, isBankAvailable: isBankAvailable, calendar: calendar, BANK: BANK, MAX_BANKS: MAX_BANKS, BANK_PRICE: BANK_PRICE, BANK_MIN_TIER: BANK_MIN_TIER, TICKS_PER_MONTH: TICKS_PER_MONTH, MONTHS_PER_YEAR: MONTHS_PER_YEAR, buyPond: buyPond, pondPrice: pondPrice, pondPoints: pondPoints, pondCoins: pondCoins, reclaimSpots: reclaimSpots, reclaimPrice: reclaimPrice, canReclaim: canReclaim, buyReclaim: buyReclaim, MAX_RECLAIM: MAX_RECLAIM, RECLAIM_PRICE: RECLAIM_PRICE, ISLAND_SIZE: ISLAND_SIZE, treasuryGain: treasuryGain, treasuryAfter: treasuryAfter, TREASURY_SHARE: TREASURY_SHARE, TREASURY_CAP: TREASURY_CAP, canPond: canPond, bestLake: bestLake, MAX_PONDS: MAX_PONDS, POND_PRICE: POND_PRICE, LAKE_SIZES: LAKE_SIZES, LAKE_BONUS: LAKE_BONUS, LAKE_COINS: LAKE_COINS, bridgeSpots: bridgeSpots, bridgePrice: bridgePrice, canBridge: canBridge, freeCount: freeCount, MAX_BRIDGES: MAX_BRIDGES, BRIDGE_PRICE: BRIDGE_PRICE, preview: preview, previewMove: previewMove, isOver: isOver,
+    buy: buy, hammer: hammer, trap: trap, move: move, open: open, buyLand: buyLand, buyBridge: buyBridge, borrow: borrow, repay: repay, setSpeed: setSpeed, lockedCells: lockedCells, loanOptions: loanOptions, loanOwed: loanOwed, loanMonthsLeft: loanMonthsLeft, bankRate: bankRate, SEIZED: SEIZED, LOAN_RATE: LOAN_RATE, LOAN_TICKS: LOAN_TICKS, MAX_SPEED: MAX_SPEED, buyBank: buyBank, bankPrice: bankPrice, bankCount: bankCount, bankSlots: bankSlots, bankIncome: bankIncome, canBuyBank: canBuyBank, isBankAvailable: isBankAvailable, calendar: calendar, BANK: BANK, MAX_BANKS: MAX_BANKS, BANK_PRICE: BANK_PRICE, BANK_MIN_TIER: BANK_MIN_TIER, TICKS_PER_MONTH: TICKS_PER_MONTH, MONTHS_PER_YEAR: MONTHS_PER_YEAR, buyPond: buyPond, pondPrice: pondPrice, pondPoints: pondPoints, pondCoins: pondCoins, payingPonds: payingPonds, pondPriceAt: pondPriceAt, reclaimSpots: reclaimSpots, reclaimPrice: reclaimPrice, canReclaim: canReclaim, buyReclaim: buyReclaim, MAX_RECLAIM: MAX_RECLAIM, RECLAIM_PRICE: RECLAIM_PRICE, ISLAND_SIZE: ISLAND_SIZE, treasuryGain: treasuryGain, treasuryAfter: treasuryAfter, TREASURY_SHARE: TREASURY_SHARE, TREASURY_CAP: TREASURY_CAP, canPond: canPond, bestLake: bestLake, POND_PRICE: POND_PRICE, LAKE_SIZES: LAKE_SIZES, LAKE_BONUS: LAKE_BONUS, LAKE_COINS: LAKE_COINS, bridgeSpots: bridgeSpots, bridgePrice: bridgePrice, canBridge: canBridge, freeCount: freeCount, MAX_BRIDGES: MAX_BRIDGES, BRIDGE_PRICE: BRIDGE_PRICE, preview: preview, previewMove: previewMove, isOver: isOver,
     priceOf: priceOf, isMovable: isMovable, canMove: canMove, isAvailable: isAvailable, unlockedTop: unlockedTop, landPrice: landPrice, canLand: canLand
   };
 });
