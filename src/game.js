@@ -405,7 +405,7 @@
       b.querySelector('.tp').textContent = owned ? '✓' : '🪙' + fmt(lp);
     });
     var nq = state.lake < TT.LAKE_SIZES.length ? TT.LAKE_SIZES[state.lake] : 0, bl = TT.bestLake(state);
-    $('pondNote').textContent = 'Ponds ' + state.ponds.length + '/' + TT.MAX_PONDS + (state.ponds.length ? ' · +' + fmt(TT.pondPoints(state)) + ' pts per turn' : '') +
+    $('pondNote').textContent = 'Ponds ' + state.ponds.length + '/' + TT.MAX_PONDS + (state.ponds.length ? ' · +' + fmt(TT.pondPoints(state)) + ' pts + 🪙' + fmt(TT.pondCoins(state)) + ' per turn' : '') +
       (nq ? ' · 🏞️ quest: a ' + nq + '×' + nq + ' lake (biggest now ' + bl + '×' + bl + ') pays 🪙' + fmt(TT.LAKE_COINS[state.lake]) + ' + points' : ' · 🏞️ all lakes built');
     var ql = $('questLine');
     ql.textContent = nq ? '🏞️ Lake quest ' + nq + '×' + nq + ': biggest ' + bl + '×' + bl + ' · reward 🪙' + fmt(TT.LAKE_COINS[state.lake]) + ' + points' : '🏞️ All lakes built';
@@ -448,7 +448,7 @@
       var pp = TT.pondPrice(state);
       if (pi >= 0 && targetOk(pi)) {
         cells[pi].classList.add('target');
-        note = (sel === pi ? 'Tap again to dig' : 'Dig') + ' a pond here (-' + pp + ' coins, +' + TT.pondPoints(Object.assign({}, state, { ponds: state.ponds.concat([pi]) })) + ' pts per turn)'; hot = sel === pi;
+        note = (sel === pi ? 'Tap again to dig' : 'Dig') + ' a pond here (-' + pp + ' coins, +' + TT.pondPoints(Object.assign({}, state, { ponds: state.ponds.concat([pi]) })) + ' pts + 🪙' + TT.pondCoins(Object.assign({}, state, { ponds: state.ponds.concat([pi]) })) + ' per turn)'; hot = sel === pi;
       } else note = '💧 Tap an empty tile to dig a pond (-' + pp + ' coins)';
     } else if (mode === 'bridge') {
       var spots = TT.bridgeSpots(state), bp = TT.bridgePrice(state);
@@ -550,7 +550,7 @@
       } else if (ev.type === 'lake') {
         toast('🏞️ ' + ev.size + '×' + ev.size + ' lake! +' + fmt(ev.coins) + ' coins, +' + fmt(ev.points) + ' points', 0.3);
       } else if (ev.type === 'pondpts') {
-        if (state.ponds.length) floatAt(state.ponds[0], '💧 +' + fmt(ev.points));
+        if (state.ponds.length) floatAt(state.ponds[0], '💧 +' + fmt(ev.points) + ' · +' + fmt(ev.coins) + '🪙');
       } else if (ev.type === 'cub') { // a bear cub is born in the pen
         cells[ev.at].classList.add('drop');
         floatAt(ev.at, '🍼');

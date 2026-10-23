@@ -380,7 +380,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
           <button class="tool" data-tool="hammer" id="hammerBtn" aria-pressed="false" aria-label="Hammer: remove a placed item"><span class="te">🔨</span><span class="tp"></span><span class="tb"></span></button>
           <button class="tool" data-tool="move" id="moveBtn" aria-pressed="false" aria-label="Mover: pick up an item and put it on an empty tile"><span class="te">🚚</span><span class="tp"></span><span class="tb"></span></button>
           <button class="tool" data-tool="bridge" id="bridgeBtn" aria-pressed="false" aria-label="Bridge: join two banks across water" hidden><span class="te">🌉</span><span class="tp"></span><span class="tb"></span></button>
-          <button class="tool" data-tool="pond" id="pondBtn" aria-pressed="false" aria-label="Pond: dig a pond on an empty tile; it pays points every turn"><span class="te">💧</span><span class="tp"></span><span class="tb"></span></button>
+          <button class="tool" data-tool="pond" id="pondBtn" aria-pressed="false" aria-label="Pond: dig a pond on an empty tile; it pays points and coins every turn"><span class="te">💧</span><span class="tp"></span><span class="tb"></span></button>
           <button class="tool land" data-land="top" aria-label="Buy land: a new row on top"><span class="te">⬆️</span><span class="tp"></span></button>
           <button class="tool land" data-land="bottom" aria-label="Buy land: a new row at the bottom"><span class="te">⬇️</span><span class="tp"></span></button>
           <button class="tool land" data-land="left" aria-label="Buy land: a new column on the left"><span class="te">⬅️</span><span class="tp"></span></button>
@@ -510,7 +510,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
         <h3>Maps and water</h3>
         <ul>
         <li>🗺️ <b>Maps</b> (also in <b>New</b>): Easy is a plain field, Standard starts with a few plants, Medium has a river across the field, Hard has random ponds. Blue tiles are <b>water</b>: nothing can be placed, merged, moved or smashed there, and animals cannot enter it. Use the 🌉 <b>bridge</b> tool (up to 5, dearer each time) on a water tile that has land on both sides, up/down or left/right (never a corner or the middle of wide water): it becomes a road that bears can walk over, but nothing can be built on it.</li>
-        <li>💧 <b>Ponds</b> (shop): dig a pond on an empty tile. It stays for the whole game, takes a tile away, and pays <b>points every turn</b> (about 5% of your best building's value each, more with every pond). <b>Lake quests</b>: the pond that completes a 2×2, then a 3×3, then a 4×4 block of water pays a one-off bonus of <b>coins and points</b>. The first pond costs only 60 coins, then each one is dearer (up to 16). Animals cannot cross water, and a bear or fox shut in by ponds is trapped like anywhere else.</li>
+        <li>💧 <b>Ponds</b> (shop): dig a pond on an empty tile. It stays for the whole game, takes a tile away, and pays <b>points and coins every turn</b> (points about 5% of your best building's value each, coins about 1/400 of its shop price each, more with every pond). <b>Lake quests</b>: the pond that completes a 2×2, then a 3×3, then a 4×4 block of water pays a one-off bonus of <b>coins and points</b>. The first pond costs only 60 coins, then each one is dearer (up to 16). Animals cannot cross water, and a bear or fox shut in by ponds is trapped like anywhere else.</li>
         </ul>
       </section>
       <section class="helppage" data-title="Banks and loans" hidden>
@@ -521,7 +521,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       </section>
     </div>
     <div class="pager"><button id="helpPrev" class="btn" aria-label="Previous page">‹ Back</button><span id="helpPageLabel" aria-live="polite"></span><button id="helpNext" class="btn" aria-label="Next page">Next ›</button></div>
-    <p class="gnote">Version <b id="buildId">2ae74f5f</b> · <a href="#" id="updateLink">↻ Get the latest version</a><br>(keeps your saved game and best scores)</p>
+    <p class="gnote">Version <b id="buildId">59243573</b> · <a href="#" id="updateLink">↻ Get the latest version</a><br>(keeps your saved game and best scores)</p>
     <div class="helpbtns"><button id="helpTour" class="btn">▶ Quick tour</button><button id="helpClose" class="btn primary">Got it</button></div>
   </div>
 </div>
@@ -564,7 +564,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   var LOAN_RATE = 0.15, LOAN_TICKS = TICKS_PER_MONTH * MONTHS_PER_YEAR;
   // Ponds: a shop tool (any map). Turns one empty tile into permanent water (state.ponds) that pays points every turn, scaled to your best
   // building tier; dearer every time. Lake quests: the first pond that completes a 2x2 / 3x3 / 4x4 block of water pays a one-off bonus (state.lake).
-  var MAX_PONDS = 16;
+  var MAX_PONDS = 16, POND_COIN_DIV = 400; // each pond also pays PRICE[top] / POND_COIN_DIV coins (min 1) every turn
   var POND_PRICE = []; (function () { for (var n = 0, p = 60; n < MAX_PONDS; n++, p *= 1.3) POND_PRICE.push(Math.round(p / 10) * 10); })();
   var LAKE_SIZES = [2, 3, 4], LAKE_BONUS = [30, 100, 300], LAKE_COINS = [200, 1200, 8000]; // a quest pays points (BASE[top] * LAKE_BONUS) AND coins
   // Bridges: a shop tool for maps with water. A bridge turns one water tile into a walkable tile (bears and foxes cross it, nothing can
@@ -958,7 +958,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     settleCrystals(s, events); // new tombstones / churches may complete a group for a waiting crystal
     noteTop(s, events);
     var pp = pondPoints(s);
-    if (pp) { s.score += pp; s.bonusScore += pp; events.push({ type: 'pondpts', points: pp }); }
+    var pc = pondCoins(s);
+    if (pp) { s.score += pp; s.bonusScore += pp; s.coins += pc; events.push({ type: 'pondpts', points: pp, coins: pc }); }
     s.tick += s.speed;
     s.loans.forEach(function (l) { // a year without repaying: the building is gone and its tile seized
       if (!l.defaulted && s.tick - l.since >= LOAN_TICKS) { l.defaulted = true; s.grid[l.at] = SEIZED; events.push({ type: 'default', bank: l.bank, at: l.at, tier: l.tier }); }
@@ -1093,8 +1094,9 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   // ---- banks and the calendar
   function bankCount(s) { var n = 0; for (var i = 0; i < s.grid.length; i++) if (s.grid[i] === BANK) n++; return n; }
   function isBankAvailable(s) { return unlockedTop(s) >= BANK_MIN_TIER; }
-  function bankPrice(s) { var n = s.banksBought || 0; return n < BANK_PRICE.length ? BANK_PRICE[n] : Math.round(BANK_PRICE[BANK_PRICE.length - 1] * Math.pow(1.5, n - BANK_PRICE.length + 1) / 10) * 10; }
   function bankSlots(s) { return bankCount(s) + (s.cur === BANK ? 1 : 0) + (s.next === BANK ? 1 : 0) + (s.hold === BANK ? 1 : 0); }
+  // the price follows the banks you hold now (board + queue + reserve), not the banks ever bought: merging three into cash starts the ladder again
+  function bankPrice(s) { return BANK_PRICE[Math.min(bankSlots(s), BANK_PRICE.length - 1)]; }
   // coins one bank pays per tick (per turn at normal speed)
   function bankIncome(s) { return Math.max(1, Math.round(PRICE[Math.min(s.top || 1, LAST_BUILDING)] * BANK_INCOME_RATE)); }
   function calendar(s) { var m = Math.floor((s.tick || 0) / TICKS_PER_MONTH); return { year: Math.floor(m / MONTHS_PER_YEAR) + 1, month: m % MONTHS_PER_YEAR + 1 }; }
@@ -1179,6 +1181,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 
   function pondPrice(s) { return s.ponds.length < MAX_PONDS ? POND_PRICE[s.ponds.length] : null; }
   function pondPoints(s) { return s.ponds.length ? s.ponds.length * Math.ceil(BASE[s.top] / 20) : 0; } // per turn
+  function pondCoins(s) { return s.ponds.length ? s.ponds.length * Math.max(1, Math.round(PRICE[Math.min(s.top || 1, LAST_BUILDING)] / POND_COIN_DIV)) : 0; } // per turn, next to the points
   function canPond(s) { dim(s); return !s.over && s.ponds.length < MAX_PONDS && s.coins >= POND_PRICE[s.ponds.length] && freeCount(s) >= 2; }
   // Is there a k x k block of water containing idx?
   function squareAt(grid, idx, k) {
@@ -1444,7 +1447,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     RESTOCK: RESTOCK, MILESTONES: MILESTONES, milestoneScore: milestoneScore, milestoneProgress: milestoneProgress, canUndo: canUndo, canHammer: canHammer, migrate: migrate,
     rand: rand, drawItem: drawItem, newGame: newGame, neighbors: neighbors, group: group,
     place: place, swap: swap, swapNext: swapNext, undo: undo, validate: validate, emptyCount: emptyCount,
-    buy: buy, hammer: hammer, trap: trap, move: move, open: open, buyLand: buyLand, buyBridge: buyBridge, borrow: borrow, repay: repay, setSpeed: setSpeed, lockedCells: lockedCells, loanOptions: loanOptions, loanOwed: loanOwed, loanMonthsLeft: loanMonthsLeft, bankRate: bankRate, SEIZED: SEIZED, LOAN_RATE: LOAN_RATE, LOAN_TICKS: LOAN_TICKS, MAX_SPEED: MAX_SPEED, buyBank: buyBank, bankPrice: bankPrice, bankCount: bankCount, bankSlots: bankSlots, bankIncome: bankIncome, canBuyBank: canBuyBank, isBankAvailable: isBankAvailable, calendar: calendar, BANK: BANK, MAX_BANKS: MAX_BANKS, BANK_PRICE: BANK_PRICE, BANK_MIN_TIER: BANK_MIN_TIER, TICKS_PER_MONTH: TICKS_PER_MONTH, MONTHS_PER_YEAR: MONTHS_PER_YEAR, buyPond: buyPond, pondPrice: pondPrice, pondPoints: pondPoints, canPond: canPond, bestLake: bestLake, MAX_PONDS: MAX_PONDS, POND_PRICE: POND_PRICE, LAKE_SIZES: LAKE_SIZES, LAKE_BONUS: LAKE_BONUS, LAKE_COINS: LAKE_COINS, bridgeSpots: bridgeSpots, bridgePrice: bridgePrice, canBridge: canBridge, freeCount: freeCount, MAX_BRIDGES: MAX_BRIDGES, BRIDGE_PRICE: BRIDGE_PRICE, preview: preview, previewMove: previewMove, isOver: isOver,
+    buy: buy, hammer: hammer, trap: trap, move: move, open: open, buyLand: buyLand, buyBridge: buyBridge, borrow: borrow, repay: repay, setSpeed: setSpeed, lockedCells: lockedCells, loanOptions: loanOptions, loanOwed: loanOwed, loanMonthsLeft: loanMonthsLeft, bankRate: bankRate, SEIZED: SEIZED, LOAN_RATE: LOAN_RATE, LOAN_TICKS: LOAN_TICKS, MAX_SPEED: MAX_SPEED, buyBank: buyBank, bankPrice: bankPrice, bankCount: bankCount, bankSlots: bankSlots, bankIncome: bankIncome, canBuyBank: canBuyBank, isBankAvailable: isBankAvailable, calendar: calendar, BANK: BANK, MAX_BANKS: MAX_BANKS, BANK_PRICE: BANK_PRICE, BANK_MIN_TIER: BANK_MIN_TIER, TICKS_PER_MONTH: TICKS_PER_MONTH, MONTHS_PER_YEAR: MONTHS_PER_YEAR, buyPond: buyPond, pondPrice: pondPrice, pondPoints: pondPoints, pondCoins: pondCoins, canPond: canPond, bestLake: bestLake, MAX_PONDS: MAX_PONDS, POND_PRICE: POND_PRICE, LAKE_SIZES: LAKE_SIZES, LAKE_BONUS: LAKE_BONUS, LAKE_COINS: LAKE_COINS, bridgeSpots: bridgeSpots, bridgePrice: bridgePrice, canBridge: canBridge, freeCount: freeCount, MAX_BRIDGES: MAX_BRIDGES, BRIDGE_PRICE: BRIDGE_PRICE, preview: preview, previewMove: previewMove, isOver: isOver,
     priceOf: priceOf, isMovable: isMovable, canMove: canMove, isAvailable: isAvailable, unlockedTop: unlockedTop, landPrice: landPrice, canLand: canLand
   };
 });
@@ -1856,7 +1859,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       b.querySelector('.tp').textContent = owned ? '✓' : '🪙' + fmt(lp);
     });
     var nq = state.lake < TT.LAKE_SIZES.length ? TT.LAKE_SIZES[state.lake] : 0, bl = TT.bestLake(state);
-    $('pondNote').textContent = 'Ponds ' + state.ponds.length + '/' + TT.MAX_PONDS + (state.ponds.length ? ' · +' + fmt(TT.pondPoints(state)) + ' pts per turn' : '') +
+    $('pondNote').textContent = 'Ponds ' + state.ponds.length + '/' + TT.MAX_PONDS + (state.ponds.length ? ' · +' + fmt(TT.pondPoints(state)) + ' pts + 🪙' + fmt(TT.pondCoins(state)) + ' per turn' : '') +
       (nq ? ' · 🏞️ quest: a ' + nq + '×' + nq + ' lake (biggest now ' + bl + '×' + bl + ') pays 🪙' + fmt(TT.LAKE_COINS[state.lake]) + ' + points' : ' · 🏞️ all lakes built');
     var ql = $('questLine');
     ql.textContent = nq ? '🏞️ Lake quest ' + nq + '×' + nq + ': biggest ' + bl + '×' + bl + ' · reward 🪙' + fmt(TT.LAKE_COINS[state.lake]) + ' + points' : '🏞️ All lakes built';
@@ -1899,7 +1902,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       var pp = TT.pondPrice(state);
       if (pi >= 0 && targetOk(pi)) {
         cells[pi].classList.add('target');
-        note = (sel === pi ? 'Tap again to dig' : 'Dig') + ' a pond here (-' + pp + ' coins, +' + TT.pondPoints(Object.assign({}, state, { ponds: state.ponds.concat([pi]) })) + ' pts per turn)'; hot = sel === pi;
+        note = (sel === pi ? 'Tap again to dig' : 'Dig') + ' a pond here (-' + pp + ' coins, +' + TT.pondPoints(Object.assign({}, state, { ponds: state.ponds.concat([pi]) })) + ' pts + 🪙' + TT.pondCoins(Object.assign({}, state, { ponds: state.ponds.concat([pi]) })) + ' per turn)'; hot = sel === pi;
       } else note = '💧 Tap an empty tile to dig a pond (-' + pp + ' coins)';
     } else if (mode === 'bridge') {
       var spots = TT.bridgeSpots(state), bp = TT.bridgePrice(state);
@@ -2001,7 +2004,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       } else if (ev.type === 'lake') {
         toast('🏞️ ' + ev.size + '×' + ev.size + ' lake! +' + fmt(ev.coins) + ' coins, +' + fmt(ev.points) + ' points', 0.3);
       } else if (ev.type === 'pondpts') {
-        if (state.ponds.length) floatAt(state.ponds[0], '💧 +' + fmt(ev.points));
+        if (state.ponds.length) floatAt(state.ponds[0], '💧 +' + fmt(ev.points) + ' · +' + fmt(ev.coins) + '🪙');
       } else if (ev.type === 'cub') { // a bear cub is born in the pen
         cells[ev.at].classList.add('drop');
         floatAt(ev.at, '🍼');

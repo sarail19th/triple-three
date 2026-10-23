@@ -36,7 +36,7 @@
   var LOAN_RATE = 0.15, LOAN_TICKS = TICKS_PER_MONTH * MONTHS_PER_YEAR;
   // Ponds: a shop tool (any map). Turns one empty tile into permanent water (state.ponds) that pays points every turn, scaled to your best
   // building tier; dearer every time. Lake quests: the first pond that completes a 2x2 / 3x3 / 4x4 block of water pays a one-off bonus (state.lake).
-  var MAX_PONDS = 16;
+  var MAX_PONDS = 16, POND_COIN_DIV = 400; // each pond also pays PRICE[top] / POND_COIN_DIV coins (min 1) every turn
   var POND_PRICE = []; (function () { for (var n = 0, p = 60; n < MAX_PONDS; n++, p *= 1.3) POND_PRICE.push(Math.round(p / 10) * 10); })();
   var LAKE_SIZES = [2, 3, 4], LAKE_BONUS = [30, 100, 300], LAKE_COINS = [200, 1200, 8000]; // a quest pays points (BASE[top] * LAKE_BONUS) AND coins
   // Bridges: a shop tool for maps with water. A bridge turns one water tile into a walkable tile (bears and foxes cross it, nothing can
@@ -430,7 +430,8 @@
     settleCrystals(s, events); // new tombstones / churches may complete a group for a waiting crystal
     noteTop(s, events);
     var pp = pondPoints(s);
-    if (pp) { s.score += pp; s.bonusScore += pp; events.push({ type: 'pondpts', points: pp }); }
+    var pc = pondCoins(s);
+    if (pp) { s.score += pp; s.bonusScore += pp; s.coins += pc; events.push({ type: 'pondpts', points: pp, coins: pc }); }
     s.tick += s.speed;
     s.loans.forEach(function (l) { // a year without repaying: the building is gone and its tile seized
       if (!l.defaulted && s.tick - l.since >= LOAN_TICKS) { l.defaulted = true; s.grid[l.at] = SEIZED; events.push({ type: 'default', bank: l.bank, at: l.at, tier: l.tier }); }
@@ -565,8 +566,9 @@
   // ---- banks and the calendar
   function bankCount(s) { var n = 0; for (var i = 0; i < s.grid.length; i++) if (s.grid[i] === BANK) n++; return n; }
   function isBankAvailable(s) { return unlockedTop(s) >= BANK_MIN_TIER; }
-  function bankPrice(s) { var n = s.banksBought || 0; return n < BANK_PRICE.length ? BANK_PRICE[n] : Math.round(BANK_PRICE[BANK_PRICE.length - 1] * Math.pow(1.5, n - BANK_PRICE.length + 1) / 10) * 10; }
   function bankSlots(s) { return bankCount(s) + (s.cur === BANK ? 1 : 0) + (s.next === BANK ? 1 : 0) + (s.hold === BANK ? 1 : 0); }
+  // the price follows the banks you hold now (board + queue + reserve), not the banks ever bought: merging three into cash starts the ladder again
+  function bankPrice(s) { return BANK_PRICE[Math.min(bankSlots(s), BANK_PRICE.length - 1)]; }
   // coins one bank pays per tick (per turn at normal speed)
   function bankIncome(s) { return Math.max(1, Math.round(PRICE[Math.min(s.top || 1, LAST_BUILDING)] * BANK_INCOME_RATE)); }
   function calendar(s) { var m = Math.floor((s.tick || 0) / TICKS_PER_MONTH); return { year: Math.floor(m / MONTHS_PER_YEAR) + 1, month: m % MONTHS_PER_YEAR + 1 }; }
@@ -651,6 +653,7 @@
 
   function pondPrice(s) { return s.ponds.length < MAX_PONDS ? POND_PRICE[s.ponds.length] : null; }
   function pondPoints(s) { return s.ponds.length ? s.ponds.length * Math.ceil(BASE[s.top] / 20) : 0; } // per turn
+  function pondCoins(s) { return s.ponds.length ? s.ponds.length * Math.max(1, Math.round(PRICE[Math.min(s.top || 1, LAST_BUILDING)] / POND_COIN_DIV)) : 0; } // per turn, next to the points
   function canPond(s) { dim(s); return !s.over && s.ponds.length < MAX_PONDS && s.coins >= POND_PRICE[s.ponds.length] && freeCount(s) >= 2; }
   // Is there a k x k block of water containing idx?
   function squareAt(grid, idx, k) {
@@ -916,7 +919,7 @@
     RESTOCK: RESTOCK, MILESTONES: MILESTONES, milestoneScore: milestoneScore, milestoneProgress: milestoneProgress, canUndo: canUndo, canHammer: canHammer, migrate: migrate,
     rand: rand, drawItem: drawItem, newGame: newGame, neighbors: neighbors, group: group,
     place: place, swap: swap, swapNext: swapNext, undo: undo, validate: validate, emptyCount: emptyCount,
-    buy: buy, hammer: hammer, trap: trap, move: move, open: open, buyLand: buyLand, buyBridge: buyBridge, borrow: borrow, repay: repay, setSpeed: setSpeed, lockedCells: lockedCells, loanOptions: loanOptions, loanOwed: loanOwed, loanMonthsLeft: loanMonthsLeft, bankRate: bankRate, SEIZED: SEIZED, LOAN_RATE: LOAN_RATE, LOAN_TICKS: LOAN_TICKS, MAX_SPEED: MAX_SPEED, buyBank: buyBank, bankPrice: bankPrice, bankCount: bankCount, bankSlots: bankSlots, bankIncome: bankIncome, canBuyBank: canBuyBank, isBankAvailable: isBankAvailable, calendar: calendar, BANK: BANK, MAX_BANKS: MAX_BANKS, BANK_PRICE: BANK_PRICE, BANK_MIN_TIER: BANK_MIN_TIER, TICKS_PER_MONTH: TICKS_PER_MONTH, MONTHS_PER_YEAR: MONTHS_PER_YEAR, buyPond: buyPond, pondPrice: pondPrice, pondPoints: pondPoints, canPond: canPond, bestLake: bestLake, MAX_PONDS: MAX_PONDS, POND_PRICE: POND_PRICE, LAKE_SIZES: LAKE_SIZES, LAKE_BONUS: LAKE_BONUS, LAKE_COINS: LAKE_COINS, bridgeSpots: bridgeSpots, bridgePrice: bridgePrice, canBridge: canBridge, freeCount: freeCount, MAX_BRIDGES: MAX_BRIDGES, BRIDGE_PRICE: BRIDGE_PRICE, preview: preview, previewMove: previewMove, isOver: isOver,
+    buy: buy, hammer: hammer, trap: trap, move: move, open: open, buyLand: buyLand, buyBridge: buyBridge, borrow: borrow, repay: repay, setSpeed: setSpeed, lockedCells: lockedCells, loanOptions: loanOptions, loanOwed: loanOwed, loanMonthsLeft: loanMonthsLeft, bankRate: bankRate, SEIZED: SEIZED, LOAN_RATE: LOAN_RATE, LOAN_TICKS: LOAN_TICKS, MAX_SPEED: MAX_SPEED, buyBank: buyBank, bankPrice: bankPrice, bankCount: bankCount, bankSlots: bankSlots, bankIncome: bankIncome, canBuyBank: canBuyBank, isBankAvailable: isBankAvailable, calendar: calendar, BANK: BANK, MAX_BANKS: MAX_BANKS, BANK_PRICE: BANK_PRICE, BANK_MIN_TIER: BANK_MIN_TIER, TICKS_PER_MONTH: TICKS_PER_MONTH, MONTHS_PER_YEAR: MONTHS_PER_YEAR, buyPond: buyPond, pondPrice: pondPrice, pondPoints: pondPoints, pondCoins: pondCoins, canPond: canPond, bestLake: bestLake, MAX_PONDS: MAX_PONDS, POND_PRICE: POND_PRICE, LAKE_SIZES: LAKE_SIZES, LAKE_BONUS: LAKE_BONUS, LAKE_COINS: LAKE_COINS, bridgeSpots: bridgeSpots, bridgePrice: bridgePrice, canBridge: canBridge, freeCount: freeCount, MAX_BRIDGES: MAX_BRIDGES, BRIDGE_PRICE: BRIDGE_PRICE, preview: preview, previewMove: previewMove, isOver: isOver,
     priceOf: priceOf, isMovable: isMovable, canMove: canMove, isAvailable: isAvailable, unlockedTop: unlockedTop, landPrice: landPrice, canLand: canLand
   };
 });
