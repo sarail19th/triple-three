@@ -209,7 +209,6 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 
 .topinfo { color: var(--muted); font-size: 12px; text-align: center; line-height: 1.5; }
 .topinfo a { color: var(--muted); }
-.foot-settings:has(a[hidden]) { display: none; }
 
 .overlay { position: fixed; inset: 0; background: #000b; display: flex; align-items: center; justify-content: center; z-index: 10; padding: 16px; }
 .trbtns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 4px 0; } /* bank dialog: deposit row, then withdraw row */
@@ -219,7 +218,13 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 .regioncard small { font-size: 10px; opacity: .85; }
 .regioncard:disabled { opacity: .5; }
 .regioncard:disabled .mini { filter: grayscale(.8) brightness(.7); }
-.updaterow { display: flex; justify-content: center; margin: 2px 0 4px; }
+.menugrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 8px 0; }
+.menuitem { position: relative; margin: 0; padding: 12px 6px; font-size: 14px; }
+.menuitem[hidden] { display: none; }
+#menu .updatebtn { display: block; width: 100%; margin: 4px 0 8px; padding: 10px 12px; }
+.dot { position: absolute; top: 5px; right: 5px; width: 11px; height: 11px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px #14301f; }
+.dot[hidden] { display: none; }
+.tray .dot { top: 4px; right: 4px; }
 .updatebtn { background: #16301f; color: var(--ink); border: 2px solid var(--accent); border-radius: 999px; padding: 6px 16px; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
 .updatebtn:disabled { opacity: .6; }
 .updatebtn.ready { background: var(--accent); color: #1b1b12; animation: updpulse 1.2s ease-in-out infinite alternate; } /* a newer version is out */

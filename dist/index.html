@@ -220,7 +220,6 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 
 .topinfo { color: var(--muted); font-size: 12px; text-align: center; line-height: 1.5; }
 .topinfo a { color: var(--muted); }
-.foot-settings:has(a[hidden]) { display: none; }
 
 .overlay { position: fixed; inset: 0; background: #000b; display: flex; align-items: center; justify-content: center; z-index: 10; padding: 16px; }
 .trbtns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 4px 0; } /* bank dialog: deposit row, then withdraw row */
@@ -230,7 +229,13 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 .regioncard small { font-size: 10px; opacity: .85; }
 .regioncard:disabled { opacity: .5; }
 .regioncard:disabled .mini { filter: grayscale(.8) brightness(.7); }
-.updaterow { display: flex; justify-content: center; margin: 2px 0 4px; }
+.menugrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 8px 0; }
+.menuitem { position: relative; margin: 0; padding: 12px 6px; font-size: 14px; }
+.menuitem[hidden] { display: none; }
+#menu .updatebtn { display: block; width: 100%; margin: 4px 0 8px; padding: 10px 12px; }
+.dot { position: absolute; top: 5px; right: 5px; width: 11px; height: 11px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px #14301f; }
+.dot[hidden] { display: none; }
+.tray .dot { top: 4px; right: 4px; }
 .updatebtn { background: #16301f; color: var(--ink); border: 2px solid var(--accent); border-radius: 999px; padding: 6px 16px; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
 .updatebtn:disabled { opacity: .6; }
 .updatebtn.ready { background: var(--accent); color: #1b1b12; animation: updpulse 1.2s ease-in-out infinite alternate; } /* a newer version is out */
@@ -368,16 +373,15 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     <div class="stat"><small>Score</small><b id="score">0</b></div>
     <div class="stat"><small>Best</small><b id="best">0</b></div>
     <div class="stat coins"><small>Coins</small><b id="coins">0</b></div>
+    <button id="menuBtn" class="tray newtray menutray" type="button" aria-label="Menu" aria-haspopup="dialog">
+      <small>Menu</small><span class="emoji">☰</span><i id="menuDot" class="dot" hidden></i>
+    </button>
   </header>
 
   <div class="topinfo">
-    <div><span id="turn">Turn 0</span> · <span id="seed">seed</span><span id="speedBox" hidden> · <a href="#" id="speedLink" aria-label="Game clock speed">⏱ 1×</a></span></div>
-    <div><a href="#" id="helpLink">How to play</a> · <a href="#" id="guideLink">Item guide</a> · <a href="#" id="worldLink">🗺️ World</a> · <a href="#" id="questsLink">🏆 Quests</a> · <a href="#" id="seasonLink" aria-label="Season theme">🎨 Season: auto</a><span class="foot-settings"> · <a href="#" id="hapticLink" role="switch" aria-label="Haptic feedback (vibration)">📳 Haptics: on</a></span></div>
-      <div id="loanLine" class="questline loanline" role="button" tabindex="0" aria-label="Loans: open the bank" hidden></div>
-      <div id="questLine" class="questline" role="button" tabindex="0" aria-label="Lake quest: open the shop"></div>
+    <div><span id="turn">Turn 0</span><span id="speedBox" hidden> · <a href="#" id="speedLink" aria-label="Game clock speed">⏱ 1×</a></span></div>
+    <div id="loanLine" class="questline loanline" role="button" tabindex="0" aria-label="Loans: open the bank" hidden></div>
   </div>
-
-  <div class="updaterow"><button id="updateBtn" class="updatebtn" type="button" aria-label="Check for a newer version and update">↻ Update · v<span id="verNow"></span></button></div>
 
   <div id="boardWrap">
     <div id="board" role="grid" aria-label="Game board"></div>
@@ -446,10 +450,28 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   </div>
 </div>
 
+<div id="menu" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Menu">
+  <div class="card">
+    <h2>☰ Menu</h2>
+    <div class="menugrid">
+      <button id="worldLink" class="btn menuitem" type="button">🗺️ World</button>
+      <button id="questsLink" class="btn menuitem" type="button">🏆 Quests<i id="questsDot" class="dot" hidden></i></button>
+      <button id="helpLink" class="btn menuitem" type="button">📖 How to play</button>
+      <button id="guideLink" class="btn menuitem" type="button">🧾 Item guide</button>
+      <button id="seasonLink" class="btn menuitem" type="button" aria-label="Season theme">🎨 Season: auto</button>
+      <button id="hapticLink" class="btn menuitem" type="button" role="switch" aria-pressed="true">📳 Haptics: on</button>
+    </div>
+    <button id="updateBtn" class="updatebtn" type="button" aria-label="Check for a newer version and update">↻ Update · v<span id="verNow"></span></button>
+    <p class="gnote">Game: <span id="seed">seed</span></p>
+    <button id="menuClose" class="btn primary">Close</button>
+  </div>
+</div>
+
 <div id="quests" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Quests">
   <div class="card">
     <h2>🏆 Quests</h2>
     <p id="questsSummary" class="gnote"></p>
+    <p id="questLine" class="gnote" role="status"></p>
     <div class="pager"><button id="questsPrev" class="btn" aria-label="Previous page">‹ Back</button><span id="questsLabel" aria-live="polite"></span><button id="questsNext" class="btn" aria-label="Next page">Next ›</button></div>
     <div id="questsBody"></div>
     <button id="questsClose" class="btn primary">Close</button>
@@ -599,7 +621,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       </section>
     </div>
     <div class="pager"><button id="helpPrev" class="btn" aria-label="Previous page">‹ Back</button><span id="helpPageLabel" aria-live="polite"></span><button id="helpNext" class="btn" aria-label="Next page">Next ›</button></div>
-    <p class="gnote">Version <b id="buildId">6721a237</b> · update with the ↻ <b>Update</b> button at the top of the game<br>(it keeps your saved game and best scores)</p>
+    <p class="gnote">Version <b id="buildId">e36e7d2f</b> · update with the ↻ <b>Update</b> button at the top of the game<br>(it keeps your saved game and best scores)</p>
     <div class="helpbtns"><button id="helpTour" class="btn">▶ Quick tour</button><button id="helpClose" class="btn primary">Got it</button></div>
   </div>
 </div>
@@ -1785,6 +1807,11 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     return out.concat(ACHIEVEMENTS);
   }
   function questDone(q, st) { return (st[q.stat] || 0) >= q.goal; }
+  function refreshDots() { // a gold dot on the menu button (and on Quests) when something is new: a finished quest not seen yet, or a newer version of the game
+    var e = store.get('tt-earned', []), n = Array.isArray(e) ? e.length : 0, fresh = n > store.get('tt-quests-seen', n);
+    $('questsDot').hidden = !fresh;
+    $('menuDot').hidden = !(fresh || $('updateBtn').classList.contains('ready'));
+  }
   var news = []; // toasts waiting for the effects layer to be cleared (animate shows them)
   function checkEarned() { // announce what has just been completed
     var st = viewStats(), done = store.get('tt-earned', null), fresh = false, first = !Array.isArray(done); // the very first time, what is already done is recorded without announcing it
@@ -1793,6 +1820,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       if (questDone(q, st) && done.indexOf(q.id) < 0) { done.push(q.id); fresh = true; if (!first) news.push(q.title ? q.icon + ' Title earned: ' + q.name + '! Pick it in New game.' : '🏆 ' + q.icon + ' ' + q.name + ' done!'); }
     });
     if (fresh || first) store.set('tt-earned', done);
+    if (first) store.set('tt-quests-seen', done.length); // what was already done is not 'new'
+    refreshDots();
   }
   function addStat(key, n) { var s = stats(); s[key] += n || 1; store.set('tt-stats', s); checkEarned(); }
   function setMax(key, v) { var s = stats(); if (v > s[key]) { s[key] = Math.floor(v); store.set('tt-stats', s); checkEarned(); } }
@@ -2735,7 +2764,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   $('toolCancel').addEventListener('click', function () { mode = null; moveFrom = -1; sel = -1; render([]); });
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
-    if (!$('tour').classList.contains('hidden')) endTour(); else closeShop();
+    if (!$('tour').classList.contains('hidden')) endTour(); else { closeShop(); closeMenu(); }
   });
   $('newBtn').addEventListener('click', function () { closeShop(); openNewGame(); });
   $('newCancel').addEventListener('click', function () { $('newGame').classList.add('hidden'); });
@@ -2807,8 +2836,15 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   function openFirstLoanBank() { if (state.loans.length) openBank(state.loans[0].bank); }
   $('loanLine').addEventListener('click', openFirstLoanBank);
   $('loanLine').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openFirstLoanBank(); } });
-  $('questLine').addEventListener('click', openShop);
-  $('questLine').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openShop(); } });
+  // ---- the menu: the less used buttons live here (World, Quests, How to play, Item guide, Season, Haptics, Update, game info). Choosing a screen closes it; Season and
+  // Haptics stay open so you can see them change.
+  function openMenu() { closeShop(); refreshDots(); $('menu').classList.remove('hidden'); }
+  function closeMenu() { $('menu').classList.add('hidden'); }
+  $('menuBtn').addEventListener('click', openMenu);
+  $('menuClose').addEventListener('click', closeMenu);
+  $('menu').addEventListener('click', function (e) {
+    if (e.target === this || (e.target.closest && e.target.closest('#worldLink, #questsLink, #helpLink, #guideLink, #updateBtn'))) closeMenu();
+  });
   // ---- the quests screen: titles first, then the achievements, each with its progress
   var questsPage = 0;
   function renderQuests() {
@@ -2824,7 +2860,10 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     }).join('');
     $('quests').querySelector('.card').scrollTop = 0;
   }
-  $('questsLink').addEventListener('click', function (e) { e.preventDefault(); closeShop(); questsPage = 0; renderQuests(); $('quests').classList.remove('hidden'); });
+  $('questsLink').addEventListener('click', function (e) {
+    e.preventDefault(); closeShop(); questsPage = 0; renderQuests(); $('quests').classList.remove('hidden');
+    var ea = store.get('tt-earned', []); store.set('tt-quests-seen', Array.isArray(ea) ? ea.length : 0); refreshDots();
+  });
   $('questsPrev').addEventListener('click', function () { questsPage = 0; renderQuests(); });
   $('questsNext').addEventListener('click', function () { questsPage = 1; renderQuests(); });
   $('questsClose').addEventListener('click', function () { $('quests').classList.add('hidden'); });
@@ -2849,7 +2888,11 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     if (!/^https?:$/.test(location.protocol) || updating) return;
     fetch('sw.js?c=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (t) {
       var m = /triple-three-([0-9a-f]{8})/.exec(t);
-      if (m && m[1] !== $('buildId').textContent) { var b = $('updateBtn'); b.classList.add('ready'); b.textContent = '⬆️ New version v' + m[1] + ': tap to update'; }
+      if (m && m[1] !== $('buildId').textContent) {
+        var b = $('updateBtn'), fresh = !b.classList.contains('ready');
+        b.classList.add('ready'); b.textContent = '⬆️ New version v' + m[1] + ': tap to update'; refreshDots();
+        if (fresh) toast('⬆️ New version: ☰ Menu → Update', 0.3);
+      }
     }).catch(function () {});
   }
   setTimeout(checkUpdate, 1500);
@@ -2929,11 +2972,9 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     { target: '.panel', title: '🌱 Place and Next', text: '<b>Place</b> is the item you will put down now, <b>Next</b> is the one after it. <b>Tap the ⇄ button between them to swap them</b> (tapping the Next item works too): free, as often as you like.' },
     { target: '#holdBtn', title: '📦 Reserve', text: 'Store the current item here for later. Tap it again to swap with what is stored. Also free.' },
     { target: '.hud .stat', title: '⭐ Score and coins', text: 'Every merge adds to your <b>score</b> and pays 🪙 <b>coins</b> (bigger groups pay more). Coins buy things in the shop. <b>Best</b> is your top score on this map.' },
-    { target: '#worldLink', title: '🗺️ World', text: 'Nine regions in a 3×3 grid, each its own game with its own save: the calm Meadow in the middle, harder ones further out. Build a 🏘️ village in the Meadow to open the next regions. <b>Custom game</b> there is the normal New game with any map.', when: function () { return $('worldLink').offsetParent !== null; } },
-    { target: '#questsLink', title: '🏆 Quests', text: 'Quests and achievements with your progress, saved across games: bears and foxes trapped, lakes, banks, regions... Four of them give a <b>title</b> (Bears Hunter, Hawkeyes, Master of Tides, Gold Keeper) that you can pick in New game for a bonus.', when: function () { return $('questsLink').offsetParent !== null; } },
-    { target: '#updateBtn', title: '↻ Update', text: 'Tap to get the latest version of the game: it keeps your saved game and best scores. The button glows <b>⬆️ New version</b> when a newer build is out.', when: function () { return $('updateBtn').offsetParent !== null; } },
+    { target: '#menuBtn', title: '☰ Menu', text: 'Everything else is in here: <b>🗺️ World</b> (nine regions in a 3×3 grid, each its own game: the calm Meadow in the middle, harder ones further out; build a 🏘️ village in the Meadow to open the next), <b>🏆 Quests</b> (quests, achievements and titles with your progress), <b>How to play</b> and this tour, the <b>Item guide</b>, the <b>🎨 Season</b> theme, <b>Haptics</b>, and <b>↻ Update</b> (it keeps your saved game and best scores). A <b>gold dot</b> on the button means something is new: a finished quest or a newer version.' },
     { target: '#newBtn', title: '⟳ New game', text: 'In a region it restarts that region on its own map. In the <b>Custom game</b> (🗺️ World) it lets you choose the <b>map</b>, the <b>bear mode</b> (Classic, Wild or No bears) and whether <b>foxes</b> appear; switch both animals off for a calm game. It erases the game you are playing, and warns you first.' },
-    { target: '.topinfo', title: '📋 Turn, rules and settings', text: 'The turn counter with the 📅 calendar and, once you own a bank, the ⏱ clock speed (tap to cycle 1×, 2×, 3×, paused) (10 turns = a month, 12 months = a year) and game seed, <b>How to play</b> (the rules and this tour), the <b>Item guide</b> (every item and what it merges into), the <b>🎨 Season</b> theme (Auto follows the calendar; tap to cycle spring, summer, autumn, winter), the 🏞️ <b>lake quest</b> line (tap it to open the shop) and, on phones with vibration, the <b>📳 Haptics</b> switch.' },
+    { target: '.topinfo', title: '📋 Turn and calendar', text: 'The turn counter with the 📅 calendar (10 turns = a month, 12 months = a year) and, once you own a bank, the ⏱ clock speed (tap to cycle 1×, 2×, 3×, paused). The 🏞️ lake quest lives in 🏆 Quests now, and the game seed and map are at the bottom of the ☰ Menu.' },
     { target: '#undoBtn', title: '↶ Undo', text: 'Takes back your last move, or your last 🚚 mover, 🔨 hammer or 🪤 trap use (a mover drop that merges at once, say). It costs a few coins, and only one step can be undone.' },
     { target: '#previewBtn', title: '👁 Preview', text: 'Shows what a tap would do before you place. Turn it off to place with a single tap.' },
     { target: '#shopBtn', title: '🛒 Shop', text: 'Opens the shop. Everything you can spend coins on is in there.', when: function () { return $('shopBtn').offsetParent !== null; } },
