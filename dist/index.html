@@ -230,6 +230,19 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 .regioncard small { font-size: 10px; opacity: .85; }
 .regioncard:disabled { opacity: .5; }
 .regioncard:disabled .mini { filter: grayscale(.8) brightness(.7); }
+.updaterow { display: flex; justify-content: center; margin: 2px 0 4px; }
+.updatebtn { background: #16301f; color: var(--ink); border: 2px solid var(--accent); border-radius: 999px; padding: 6px 16px; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.updatebtn:disabled { opacity: .6; }
+.updatebtn.ready { background: var(--accent); color: #1b1b12; animation: updpulse 1.2s ease-in-out infinite alternate; } /* a newer version is out */
+@keyframes updpulse { from { box-shadow: 0 0 0 0 #ffd45a99; } to { box-shadow: 0 0 0 7px #ffd45a00; } }
+.questrow { text-align: left; background: #0e2217; border: 2px solid #ffffff1c; border-radius: 12px; padding: 8px 10px; margin: 6px 0; }
+.questrow.done { border-color: var(--accent); }
+.questrow .qh { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+.questrow .qh .qi { font-size: 22px; }
+.questrow .qh .qs { margin-left: auto; font-size: 13px; opacity: .9; }
+.questrow small { display: block; opacity: .85; margin-top: 2px; font-size: 12px; line-height: 1.25; }
+.questrow .qbar { height: 6px; border-radius: 3px; background: #ffffff1c; margin-top: 6px; overflow: hidden; }
+.questrow .qbar i { display: block; height: 100%; background: var(--accent); }
 .dlgbtns { position: sticky; bottom: -20px; margin: 8px -20px -20px; padding: 10px 20px 20px; background: #14301f; } /* New game: Start stays in reach while the long dialog scrolls */
 .card { background: #14301f; border: 2px solid var(--accent); border-radius: 18px; padding: 20px; max-width: 380px; width: 100%; text-align: center; max-height: 100%; overflow: auto; }
 .card h2 { margin: 0 0 8px; font-size: 24px; }
@@ -359,10 +372,12 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 
   <div class="topinfo">
     <div><span id="turn">Turn 0</span> · <span id="seed">seed</span><span id="speedBox" hidden> · <a href="#" id="speedLink" aria-label="Game clock speed">⏱ 1×</a></span></div>
-    <div><a href="#" id="helpLink">How to play</a> · <a href="#" id="guideLink">Item guide</a> · <a href="#" id="worldLink">🗺️ World</a> · <a href="#" id="seasonLink" aria-label="Season theme">🎨 Season: auto</a><span class="foot-settings"> · <a href="#" id="hapticLink" role="switch" aria-label="Haptic feedback (vibration)">📳 Haptics: on</a></span></div>
+    <div><a href="#" id="helpLink">How to play</a> · <a href="#" id="guideLink">Item guide</a> · <a href="#" id="worldLink">🗺️ World</a> · <a href="#" id="questsLink">🏆 Quests</a> · <a href="#" id="seasonLink" aria-label="Season theme">🎨 Season: auto</a><span class="foot-settings"> · <a href="#" id="hapticLink" role="switch" aria-label="Haptic feedback (vibration)">📳 Haptics: on</a></span></div>
       <div id="loanLine" class="questline loanline" role="button" tabindex="0" aria-label="Loans: open the bank" hidden></div>
       <div id="questLine" class="questline" role="button" tabindex="0" aria-label="Lake quest: open the shop"></div>
   </div>
+
+  <div class="updaterow"><button id="updateBtn" class="updatebtn" type="button" aria-label="Check for a newer version and update">↻ Update · v<span id="verNow"></span></button></div>
 
   <div id="boardWrap">
     <div id="board" role="grid" aria-label="Game board"></div>
@@ -428,6 +443,16 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     <p id="overTreasury" class="gnote"></p>
     <p id="overStats" class="gnote"></p>
     <button id="againBtn" class="btn primary">Play again</button>
+  </div>
+</div>
+
+<div id="quests" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Quests">
+  <div class="card">
+    <h2>🏆 Quests</h2>
+    <p id="questsSummary" class="gnote"></p>
+    <div class="pager"><button id="questsPrev" class="btn" aria-label="Previous page">‹ Back</button><span id="questsLabel" aria-live="polite"></span><button id="questsNext" class="btn" aria-label="Next page">Next ›</button></div>
+    <div id="questsBody"></div>
+    <button id="questsClose" class="btn primary">Close</button>
   </div>
 </div>
 
@@ -501,6 +526,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 <div id="guide" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Item guide">
   <div class="card">
     <h2>Item guide</h2>
+    <div class="pager"><button id="guidePrev" class="btn" aria-label="Previous page">‹ Back</button><span id="guidePageLabel" aria-live="polite"></span><button id="guideNext" class="btn" aria-label="Next page">Next ›</button></div>
     <div id="guideBody"></div>
     <button id="guideClose" class="btn primary">Close</button>
   </div>
@@ -542,7 +568,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
         <li>🌿 <b>Calm mode</b> (pick <b>No bears</b> and/or <b>No foxes</b> in <b>New</b>): the switched-off animals never appear. With both off there is nothing to interrupt you, and no trap tool. These games keep their own best score.</li>
         <li>🐻💢 <b>Wild bears</b> (pick it in <b>New</b>): a bear that cannot step but is not sealed in gets angry (💢, then 💢💢) and on the third turn <b>mauls</b> a 🌱🌿🌳🏕️🛖 next to it one tier down (a 🌱 is destroyed, which opens an escape hole), then starts over. Houses and everything above are safe. In a small pen (4 to 6 tiles) holding 2 bears and 2 free tiles, a cub is sometimes born 🍼.</li>
         <li>🐺 <b>Animals follow the season</b>: the bear is a 🐗 boar and the fox a 🦝 raccoon in autumn, a 🐺 wolf and a 🐇 rabbit in winter (🐻 and 🦊 in spring and summer). Only the looks change, the rules do not.</li>
-        <li>🏹 <b>Titles</b>: your quests run across games. Trap <b>100 bears</b> in total (the trap tool or a full pen, in any mode) and you earn <b>Bears Hunter</b>: pick it in <b>New</b> and 30% of the bears in the queue turn into grass. A game with a title has its own best score.</li>
+        <li>🏆 <b>Quests</b> (top, next to the World): a list of quests and achievements with your progress, saved across games and regions. Four of them give a <b>title</b> you can pick in <b>New</b> (a game with a title has its own best score): 🏹 <b>Bears Hunter</b> (trap 100 bears: 30% fewer bears), 🦅 <b>Hawkeyes</b> (trap 25 foxes: half the foxes), 🌊 <b>Master of Tides</b> (dig a 4×4 lake: more and higher lucky drops on maps with their own water) and 🪙 <b>Gold Keeper</b> (fill all three bank accounts with 🪙1M in one game: no deposit fee and double interest).</li>
         </ul>
       </section>
       <section class="helppage" data-title="Shop and items" hidden>
@@ -573,7 +599,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       </section>
     </div>
     <div class="pager"><button id="helpPrev" class="btn" aria-label="Previous page">‹ Back</button><span id="helpPageLabel" aria-live="polite"></span><button id="helpNext" class="btn" aria-label="Next page">Next ›</button></div>
-    <p class="gnote">Version <b id="buildId">d52abbe8</b> · <a href="#" id="updateLink">↻ Get the latest version</a><br>(keeps your saved game and best scores)</p>
+    <p class="gnote">Version <b id="buildId">6721a237</b> · update with the ↻ <b>Update</b> button at the top of the game<br>(it keeps your saved game and best scores)</p>
     <div class="helpbtns"><button id="helpTour" class="btn">▶ Quick tour</button><button id="helpClose" class="btn primary">Got it</button></div>
   </div>
 </div>
@@ -614,7 +640,15 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   // Titles (sobriquets): earned over many games by a quest counter that the page keeps (state.bearsTrapped is this game's share), chosen per
   // game in the New game dialog (state.title) and applied by the logic: hunter = after BEARS trapped in total, a share of the bears in the
   // queue turn into grass. The extra random number is only drawn when the title is on, so games without one replay exactly as before.
-  var TITLES = { hunter: { stat: 'bears', goal: 100, bearCut: 0.3 } };
+  // hunter: bears in the queue turn into grass; hawkeye: the same for foxes; tides: more lucky drops, and higher ones, on maps whose own water makes the
+  // sea or a river (medium, hard, island); gold: no deposit fee and double interest on the bank accounts. `stat` / `goal` = the page's quest counter.
+  var TITLES = {
+    hunter: { stat: 'bears', goal: 100, bearCut: 0.3 },
+    hawkeye: { stat: 'foxes', goal: 25, foxCut: 0.5 },
+    tides: { stat: 'lake4', goal: 1, luckyBonus: 0.08, luckyMaxTier: 7 },
+    gold: { stat: 'gold', goal: 1, noFee: true, interestX2: true }
+  };
+  var WATER_MAPS = ['medium', 'hard', 'island'];
   // Treasury: saved accounts (kept by the page, outside the game state) that carry coins from one game to the next. Every bank has its OWN account,
   // named by the order the banks were placed (Bank 1, 2, 3 = the place in state.bankOrder), each holding at most TREASURY_BANK_CAP; a deposit
   // through a bank keeps TREASURY_FEE. A game that has withdrawn has state.boost > 0 (the total taken) and its own best-score board.
@@ -703,7 +737,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   function randInt(s, n) { return Math.floor(rand(s) * n); }
   // A lucky building tier for the next item, or 0. Lower tiers are likelier (camp 3 : hut 2 : house 1 when all three are possible).
   function luckyTier(s) {
-    var rate = LUCKY_RATE[s.map], hi = Math.min((s.top || 0) - 1, LUCKY_MAX_TIER);
+    var tt = s.title ? TITLES[s.title] : null, tides = tt && tt.luckyBonus && WATER_MAPS.indexOf(s.map) >= 0; // Master of Tides: more, and higher, lucky drops beside water
+    var rate = (LUCKY_RATE[s.map] || 0) + (tides ? tt.luckyBonus : 0), hi = Math.min((s.top || 0) - 1, tides ? tt.luckyMaxTier : LUCKY_MAX_TIER);
     if (!rate || hi < LUCKY_MIN_TIER || rand(s) >= rate) return 0;
     var total = 0, k;
     for (k = LUCKY_MIN_TIER; k <= hi; k++) total += hi - k + 1;
@@ -723,7 +758,9 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
         var it = WEIGHTS[i][0];
         // a switched-off animal turns into plain grass (the draw is the same, so games with both animals on replay exactly as ever)
         if ((it === BEAR && s.bears === false) || (it === FOX && s.foxes === false)) return 1;
-        if (it === BEAR && s.title && rand(s) < TITLES[s.title].bearCut) return 1; // the Bears Hunter title: some bears turn into grass
+        var tt = s.title ? TITLES[s.title] : null; // a title with a cut turns some of those animals into grass (one extra draw, only then)
+        if (it === BEAR && tt && tt.bearCut && rand(s) < tt.bearCut) return 1;
+        if (it === FOX && tt && tt.foxCut && rand(s) < tt.foxCut) return 1;
         return it;
       }
     }
@@ -731,14 +768,14 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   }
 
   function clone(s) {
-    return { ver: s.ver, wild: s.wild, bears: s.bears, foxes: s.foxes, map: s.map, bridges: s.bridges.slice(), ponds: s.ponds.slice(), reclaimed: s.reclaimed, vault: s.vault.slice(), leveled: s.leveled, boost: s.boost, title: s.title, bearsTrapped: s.bearsTrapped, lake: s.lake, tick: s.tick, speed: s.speed, banksBought: s.banksBought, bankOrder: s.bankOrder.slice(), loans: s.loans.map(function (l) { return Object.assign({}, l); }), w: s.w, h: s.h, land: s.land.slice(), top: s.top, grid: s.grid.slice(), cur: s.cur, next: s.next, hold: s.hold, score: s.score, coins: s.coins,
+    return { ver: s.ver, wild: s.wild, bears: s.bears, foxes: s.foxes, map: s.map, bridges: s.bridges.slice(), ponds: s.ponds.slice(), reclaimed: s.reclaimed, vault: s.vault.slice(), leveled: s.leveled, boost: s.boost, title: s.title, bearsTrapped: s.bearsTrapped, foxesTrapped: s.foxesTrapped, lake: s.lake, tick: s.tick, speed: s.speed, banksBought: s.banksBought, bankOrder: s.bankOrder.slice(), loans: s.loans.map(function (l) { return Object.assign({}, l); }), w: s.w, h: s.h, land: s.land.slice(), top: s.top, grid: s.grid.slice(), cur: s.cur, next: s.next, hold: s.hold, score: s.score, coins: s.coins,
       stock: Object.assign({}, s.stock), milestone: s.milestone, bonusScore: s.bonusScore, turn: s.turn, over: s.over, rng: s.rng, seed: s.seed, undo: s.undo };
   }
 
   function newGame(seed, opts) {
     seed = (seed >>> 0) || 1;
     var bears = !(opts && opts.bears === false), foxes = !(opts && opts.foxes === false);
-    var s = { ver: VERSION, wild: bears && !!(opts && opts.wild), bears: bears, foxes: foxes, map: opts && MAPS.indexOf(opts.map) >= 0 ? opts.map : 'easy', bridges: [], ponds: [], reclaimed: 0, vault: [0, 0, 0], leveled: 0, boost: 0, title: opts && TITLES[opts.title] ? opts.title : '', bearsTrapped: 0, lake: 0, tick: 0, speed: 1, banksBought: 0, bankOrder: [], loans: [], w: DEFAULT_W, h: DEFAULT_H, land: [], top: 1, grid: new Array(DEFAULT_W * DEFAULT_H).fill(EMPTY), cur: 1, next: 1, hold: 0, score: 0, coins: START_COINS,
+    var s = { ver: VERSION, wild: bears && !!(opts && opts.wild), bears: bears, foxes: foxes, map: opts && MAPS.indexOf(opts.map) >= 0 ? opts.map : 'easy', bridges: [], ponds: [], reclaimed: 0, vault: [0, 0, 0], leveled: 0, boost: 0, title: opts && TITLES[opts.title] ? opts.title : '', bearsTrapped: 0, foxesTrapped: 0, lake: 0, tick: 0, speed: 1, banksBought: 0, bankOrder: [], loans: [], w: DEFAULT_W, h: DEFAULT_H, land: [], top: 1, grid: new Array(DEFAULT_W * DEFAULT_H).fill(EMPTY), cur: 1, next: 1, hold: 0, score: 0, coins: START_COINS,
       stock: Object.assign({}, START_STOCK), milestone: 0, bonusScore: 0, turn: 0, over: false, rng: seed, seed: seed, undo: null };
     if (s.map === 'island') { s.w = s.h = ISLAND_SIZE; s.land = SIDES.slice(); s.grid = new Array(ISLAND_SIZE * ISLAND_SIZE).fill(EMPTY); } // the biggest board, all land bought
     dim(s);
@@ -939,7 +976,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       if (!room) pocket.forEach(function (c) { if (s.grid[c] !== EMPTY) trapped.push(c); });
     }
     trapped.sort(function (a, b) { return (b === last) - (a === last) || a - b; });
-    trapped.forEach(function (at) { if (isBear(s.grid[at])) s.bearsTrapped++; s.grid[at] = TOMB; events.push({ type: 'trapped', at: at }); });
+    trapped.forEach(function (at) { if (isBear(s.grid[at])) s.bearsTrapped++; else if (s.grid[at] === FOX) s.foxesTrapped++; s.grid[at] = TOMB; events.push({ type: 'trapped', at: at }); });
     for (i = 0; i < N; i++) if (isBear(s.grid[i])) bears.push(i);
     var mauled = [];
     bears.forEach(function (from) {
@@ -1067,7 +1104,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       s.loans.forEach(function (l) { if (l.defaulted) inDefault[l.bank] = true; });
       for (var bi = 0; bi < s.grid.length; bi++) if (s.grid[bi] === BANK && !inDefault[bi]) paying.push(bi);
       if (paying.length) {
-        var interest = paying.map(function (b) { var rk = s.bankOrder.indexOf(b); return rk >= 0 ? Math.floor(s.vault[rk] * s.speed * TREASURY_INTEREST_PPM / 1e6) : 0; }); // on that bank's own account
+        var interest = paying.map(function (b) { var rk = s.bankOrder.indexOf(b); return rk >= 0 ? Math.floor(s.vault[rk] * s.speed * TREASURY_INTEREST_PPM * (s.title && TITLES[s.title].interestX2 ? 2 : 1) / 1e6) : 0; }); // on that bank's own account
         var extra = interest.reduce(function (a, b) { return a + b; }, 0);
         s.coins += each * paying.length + extra;
         events.push({ type: 'bankpay', coins: each * paying.length + extra, each: each, interest: interest, ticks: s.speed, banks: paying.length, at: paying });
@@ -1137,7 +1174,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     if (state.over || !(idx >= 0 && idx < N) || (!isBear(state.grid[idx]) && state.grid[idx] !== FOX) || state.coins < PRICE.trap || !(state.stock.trap > 0)) return null;
     var s = clone(state), events = [{ type: 'trap', at: idx }];
     s.undo = snapshot(state); // a tool use can be undone by itself
-    s.coins -= PRICE.trap; s.stock.trap--; if (isBear(s.grid[idx])) s.bearsTrapped++; s.grid[idx] = TOMB;
+    s.coins -= PRICE.trap; s.stock.trap--; if (isBear(s.grid[idx])) s.bearsTrapped++; else s.foxesTrapped++; s.grid[idx] = TOMB;
     resolveAt(s, idx, events);
     settleCrystals(s, events);
     noteTop(s, events);
@@ -1386,7 +1423,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     return { state: s, events: [{ type: 'reclaim', at: idx, price: price }] };
   }
   // Treasury: the account of the bank on cell `bankIdx` is the one named by its place in bankOrder (0 = Bank 1). `balance` is that account before the call.
-  function treasuryNet(amount) { return amount - Math.floor(amount * TREASURY_FEE); }
+  function treasuryNet(amount, title) { return amount - (title && TITLES[title] && TITLES[title].noFee ? 0 : Math.floor(amount * TREASURY_FEE)); } // Gold Keeper pays no fee
   function treasuryRank(state, bankIdx) { return state.grid[bankIdx] === BANK ? state.bankOrder.indexOf(bankIdx) : -1; }
   // Deposit `amount` coins of this game through that bank: the account gets the amount minus the fee and must have room. Returns {state, net, fee, rank}
   // or null. A free action; it clears Undo (the accounts live outside the state, so undoing a deposit would copy coins).
@@ -1394,7 +1431,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     dim(state);
     var rank = treasuryRank(state, bankIdx);
     if (state.over || rank < 0 || !(amount >= 1) || amount !== (amount | 0) || amount > state.coins) return null;
-    var net = treasuryNet(amount);
+    var net = treasuryNet(amount, state.title);
     if (!(balance >= 0) || balance + net > TREASURY_BANK_CAP) return null;
     var s = clone(state); s.coins -= amount; s.undo = null; s.vault[rank] = balance + net; // the mirror follows the account
     if (isOver(s)) return null; // never into a stuck game
@@ -1518,6 +1555,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       if (!Array.isArray(x.vault) || x.vault.length !== 3) x.vault = [0, 0, 0]; // mirror of the saved bank accounts, for the interest
       if (typeof x.title !== 'string') x.title = ''; // titles and the trapped-bears counter came later
       if (typeof x.bearsTrapped !== 'number') x.bearsTrapped = 0;
+      if (typeof x.foxesTrapped !== 'number') x.foxesTrapped = 0;
       if (typeof x.tick !== 'number') x.tick = 0; // the calendar and banks came later
       if (typeof x.speed !== 'number') x.speed = 1;
       if (!Array.isArray(x.loans)) x.loans = [];
@@ -1573,7 +1611,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     if (s.leveled !== (s.leveled | 0) || s.leveled < 0) return ['bad leveled count'];
     if (!Array.isArray(s.vault) || s.vault.length !== 3 || s.vault.some(function (v) { return v !== (v | 0) || v < 0 || v > TREASURY_BANK_CAP; })) return ['bad vault'];
     if (s.title !== '' && !TITLES[s.title]) return ['bad title'];
-    if (s.bearsTrapped !== (s.bearsTrapped | 0) || s.bearsTrapped < 0) return ['bad bears trapped count'];
+    if (s.bearsTrapped !== (s.bearsTrapped | 0) || s.bearsTrapped < 0 || s.foxesTrapped !== (s.foxesTrapped | 0) || s.foxesTrapped < 0) return ['bad trapped count'];
     if (s.map === 'island' && (s.w !== ISLAND_SIZE || s.h !== ISLAND_SIZE)) return ['an island is the biggest board'];
     var lr = 0, tb = 0;
     s.land.forEach(function (side, k) {
@@ -1706,12 +1744,78 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   }
   function setAccount(rank, v) { var a = accounts(); a[rank] = Math.max(0, Math.floor(v)); store.set('tt-treasury', a); }
   function treasuryTotal() { return accounts().reduce(function (a, b) { return a + b; }, 0); }
-  // Titles: quest counters are saved across games (tt-stats); the game on screen adds its own count when it is left (state.bearsTrapped is in the
-  // state, so undo takes it back too). A title is earned at its goal and picked per game in the New game dialog (tt-title).
-  var TITLE_NAMES = { hunter: 'Bears Hunter' }, TITLE_ICON = { hunter: '🏹' };
-  function stats() { var v = store.get('tt-stats', null); return { bears: v && v.bears > 0 ? Math.floor(v.bears) : 0 }; }
-  function statsNow() { return { bears: stats().bears + (state ? state.bearsTrapped || 0 : 0) }; } // the totals once the game on screen is left
-  function titleUnlocked(id, st) { return !!TT.TITLES[id] && st[TT.TITLES[id].stat] >= TT.TITLES[id].goal; }
+  // ---- quests, achievements and titles. The counters live in tt-stats (saved across games and regions): bears / foxes are counted in the game state (so undo takes
+  // them back) and added when a game is left; the rest are counted from the events as they happen. A quest is done when its counter reaches its goal; four of them
+  // are TITLES (TT.TITLES has their effect): the one picked in the New game dialog (tt-title) applies to that game. tt-earned remembers what was announced.
+  var TITLE_INFO = {
+    hunter: { icon: '🏹', name: 'Bears Hunter', how: 'Trap 100 bears (the trap tool, or a full pen).', effect: '30% fewer bears in the item queue.' },
+    hawkeye: { icon: '🦅', name: 'Hawkeyes', how: 'Trap 25 foxes (rabbits in winter).', effect: 'Half the foxes in the item queue.' },
+    tides: { icon: '🌊', name: 'Master of Tides', how: 'Dig a 4×4 lake: 16 water tiles.', effect: 'More, and higher, lucky drops (up to a 🏘️ village) on maps with their own water: Medium, Hard and Island.' },
+    gold: { icon: '🪙', name: 'Gold Keeper', how: 'Fill all three bank accounts with 🪙1M each, in one game.', effect: 'No fee on bank deposits and double interest on your accounts.' }
+  };
+  var TITLE_NAMES = {}, TITLE_ICON = {};
+  Object.keys(TITLE_INFO).forEach(function (id) { TITLE_NAMES[id] = TITLE_INFO[id].name; TITLE_ICON[id] = TITLE_INFO[id].icon; });
+  var ACHIEVEMENTS = [
+    { id: 'village', icon: '🏘️', name: 'First village', stat: 'topEver', goal: 7, how: 'Build a village.' },
+    { id: 'mall', icon: '🏬', name: 'Mall tycoon', stat: 'topEver', goal: 10, how: 'Build a mall.' },
+    { id: 'banker', icon: '🏦', name: 'Banker', stat: 'bankEver', goal: 1, how: 'Build a bank.' },
+    { id: 'debtfree', icon: '🧾', name: 'Debt free', stat: 'repays', goal: 5, how: 'Repay 5 loans.' },
+    { id: 'rich', icon: '💎', name: 'Millionaire', stat: 'coinsEver', goal: 1000000, how: 'Hold 🪙1,000,000 at once.' },
+    { id: 'cash', icon: '💵', name: 'Cash collector', stat: 'cash', goal: 10, how: 'Collect 10 💵 cash.' },
+    { id: 'treasure', icon: '💰', name: 'Treasure hunter', stat: 'treasures', goal: 25, how: 'Open 25 💰 treasures.' },
+    { id: 'church', icon: '⛪', name: 'Church builder', stat: 'churches', goal: 20, how: 'Trap bears into 20 churches.' },
+    { id: 'bridge', icon: '🌉', name: 'Bridge builder', stat: 'longBridge', goal: 1, how: 'Build a long bridge: 3 bridged tiles in a line.' },
+    { id: 'pond', icon: '🪷', name: 'Pond keeper', stat: 'pondPay', goal: 1, how: 'Dig a 3×3 block of ponds that pays.' },
+    { id: 'sea', icon: '🏝️', name: 'Land maker', stat: 'reclaims', goal: 20, how: 'Reclaim 20 sea tiles on the Island map.' },
+    { id: 'mountain', icon: '⛏️', name: 'Mountain mover', stat: 'levels', goal: 10, how: 'Flatten 10 mountains on the Highlands map.' },
+    { id: 'hole', icon: '🕳️', name: 'Hole filler', stat: 'fills', goal: 20, how: 'Fill 20 holes.' },
+    { id: 'wander', icon: '🧭', name: 'Wanderer', stat: 'regions', goal: 5, how: 'Open 5 regions of the 🗺️ World.' },
+    { id: 'cartographer', icon: '🗺️', name: 'Cartographer', stat: 'regions', goal: 9, how: 'Open all 9 regions.' }
+  ];
+  var STAT_KEYS = ['bears', 'foxes', 'lake4', 'gold', 'topEver', 'bankEver', 'repays', 'coinsEver', 'cash', 'treasures', 'churches', 'longBridge', 'pondPay', 'reclaims', 'levels', 'fills'];
+  function stats() { // the saved counters
+    var v = store.get('tt-stats', null), o = {};
+    STAT_KEYS.forEach(function (k) { o[k] = v && v[k] > 0 ? Math.floor(v[k]) : 0; });
+    return o;
+  }
+  function statsNow() { var o = stats(); if (state) { o.bears += state.bearsTrapped || 0; o.foxes += state.foxesTrapped || 0; } return o; } // the totals once the game on screen is left
+  function viewStats() { var o = statsNow(); o.regions = REGIONS.filter(function (r) { return regionOpen(r); }).length; return o; } // what the screens show (adds the derived counters)
+  function allQuests() {
+    var out = Object.keys(TT.TITLES).map(function (id) { var t = TT.TITLES[id], i = TITLE_INFO[id]; return { id: id, title: true, icon: i.icon, name: i.name, stat: t.stat, goal: t.goal, how: i.how, effect: i.effect }; });
+    return out.concat(ACHIEVEMENTS);
+  }
+  function questDone(q, st) { return (st[q.stat] || 0) >= q.goal; }
+  var news = []; // toasts waiting for the effects layer to be cleared (animate shows them)
+  function checkEarned() { // announce what has just been completed
+    var st = viewStats(), done = store.get('tt-earned', null), fresh = false, first = !Array.isArray(done); // the very first time, what is already done is recorded without announcing it
+    if (first) done = [];
+    allQuests().forEach(function (q) {
+      if (questDone(q, st) && done.indexOf(q.id) < 0) { done.push(q.id); fresh = true; if (!first) news.push(q.title ? q.icon + ' Title earned: ' + q.name + '! Pick it in New game.' : '🏆 ' + q.icon + ' ' + q.name + ' done!'); }
+    });
+    if (fresh || first) store.set('tt-earned', done);
+  }
+  function addStat(key, n) { var s = stats(); s[key] += n || 1; store.set('tt-stats', s); checkEarned(); }
+  function setMax(key, v) { var s = stats(); if (v > s[key]) { s[key] = Math.floor(v); store.set('tt-stats', s); checkEarned(); } }
+  function trackEvents(events) { // the quests that count what just happened
+    events.forEach(function (ev) {
+      if (ev.type === 'open') addStat(ev.item === TT.CASH ? 'cash' : 'treasures');
+      else if (ev.type === 'merge' && ev.to === TT.CHURCH) addStat('churches');
+      else if (ev.type === 'repay') addStat('repays');
+      else if (ev.type === 'reclaim') addStat('reclaims');
+      else if (ev.type === 'level') addStat('levels');
+      else if (ev.type === 'fill') addStat('fills');
+      else if (ev.type === 'pondpts') setMax('pondPay', 1);
+      else if (ev.type === 'lake' && ev.size === 4) setMax('lake4', 1);
+    });
+  }
+  function trackState() { // the quests that look at the game as it stands (called by save)
+    if (!state) return;
+    setMax('topEver', state.top); setMax('coinsEver', state.coins);
+    if (TT.bankCount(state) >= 1) setMax('bankEver', 1);
+    if (TT.longBridgeCells(state).length) setMax('longBridge', 1);
+    if (state.bankOrder.length === 3 && state.vault.every(function (v) { return v >= TT.TREASURY_BANK_CAP; })) setMax('gold', 1); // all three accounts full
+  }
+  function titleUnlocked(id, st) { return !!TT.TITLES[id] && (st[TT.TITLES[id].stat] || 0) >= TT.TITLES[id].goal; }
   function titlePref() { var v = store.get('tt-title', ''); return TT.TITLES[v] ? v : ''; }
   // ---- the world: a 3x3 grid of regions, each a normal game in its own save slot (tt-save-<id>; the free game keeps tt-save). Layout: easy in the middle, a mix
   // of maps on the four sides, wild bears in the corners. `needs` = the neighbours that unlock a region once one of them has reached building tier `need`.
@@ -1736,18 +1840,18 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   }
   function saveKey(id) { return id ? 'tt-save-' + id : 'tt-save'; }
   function regionOptions(r) { return { map: r.map, wild: r.wild, bears: r.bears, foxes: r.foxes }; }
-  var worldNews = [];
   function noteWorld() { // remember the best building tier of the region on screen; tell when that opens another region
     if (!region || !state || !(state.top > (worldTops()[region] || 0))) return;
     var before = worldTops(), after = Object.assign({}, before);
     after[region] = state.top;
     store.set('tt-world', { tops: after });
-    REGIONS.forEach(function (r) { if (!regionOpen(r, before) && regionOpen(r, after)) worldNews.push('🗺️ ' + r.icon + ' ' + r.name + ' is open: see 🗺️ World'); }); // shown after the effects are cleared (animate)
+    REGIONS.forEach(function (r) { if (!regionOpen(r, before) && regionOpen(r, after)) news.push('🗺️ ' + r.icon + ' ' + r.name + ' is open: see 🗺️ World'); }); // shown after the effects are cleared (animate)
+    checkEarned();
   }
   function startNew(seed, o) {
     o = o || {};
     var was = stats(), now = o.noBank ? was : statsNow(), want = o.title === undefined ? titlePref() : o.title;
-    store.set('tt-stats', now);
+    store.set('tt-stats', now); checkEarned(); // the bears and foxes of the game being left count now
     state = TT.newGame(seed || randomSeed(), {
       wild: o.wild === undefined ? wildPref() : o.wild, map: o.map === undefined ? mapPref() : o.map,
       bears: o.bears === undefined ? bearsPref() : o.bears, foxes: o.foxes === undefined ? foxesPref() : o.foxes,
@@ -1757,9 +1861,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     $('overlay').classList.add('hidden');
     save();
     render([]);
-    Object.keys(TT.TITLES).forEach(function (id) { if (!titleUnlocked(id, was) && titleUnlocked(id, now)) toast(TITLE_ICON[id] + ' Title earned: ' + TITLE_NAMES[id] + '! Pick it in New game.', 0.4); });
   }
-  function save() { store.set(saveKey(region), state); noteWorld(); }
+  function save() { store.set(saveKey(region), state); noteWorld(); trackState(); }
 
   function loadSaved() {
     var s = store.get(saveKey(region), null);
@@ -2248,6 +2351,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     renderLoanLine();
     if (!$('bankDlg').classList.contains('hidden')) renderBank();
     $('seed').textContent = (region ? regionById(region).icon + ' ' + regionById(region).name + ' · ' : '') + 'seed ' + state.seed + (state.map !== 'easy' ? ' · ' + state.map + ' map' : '') + modeLabel(state);
+    trackEvents(events);
     animate(events);
     updatePreview();
     syncCritters();
@@ -2437,7 +2541,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
         floatAt(ev.at, '🔨 -' + TT.PRICE.hammer + '🪙');
       }
     });
-    while (worldNews.length) toast(worldNews.shift(), 0.35);
+    while (news.length) toast(news.shift(), 0.35);
     setTimeout(function () { if (fxEl.childNodes.length) fxEl.textContent = ''; }, 1000);
   }
 
@@ -2508,9 +2612,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     $('overTitle').textContent = newBest ? 'New best!' : 'Town full!';
     $('overText').textContent = 'Score ' + state.score + ' in ' + state.turn + ' turns' + (newBest ? '' : ' · best ' + best);
     $('overTreasury').textContent = '🏛️ Treasury 🪙' + fmt(treasuryTotal()) + ' in all · deposit coins at a bank in one game, withdraw them at a bank in another.';
-    var tst = statsNow(), q = TT.TITLES.hunter;
-    $('overStats').textContent = state.bearsTrapped || tst.bears < q.goal
-      ? TITLE_ICON.hunter + ' ' + state.bearsTrapped + ' bears trapped this game · ' + Math.min(tst.bears, q.goal) + '/' + q.goal + ' for ' + TITLE_NAMES.hunter : TITLE_ICON.hunter + ' ' + TITLE_NAMES.hunter + ' earned: pick it in New game.';
+    var vs = viewStats(), qs = allQuests(), nd = qs.filter(function (q) { return questDone(q, vs); }).length;
+    $('overStats').textContent = '🏹 ' + (state.bearsTrapped || 0) + ' bears and 🦊 ' + (state.foxesTrapped || 0) + ' foxes trapped this game · 🏆 ' + nd + ' / ' + qs.length + ' quests done';
     $('overlay').classList.remove('hidden');
   }
 
@@ -2583,7 +2686,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     document.querySelectorAll('#newGame .opt[data-bears]').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.bears === dlg.bears); });
     document.querySelectorAll('#newGame .opt[data-foxes]').forEach(function (b) { b.setAttribute('aria-pressed', (b.dataset.foxes === 'on') === dlg.foxes); });
     $('mapNote').textContent = MAP_NOTES[dlg.map];
-    var tst = statsNow(), tbox = $('titleOpts');
+    var tst = viewStats(), tbox = $('titleOpts');
     tbox.textContent = '';
     [''].concat(Object.keys(TT.TITLES)).forEach(function (id) {
       var ok = !id || titleUnlocked(id, tst), b = document.createElement('button');
@@ -2593,10 +2696,10 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       b.addEventListener('click', function () { dlg.title = id; showDialog(); });
       tbox.appendChild(b);
     });
-    $('titleNote').textContent = Object.keys(TT.TITLES).map(function (id) {
-      var q = TT.TITLES[id], have = Math.min(tst[q.stat], q.goal), mine = state && state.bearsTrapped ? ' (' + state.bearsTrapped + ' in the game you are leaving)' : '';
-      return TITLE_ICON[id] + ' ' + TITLE_NAMES[id] + ': trap ' + q.goal + ' bears in total (' + have + '/' + q.goal + (have < q.goal ? mine : '') + ') for ' + Math.round(q.bearCut * 100) + '% fewer bears in the queue. A game with a title has its own best score.';
-    }).join(' ');
+    var pick = titleUnlocked(dlg.title, tst) ? dlg.title : '', t = TT.TITLES[pick];
+    $('titleNote').textContent = pick
+      ? TITLE_ICON[pick] + ' ' + TITLE_NAMES[pick] + ': ' + TITLE_INFO[pick].effect + ' A game with a title has its own best score.'
+      : 'Titles are earned in 🏆 Quests: ' + Object.keys(TT.TITLES).map(function (id) { var q = TT.TITLES[id]; return TITLE_ICON[id] + ' ' + TITLE_NAMES[id] + ' ' + (tst[q.stat] >= q.goal ? '✓' : Math.min(tst[q.stat], q.goal) + '/' + q.goal); }).join(' · ') + '.';
     showSamples();
     $('foxNote').textContent = dlg.foxes ? 'Foxes warp around the board; walls or a full box trap them.' : 'No foxes in the item queue.';
     $('bearNote').textContent = dlg.bears === 'off' ? 'No bears in the item queue' + (dlg.foxes ? '.' : ' (calm mode: no animals at all, nothing to interrupt you).') : dlg.bears === 'wild' ? 'Boxed-in bears growl, get angry, then maul a 🌱🌿🌳🏕️🛖 next to them (one tier down). Bears breed in small pens. Own best scores.' : 'Bears wander and get trapped into tombstones.';
@@ -2651,22 +2754,44 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     }
     return out.join('');
   }
+  function chipRaw(emoji, label) { return '<div class="chip"><span class="ce">' + emoji + '</span><small>' + label + '</small></div>'; }
   function buildGuide() {
-  $('guideBody').innerHTML =
+    var html =
+    '<!--page:Buildings-->' +
     '<h3>Buildings</h3><div class="chain">' + chain(1, null, 'cash (final)') + '</div>' +
     '<p class="gnote">💵 Cash is collectible: tap it for +' + TT.CASH_COINS + ' coins. ' + CRITTERS[curSeason].home.join('') + ' hop around the homes (camp to village).</p>' +
+    '<p class="gnote">Three or more connected items of the same kind merge into the next one. Bigger groups pay more points and coins.</p>' +
+    '<p class="gnote">🍀 <b>Lucky drops</b>: once you have built a higher tier, the next item is sometimes a free 🏕️ 🛖 or 🏠 (a tier below your best, never above a house). Most often on Easy, rarer on Standard and Medium, never on Hard.</p>' +
+    '<!--page:Animals and gems-->' +
     '<h3>Bears</h3><div class="chain">' + chip(TT.BEAR, 'trap it') + '<span class="arrow">&rarr;</span>' +
     chain(TT.TOMB, null, 'treasure: tap to open, +' + TT.TREASURE_COINS + ' coins') + '</div>' +
     '<p class="gnote">👻🐈‍⬛ haunt the tombstones and churches. <b>Wild bears</b> mode: a bear that cannot step but is not sealed in gets angry (💢, then 💢💢) and on the third turn mauls a 🌱🌿🌳🏕️🛖 next to it, one tier down (a 🌱 is destroyed), then starts over. In a small pen (4 to 6 tiles) with 2 bears and 2 free tiles, a cub is sometimes born (🍼). Blue tiles are <b>water</b>: nothing can be placed, merged, moved or smashed there, and animals cannot cross it. A 🌉 <b>bridge</b> (up to 5, dearer each time) turns a water tile that has land on both sides into a road bears can walk over; nothing can be built on it.</p>' +
     '<h3>Special</h3><div class="chain">' + chip(TT.CRYSTAL, 'wildcard') + chip(TT.FOX, 'warps, walls trap it') + '</div>' +
+    '<p class="gnote">💎 stands in for any tier, including 🏬 (making 💵 cash) and 🕌 (making a 💰 treasure). Three or more 💎 touching each other merge into a 💰 treasure. 🚚 moves one item to an empty tile for coins.</p>' +
+    '<p class="gnote">🍂 The animals follow the season: bear and fox are ' + SKINS.autumn.bear[0] + ' ' + SKINS.autumn.fox[0] + ' in autumn and ' + SKINS.winter.bear[0] + ' ' + SKINS.winter.fox[0] + ' in winter (now: ' + em(TT.BEAR) + ' ' + em(TT.FOX) + '). Only the looks change.</p>' +
+    '<!--page:Banks and loans-->' +
     '<h3>Bank</h3><div class="chain">' + chip(TT.BANK, 'pays every turn') + '<span class="arrow">&rarr;<small>x3</small></span>' + chip(TT.CASH, 'cash') + '</div>' +
     '<p class="gnote">🏦 A <b>bank</b> is sold in the shop once you have built a village. It is a dead tile for animals (they cannot cross it), cannot go in the reserve, can be carried by the 🚚 mover (unless a loan locks it) and is broken only by the hammer, and pays you coins every turn (more at higher clock speed; the 📅 date is at the top). At most 3; each is dearer. Three connected banks merge into 💵 cash.</p>' +
     '<p class="gnote">💸 <b>Loans</b>: tap a bank to borrow half the shop price of the dearest building next to it. That building and the bank are 🔒 locked (no merging, moving or smashing) until you repay the loan plus simple interest: 15% a year at the first bank, 30% at the second, 60% at the third. A year unpaid and the building is gone and its tile becomes a 🏚️ seized lot (a dead tile; the bank stops paying) until you pay the debt. ⏱ The clock speed (shown once you own a bank) decides how many ticks a turn adds: faster means income, interest and the deadline all come sooner; paused stops them all.</p>' +
-    '<p class="gnote">💎 stands in for any tier, including 🏬 (making 💵 cash) and 🕌 (making a 💰 treasure). Three or more 💎 touching each other merge into a 💰 treasure. 🚚 moves one item to an empty tile for coins.</p>' +
-    '<p class="gnote">🍂 The animals follow the season: bear and fox are ' + SKINS.autumn.bear[0] + ' ' + SKINS.autumn.fox[0] + ' in autumn and ' + SKINS.winter.bear[0] + ' ' + SKINS.winter.fox[0] + ' in winter (now: ' + em(TT.BEAR) + ' ' + em(TT.FOX) + '). Only the looks change.</p>' +
-    '<p class="gnote">Three or more connected items of the same kind merge into the next one. Bigger groups pay more points and coins.</p>' +
-    '<p class="gnote">🍀 <b>Lucky drops</b>: once you have built a higher tier, the next item is sometimes a free 🏕️ 🛖 or 🏠 (a tier below your best, never above a house). Most often on Easy, rarer on Standard and Medium, never on Hard.</p>';
+    '<!--page:Water and terrain-->' +
+    '<div class="chain">' + chipRaw('🌊', 'water: a wall') + chipRaw('🌉', 'bridge') + chipRaw('💧', 'dug pond') + chipRaw(em(TT.MOUNTAIN), 'mountain') + chipRaw('🕳️', 'hole') + chipRaw('🏝️', 'reclaim') + chipRaw('⛏️', 'level') + '</div>' +
+    '<p class="gnote">🌊 <b>Water</b> (rivers, ponds, the sea) is a wall: nothing can be built, moved or smashed there and animals cannot enter it. 🌉 A <b>bridge</b> turns a water tile with land on both sides into a road bears can walk over (up to 8); <b>three or more bridged tiles in a line</b> are a long bridge that glows gold and pays coins every turn.</p>' +
+    '<p class="gnote">💧 A <b>pond</b> takes an empty tile for good and there is no limit; it pays points and coins every turn only inside a <b>3×3 block of dug ponds</b>. A 2×2, 3×3 and 4×4 lake pay quest bonuses.</p>' +
+    '<p class="gnote">' + em(TT.MOUNTAIN) + ' A <b>mountain</b> (Highlands map) is a wall until the ⛏️ <b>Level</b> tool flattens it for coins. 🕳️ A <b>hole</b> swallows any item you place in it: the item is used up, the tile becomes flat ground and a turn passes.</p>' +
+    '<p class="gnote">🏝️ On the <b>Island</b> map you cannot buy land: the <b>Reclaim</b> tool turns a sea tile next to the land into ground, dearer every time.</p>';
+    guidePages = html.split('<!--page:').slice(1).map(function (p) { var k = p.indexOf('-->'); return { title: p.slice(0, k), html: p.slice(k + 3) }; });
+    showGuidePage(guidePage);
   }
+  var guidePages = [], guidePage = 0;
+  function showGuidePage(n) {
+    guidePage = Math.max(0, Math.min(guidePages.length - 1, n));
+    $('guideBody').innerHTML = guidePages[guidePage].html;
+    $('guidePageLabel').textContent = (guidePage + 1) + ' / ' + guidePages.length + ' · ' + guidePages[guidePage].title;
+    $('guidePrev').disabled = guidePage === 0; $('guideNext').disabled = guidePage === guidePages.length - 1;
+    $('guide').querySelector('.card').scrollTop = 0;
+  }
+  $('guidePrev').addEventListener('click', function () { showGuidePage(guidePage - 1); });
+  $('guideNext').addEventListener('click', function () { showGuidePage(guidePage + 1); });
   buildGuide();
   $('bankBorrow').addEventListener('click', function () {
     var r = TT.borrow(state, bankAt);
@@ -2684,15 +2809,52 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   $('loanLine').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openFirstLoanBank(); } });
   $('questLine').addEventListener('click', openShop);
   $('questLine').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openShop(); } });
-  // "Get the latest version": drop the service worker and its caches, then reload. The saved game lives in localStorage, which is not touched.
-  $('updateLink').addEventListener('click', function (e) {
-    e.preventDefault();
-    this.textContent = 'Updating…';
+  // ---- the quests screen: titles first, then the achievements, each with its progress
+  var questsPage = 0;
+  function renderQuests() {
+    var st = viewStats(), qs = allQuests(), done = qs.filter(function (q) { return questDone(q, st); }).length;
+    var list = qs.filter(function (q) { return !!q.title === (questsPage === 0); });
+    $('questsSummary').textContent = '🏆 ' + done + ' / ' + qs.length + ' done · saved across games and regions' + (questsPage === 0 ? '. Pick a title in New game: it changes that game and gives it its own best score.' : '.');
+    $('questsLabel').textContent = (questsPage + 1) + ' / 2 · ' + (questsPage === 0 ? 'Titles' : 'Achievements');
+    $('questsPrev').disabled = questsPage === 0; $('questsNext').disabled = questsPage === 1;
+    $('questsBody').innerHTML = list.map(function (q) {
+      var have = Math.min(st[q.stat] || 0, q.goal), ok = questDone(q, st);
+      return '<div class="questrow' + (ok ? ' done' : '') + '" data-quest="' + q.id + '"><div class="qh"><span class="qi">' + q.icon + '</span><span>' + q.name + '</span><span class="qs">' + (ok ? '✓ done' : fmt(have) + ' / ' + fmt(q.goal)) + '</span></div>' +
+        '<small>' + q.how + (q.effect ? ' <b>Reward:</b> ' + q.effect : '') + '</small><div class="qbar"><i style="width:' + Math.round(100 * have / q.goal) + '%"></i></div></div>';
+    }).join('');
+    $('quests').querySelector('.card').scrollTop = 0;
+  }
+  $('questsLink').addEventListener('click', function (e) { e.preventDefault(); closeShop(); questsPage = 0; renderQuests(); $('quests').classList.remove('hidden'); });
+  $('questsPrev').addEventListener('click', function () { questsPage = 0; renderQuests(); });
+  $('questsNext').addEventListener('click', function () { questsPage = 1; renderQuests(); });
+  $('questsClose').addEventListener('click', function () { $('quests').classList.add('hidden'); });
+  $('quests').addEventListener('click', function (e) { if (e.target === this) $('quests').classList.add('hidden'); });
+  // ---- the Update button (always at the top): drop the service worker and its caches, refetch the page past the HTTP cache and reload on a fresh URL, so ONE tap
+  // is enough. The saved game lives in localStorage, which is not touched. A check against sw.js (never cached) makes the button glow when a newer build is out.
+  $('verNow').textContent = $('buildId').textContent;
+  var updating = false;
+  function doUpdate() {
+    if (updating) return;
+    updating = true;
+    var b = $('updateBtn'); b.disabled = true; b.textContent = '↻ Updating…';
     var jobs = [];
     if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); }));
     if (window.caches && caches.keys) jobs.push(caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); }));
-    Promise.all(jobs).catch(function () {}).then(function () { location.reload(); });
-  });
+    Promise.all(jobs).catch(function () {})
+      .then(function () { return fetch(location.pathname, { cache: 'reload' }).catch(function () {}); })
+      .then(function () { location.replace(location.pathname + '?v=' + Date.now() + location.hash); });
+  }
+  $('updateBtn').addEventListener('click', doUpdate);
+  function checkUpdate() {
+    if (!/^https?:$/.test(location.protocol) || updating) return;
+    fetch('sw.js?c=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (t) {
+      var m = /triple-three-([0-9a-f]{8})/.exec(t);
+      if (m && m[1] !== $('buildId').textContent) { var b = $('updateBtn'); b.classList.add('ready'); b.textContent = '⬆️ New version v' + m[1] + ': tap to update'; }
+    }).catch(function () {});
+  }
+  setTimeout(checkUpdate, 1500);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) checkUpdate(); });
+  setInterval(checkUpdate, 5 * 60 * 1000);
   // ---- the world screen: switch between the regions (and back to the custom game); every region keeps its own save
   function enterRegion(id) {
     var r = id ? regionById(id) : null;
@@ -2728,7 +2890,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   $('worldClose').addEventListener('click', function () { $('world').classList.add('hidden'); });
   $('worldFree').addEventListener('click', function () { enterRegion(''); });
   $('world').addEventListener('click', function (e) { if (e.target === this) $('world').classList.add('hidden'); });
-  $('guideLink').addEventListener('click', function (e) { e.preventDefault(); $('guide').classList.remove('hidden'); });
+  $('guideLink').addEventListener('click', function (e) { e.preventDefault(); showGuidePage(0); $('guide').classList.remove('hidden'); });
   $('guideClose').addEventListener('click', function () { $('guide').classList.add('hidden'); });
   $('hapticLink').addEventListener('click', function (e) {
     e.preventDefault();
@@ -2768,6 +2930,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     { target: '#holdBtn', title: '📦 Reserve', text: 'Store the current item here for later. Tap it again to swap with what is stored. Also free.' },
     { target: '.hud .stat', title: '⭐ Score and coins', text: 'Every merge adds to your <b>score</b> and pays 🪙 <b>coins</b> (bigger groups pay more). Coins buy things in the shop. <b>Best</b> is your top score on this map.' },
     { target: '#worldLink', title: '🗺️ World', text: 'Nine regions in a 3×3 grid, each its own game with its own save: the calm Meadow in the middle, harder ones further out. Build a 🏘️ village in the Meadow to open the next regions. <b>Custom game</b> there is the normal New game with any map.', when: function () { return $('worldLink').offsetParent !== null; } },
+    { target: '#questsLink', title: '🏆 Quests', text: 'Quests and achievements with your progress, saved across games: bears and foxes trapped, lakes, banks, regions... Four of them give a <b>title</b> (Bears Hunter, Hawkeyes, Master of Tides, Gold Keeper) that you can pick in New game for a bonus.', when: function () { return $('questsLink').offsetParent !== null; } },
+    { target: '#updateBtn', title: '↻ Update', text: 'Tap to get the latest version of the game: it keeps your saved game and best scores. The button glows <b>⬆️ New version</b> when a newer build is out.', when: function () { return $('updateBtn').offsetParent !== null; } },
     { target: '#newBtn', title: '⟳ New game', text: 'In a region it restarts that region on its own map. In the <b>Custom game</b> (🗺️ World) it lets you choose the <b>map</b>, the <b>bear mode</b> (Classic, Wild or No bears) and whether <b>foxes</b> appear; switch both animals off for a calm game. It erases the game you are playing, and warns you first.' },
     { target: '.topinfo', title: '📋 Turn, rules and settings', text: 'The turn counter with the 📅 calendar and, once you own a bank, the ⏱ clock speed (tap to cycle 1×, 2×, 3×, paused) (10 turns = a month, 12 months = a year) and game seed, <b>How to play</b> (the rules and this tour), the <b>Item guide</b> (every item and what it merges into), the <b>🎨 Season</b> theme (Auto follows the calendar; tap to cycle spring, summer, autumn, winter), the 🏞️ <b>lake quest</b> line (tap it to open the shop) and, on phones with vibration, the <b>📳 Haptics</b> switch.' },
     { target: '#undoBtn', title: '↶ Undo', text: 'Takes back your last move, or your last 🚚 mover, 🔨 hammer or 🪤 trap use (a mover drop that merges at once, say). It costs a few coins, and only one step can be undone.' },
@@ -2841,6 +3005,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     state = loadSaved();
     if (region && store.get('tt-region', null) === null) store.set('tt-region', region);
     if (state) render([]); else startNew(0, region ? regionOptions(regionById(region)) : {}); // a new player starts in the Meadow
+    checkEarned(); // records what was done before the quests existed (silently the first time)
   }
   if (!store.get('tt-seen-help', 0) && state.turn === 0) startTour(); // first launch: the guided tour (How to play keeps the written rules)
 
@@ -2854,6 +3019,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     critterHomes: function () { return critters.map(function (c) { return { kind: c.kind, cell: c.cell, code: state.grid[c.cell] }; }); }
   };
 
+  if (/[?&]v=\d+/.test(location.search) && history.replaceState) history.replaceState(null, '', location.pathname + location.hash); // the update reloads on a fresh ?v= URL: tidy it
   if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
     // cache-first service worker: when an update takes over, reload once so the new version shows without a manual refresh
     var hadController = !!navigator.serviceWorker.controller, reloaded = false;

@@ -29,9 +29,19 @@ if not os.path.exists(os.path.join(DIST, 'index.html')):
     sys.exit('dist/index.html missing - run `node build.js` first')
 
 
+SW_OVERRIDE = {'body': None}   # what the update check (sw.js?c=...) is told the newest build is; None = the real file
+
+
 class Quiet(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a):
         pass
+
+    def do_GET(self):
+        if SW_OVERRIDE['body'] is not None and self.path.startswith('/sw.js?c='):
+            data = SW_OVERRIDE['body'].encode()
+            self.send_response(200); self.send_header('Content-Type', 'application/javascript'); self.send_header('Content-Length', str(len(data))); self.end_headers(); self.wfile.write(data)
+            return
+        super().do_GET()
 
 
 server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), functools.partial(Quiet, directory=DIST))
@@ -121,7 +131,7 @@ with sync_playwright() as p:
     ctx.add_init_script("window.__vib = []; Object.defineProperty(navigator, 'vibrate', { configurable: true, value: (ms) => { window.__vib.push(ms); return true; } });")
     page = ctx.new_page()
     errors = []
-    page.on('pageerror', lambda e: errors.append(str(e)))
+    page.on('pageerror', lambda e: errors.append(str(e) + ' @ ' + str(getattr(e, 'stack', ''))[:400]))
     page.on('console', lambda m: errors.append(m.text) if m.type == 'error' else None)
     page.on('dialog', lambda d: d.accept())
 
@@ -638,14 +648,28 @@ with sync_playwright() as p:
         page.tap('#helpNext'); assert vis()[k] and sum(vis()) == 1 and pages[k] in page.inner_text('#helpPageLabel')
     assert page.is_disabled('#helpNext') and not page.is_disabled('#helpPrev')
     page.tap('#helpPrev'); assert vis()[3]
-    assert page.evaluate("getComputedStyle(document.getElementById('updateLink')).color") == 'rgb(255, 212, 90)', 'the link is readable on the green card'
     page.tap('#helpClose'); page.tap('#helpLink'); assert vis() == [True, False, False, False, False], 'it opens on the first page again'
+    # the Update button is at the top of the game (not in How to play), shows the version, and one tap reloads on a fresh URL that is tidied afterwards
+    page.tap('#helpClose')
+    assert page.locator('#updateBtn').is_visible() and page.locator('#updateLink').count() == 0
+    assert page.inner_text('#verNow') == page.inner_text('#buildId') and not page.evaluate("document.getElementById('updateBtn').classList.contains('ready')")
     before = state(page)
     with page.expect_navigation():
-        page.tap('#updateLink')
+        page.tap('#updateBtn')
     page.wait_for_selector('#board .cell')
     after = state(page)
     assert after['seed'] == before['seed'] and after['turn'] == before['turn'] and after['grid'] == before['grid'], 'the saved game survives the update'
+    assert '?v=' not in page.url, page.url
+    # a newer build on the server makes the button glow (the check reads sw.js, which names the build)
+    SW_OVERRIDE['body'] = "const C='triple-three-deadbeef';"
+    page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+    page.wait_for_function("document.getElementById('updateBtn').classList.contains('ready')")
+    assert 'deadbeef' in page.inner_text('#updateBtn') and 'New version' in page.inner_text('#updateBtn')
+    # the same build on the server: nothing to announce
+    SW_OVERRIDE['body'] = "const C='triple-three-" + page.inner_text('#buildId') + "';"
+    page.reload(); page.wait_for_selector('#board .cell'); page.wait_for_timeout(2200)
+    assert not page.evaluate("document.getElementById('updateBtn').classList.contains('ready')"), 'the same build is not an update'
+    SW_OVERRIDE['body'] = None
 
     # ---- calm mode: No bears + No foxes. No animals ever show up, no trap tool, own best score, the picks are remembered
     page.tap('#newBtn'); page.tap('.opt[data-bears="off"]'); page.tap('.opt[data-foxes="off"]'); page.tap('#newStart')
@@ -1013,6 +1037,61 @@ with sync_playwright() as p:
     assert page.inner_text('#coins') == '1M' and page.inner_text('#score') == '2.7M'
     check_consistent(page, 'compact counters')
 
+    # ---- quests: titles and achievements with progress, saved across games; finishing one is announced
+    page.evaluate("['tt-stats', 'tt-earned', 'tt-title', 'tt-treasury'].forEach(k => localStorage.removeItem(k))")
+    load([0] * 36, coins=50, top=3)
+    page.tap('#questsLink')
+    assert page.locator('#quests').is_visible() and '0 / 19 done' in page.inner_text('#questsSummary'), page.inner_text('#questsSummary')
+    assert page.inner_text('#questsLabel').startswith('1 / 2 · Titles') and page.is_disabled('#questsPrev')
+    names = page.evaluate("[...document.querySelectorAll('#questsBody .questrow')].map(r => r.dataset.quest)")
+    assert names == ['hunter', 'hawkeye', 'tides', 'gold'], names
+    assert '0 / 100' in page.inner_text('#questsBody .questrow[data-quest="hunter"]') and 'Reward' in page.inner_text('#questsBody .questrow[data-quest="gold"]')
+    page.tap('#questsNext')
+    assert page.inner_text('#questsLabel').startswith('2 / 2 · Achievements') and page.is_disabled('#questsNext')
+    ach = page.evaluate("[...document.querySelectorAll('#questsBody .questrow')].map(r => r.dataset.quest)")
+    assert len(ach) == 15 and 'village' in ach and 'cartographer' in ach and 'rich' in ach, ach
+    page.tap('#questsPrev'); assert page.inner_text('#questsLabel').startswith('1 / 2'); page.tap('#questsClose'); assert page.locator('#quests').is_hidden()
+    # a 4x4 lake (the last of 16 ponds) completes the 2x2, 3x3 and 4x4 quests at once: Master of Tides
+    block = [r * 6 + c for r in range(4) for c in range(4)]
+    last = block[-1]
+    gp = [0] * 36
+    for i in block:
+        if i != last: gp[i] = 21
+    load(gp, coins=100000, top=4, lake=0, ponds=[i for i in block if i != last])
+    shop_tap(page, '#pondBtn'); tap_cell(page, last, True)
+    lk = check_consistent(page, 'a 4x4 lake')
+    assert lk['lake'] == 3 and len(lk['ponds']) == 16
+    assert page.evaluate("JSON.parse(localStorage.getItem('tt-stats')).lake4") == 1 and 'tides' in page.evaluate("JSON.parse(localStorage.getItem('tt-earned'))")
+    assert 'Title earned: Master of Tides' in page.inner_text('#fx'), 'the title is announced'
+    page.tap('#questsLink'); assert 'done' in page.inner_text('#questsBody .questrow[data-quest="tides"]') and page.evaluate("document.querySelector('#questsBody .questrow[data-quest=tides]').classList.contains('done')")
+    page.tap('#questsClose')
+    page.tap('#newBtn')
+    assert page.evaluate("[...document.querySelectorAll('#titleOpts .opt')].map(b => b.dataset.title)") == ['', 'hunter', 'hawkeye', 'tides', 'gold']
+    assert not page.is_disabled('.opt[data-title="tides"]') and page.is_disabled('.opt[data-title="hunter"]') and page.is_disabled('.opt[data-title="gold"]')
+    page.tap('.opt[data-title="tides"]'); assert 'lucky drops' in page.inner_text('#titleNote')
+    page.tap('#newStart')
+    assert state(page)['title'] == 'tides' and 'Master of Tides' in page.inner_text('#seed')
+    # Hawkeyes: the foxes of the game being left count in the dialog like the bears do
+    page.evaluate("localStorage.setItem('tt-stats', JSON.stringify({ foxes: 24 }))")
+    load([0] * 36, coins=50, top=3, foxesTrapped=1)
+    page.tap('#newBtn'); assert not page.is_disabled('.opt[data-title="hawkeye"]'), 'the 25th fox is in the game on screen'
+    page.tap('.opt[data-title="hawkeye"]'); page.tap('#newStart')
+    assert state(page)['title'] == 'hawkeye' and page.evaluate("JSON.parse(localStorage.getItem('tt-stats')).foxes") == 25
+    # Gold Keeper: three banks, each account full (1M) in one game
+    gg = [0] * 36; gg[0] = 22; gg[2] = 22; gg[4] = 22
+    page.evaluate("localStorage.setItem('tt-treasury', JSON.stringify([1000000, 1000000, 1000000]))")
+    load(gg, coins=500, top=7, banksBought=3, bankOrder=[0, 2, 4])
+    tap_cell(page, 35, True)
+    assert page.evaluate("JSON.parse(localStorage.getItem('tt-stats')).gold") == 1 and 'Title earned: Gold Keeper' in page.inner_text('#fx')
+    page.tap('#newBtn'); page.tap('.opt[data-title="gold"]'); page.tap('#newStart')
+    assert state(page)['title'] == 'gold'
+    # what was already done before the quests existed is recorded silently (no flood of announcements)
+    page.evaluate("localStorage.removeItem('tt-earned'); localStorage.setItem('tt-stats', JSON.stringify({ bears: 150, topEver: 8 }))")
+    load([0] * 36, coins=50, top=3)
+    page.wait_for_timeout(200)
+    assert set(page.evaluate("JSON.parse(localStorage.getItem('tt-earned'))")) >= {'hunter', 'village'} and page.inner_text('#fx') == ''
+    page.evaluate("['tt-stats', 'tt-earned', 'tt-title', 'tt-treasury'].forEach(k => localStorage.removeItem(k))")
+
     # ---- shop: higher tiers unlock once built; stock runs out -> price doubles (shown on the button)
     load([0] * 36, coins=500)
     assert page.locator('.tool[data-tool="4"]').count() == 0, 'camp is locked at the start'
@@ -1108,11 +1187,25 @@ with sync_playwright() as p:
     page.tap('#helpLink'); page.tap('#helpClose'); assert page.locator('#help').is_hidden()
     page.tap('#guideLink')
     assert page.locator('#guide').is_visible()
+    # the item guide is paged: buildings, animals and gems, banks and loans, water and terrain
+    gl = page.inner_text('#guidePageLabel')
+    assert gl.startswith('1 / 4 · Buildings') and page.is_disabled('#guidePrev') and not page.is_disabled('#guideNext'), gl
     guide = page.inner_text('#guideBody')
-    for e in ['🌱', '🏕️', '🏘️', '🏫', '🏥', '🏬', '💵', '🐻', '🪦', '⛪', '🕌', '💰', '💎', '🦊']:
-        assert e in guide, f'guide misses {e}'
+    for e in ['🌱', '🏕️', '🏘️', '🏫', '🏥', '🏬', '💵']:
+        assert e in guide, f'page 1 misses {e}'
     assert 'Lucky drops' in guide, 'guide explains lucky drops'
     page.screenshot(path=os.path.join(args.shots, '4_guide.png'))
+    page.tap('#guideNext'); assert '2 / 4 · Animals' in page.inner_text('#guidePageLabel')
+    guide = page.inner_text('#guideBody')
+    for e in ['🐻', '🪦', '⛪', '🕌', '💰', '💎', '🦊']:
+        assert e in guide, f'page 2 misses {e}'
+    page.tap('#guideNext'); assert '3 / 4 · Banks' in page.inner_text('#guidePageLabel') and '🏦' in page.inner_text('#guideBody') and 'Loans' in page.inner_text('#guideBody')
+    page.tap('#guideNext'); assert '4 / 4 · Water' in page.inner_text('#guidePageLabel') and page.is_disabled('#guideNext')
+    terr = page.inner_text('#guideBody')
+    for w in ['bridge', 'pond', 'mountain', 'hole', 'Reclaim', 'long bridge']:
+        assert w in terr, f'the terrain page misses {w}'
+    page.tap('#guidePrev'); assert '3 / 4' in page.inner_text('#guidePageLabel')
+    page.tap('#guideClose'); page.tap('#guideLink'); assert page.inner_text('#guidePageLabel').startswith('1 / 4'), 'it opens on the first page again'
     page.tap('#guideClose')
     assert page.locator('#guide').is_hidden()
 

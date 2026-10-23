@@ -34,7 +34,15 @@
   // Titles (sobriquets): earned over many games by a quest counter that the page keeps (state.bearsTrapped is this game's share), chosen per
   // game in the New game dialog (state.title) and applied by the logic: hunter = after BEARS trapped in total, a share of the bears in the
   // queue turn into grass. The extra random number is only drawn when the title is on, so games without one replay exactly as before.
-  var TITLES = { hunter: { stat: 'bears', goal: 100, bearCut: 0.3 } };
+  // hunter: bears in the queue turn into grass; hawkeye: the same for foxes; tides: more lucky drops, and higher ones, on maps whose own water makes the
+  // sea or a river (medium, hard, island); gold: no deposit fee and double interest on the bank accounts. `stat` / `goal` = the page's quest counter.
+  var TITLES = {
+    hunter: { stat: 'bears', goal: 100, bearCut: 0.3 },
+    hawkeye: { stat: 'foxes', goal: 25, foxCut: 0.5 },
+    tides: { stat: 'lake4', goal: 1, luckyBonus: 0.08, luckyMaxTier: 7 },
+    gold: { stat: 'gold', goal: 1, noFee: true, interestX2: true }
+  };
+  var WATER_MAPS = ['medium', 'hard', 'island'];
   // Treasury: saved accounts (kept by the page, outside the game state) that carry coins from one game to the next. Every bank has its OWN account,
   // named by the order the banks were placed (Bank 1, 2, 3 = the place in state.bankOrder), each holding at most TREASURY_BANK_CAP; a deposit
   // through a bank keeps TREASURY_FEE. A game that has withdrawn has state.boost > 0 (the total taken) and its own best-score board.
@@ -123,7 +131,8 @@
   function randInt(s, n) { return Math.floor(rand(s) * n); }
   // A lucky building tier for the next item, or 0. Lower tiers are likelier (camp 3 : hut 2 : house 1 when all three are possible).
   function luckyTier(s) {
-    var rate = LUCKY_RATE[s.map], hi = Math.min((s.top || 0) - 1, LUCKY_MAX_TIER);
+    var tt = s.title ? TITLES[s.title] : null, tides = tt && tt.luckyBonus && WATER_MAPS.indexOf(s.map) >= 0; // Master of Tides: more, and higher, lucky drops beside water
+    var rate = (LUCKY_RATE[s.map] || 0) + (tides ? tt.luckyBonus : 0), hi = Math.min((s.top || 0) - 1, tides ? tt.luckyMaxTier : LUCKY_MAX_TIER);
     if (!rate || hi < LUCKY_MIN_TIER || rand(s) >= rate) return 0;
     var total = 0, k;
     for (k = LUCKY_MIN_TIER; k <= hi; k++) total += hi - k + 1;
@@ -143,7 +152,9 @@
         var it = WEIGHTS[i][0];
         // a switched-off animal turns into plain grass (the draw is the same, so games with both animals on replay exactly as ever)
         if ((it === BEAR && s.bears === false) || (it === FOX && s.foxes === false)) return 1;
-        if (it === BEAR && s.title && rand(s) < TITLES[s.title].bearCut) return 1; // the Bears Hunter title: some bears turn into grass
+        var tt = s.title ? TITLES[s.title] : null; // a title with a cut turns some of those animals into grass (one extra draw, only then)
+        if (it === BEAR && tt && tt.bearCut && rand(s) < tt.bearCut) return 1;
+        if (it === FOX && tt && tt.foxCut && rand(s) < tt.foxCut) return 1;
         return it;
       }
     }
@@ -151,14 +162,14 @@
   }
 
   function clone(s) {
-    return { ver: s.ver, wild: s.wild, bears: s.bears, foxes: s.foxes, map: s.map, bridges: s.bridges.slice(), ponds: s.ponds.slice(), reclaimed: s.reclaimed, vault: s.vault.slice(), leveled: s.leveled, boost: s.boost, title: s.title, bearsTrapped: s.bearsTrapped, lake: s.lake, tick: s.tick, speed: s.speed, banksBought: s.banksBought, bankOrder: s.bankOrder.slice(), loans: s.loans.map(function (l) { return Object.assign({}, l); }), w: s.w, h: s.h, land: s.land.slice(), top: s.top, grid: s.grid.slice(), cur: s.cur, next: s.next, hold: s.hold, score: s.score, coins: s.coins,
+    return { ver: s.ver, wild: s.wild, bears: s.bears, foxes: s.foxes, map: s.map, bridges: s.bridges.slice(), ponds: s.ponds.slice(), reclaimed: s.reclaimed, vault: s.vault.slice(), leveled: s.leveled, boost: s.boost, title: s.title, bearsTrapped: s.bearsTrapped, foxesTrapped: s.foxesTrapped, lake: s.lake, tick: s.tick, speed: s.speed, banksBought: s.banksBought, bankOrder: s.bankOrder.slice(), loans: s.loans.map(function (l) { return Object.assign({}, l); }), w: s.w, h: s.h, land: s.land.slice(), top: s.top, grid: s.grid.slice(), cur: s.cur, next: s.next, hold: s.hold, score: s.score, coins: s.coins,
       stock: Object.assign({}, s.stock), milestone: s.milestone, bonusScore: s.bonusScore, turn: s.turn, over: s.over, rng: s.rng, seed: s.seed, undo: s.undo };
   }
 
   function newGame(seed, opts) {
     seed = (seed >>> 0) || 1;
     var bears = !(opts && opts.bears === false), foxes = !(opts && opts.foxes === false);
-    var s = { ver: VERSION, wild: bears && !!(opts && opts.wild), bears: bears, foxes: foxes, map: opts && MAPS.indexOf(opts.map) >= 0 ? opts.map : 'easy', bridges: [], ponds: [], reclaimed: 0, vault: [0, 0, 0], leveled: 0, boost: 0, title: opts && TITLES[opts.title] ? opts.title : '', bearsTrapped: 0, lake: 0, tick: 0, speed: 1, banksBought: 0, bankOrder: [], loans: [], w: DEFAULT_W, h: DEFAULT_H, land: [], top: 1, grid: new Array(DEFAULT_W * DEFAULT_H).fill(EMPTY), cur: 1, next: 1, hold: 0, score: 0, coins: START_COINS,
+    var s = { ver: VERSION, wild: bears && !!(opts && opts.wild), bears: bears, foxes: foxes, map: opts && MAPS.indexOf(opts.map) >= 0 ? opts.map : 'easy', bridges: [], ponds: [], reclaimed: 0, vault: [0, 0, 0], leveled: 0, boost: 0, title: opts && TITLES[opts.title] ? opts.title : '', bearsTrapped: 0, foxesTrapped: 0, lake: 0, tick: 0, speed: 1, banksBought: 0, bankOrder: [], loans: [], w: DEFAULT_W, h: DEFAULT_H, land: [], top: 1, grid: new Array(DEFAULT_W * DEFAULT_H).fill(EMPTY), cur: 1, next: 1, hold: 0, score: 0, coins: START_COINS,
       stock: Object.assign({}, START_STOCK), milestone: 0, bonusScore: 0, turn: 0, over: false, rng: seed, seed: seed, undo: null };
     if (s.map === 'island') { s.w = s.h = ISLAND_SIZE; s.land = SIDES.slice(); s.grid = new Array(ISLAND_SIZE * ISLAND_SIZE).fill(EMPTY); } // the biggest board, all land bought
     dim(s);
@@ -359,7 +370,7 @@
       if (!room) pocket.forEach(function (c) { if (s.grid[c] !== EMPTY) trapped.push(c); });
     }
     trapped.sort(function (a, b) { return (b === last) - (a === last) || a - b; });
-    trapped.forEach(function (at) { if (isBear(s.grid[at])) s.bearsTrapped++; s.grid[at] = TOMB; events.push({ type: 'trapped', at: at }); });
+    trapped.forEach(function (at) { if (isBear(s.grid[at])) s.bearsTrapped++; else if (s.grid[at] === FOX) s.foxesTrapped++; s.grid[at] = TOMB; events.push({ type: 'trapped', at: at }); });
     for (i = 0; i < N; i++) if (isBear(s.grid[i])) bears.push(i);
     var mauled = [];
     bears.forEach(function (from) {
@@ -487,7 +498,7 @@
       s.loans.forEach(function (l) { if (l.defaulted) inDefault[l.bank] = true; });
       for (var bi = 0; bi < s.grid.length; bi++) if (s.grid[bi] === BANK && !inDefault[bi]) paying.push(bi);
       if (paying.length) {
-        var interest = paying.map(function (b) { var rk = s.bankOrder.indexOf(b); return rk >= 0 ? Math.floor(s.vault[rk] * s.speed * TREASURY_INTEREST_PPM / 1e6) : 0; }); // on that bank's own account
+        var interest = paying.map(function (b) { var rk = s.bankOrder.indexOf(b); return rk >= 0 ? Math.floor(s.vault[rk] * s.speed * TREASURY_INTEREST_PPM * (s.title && TITLES[s.title].interestX2 ? 2 : 1) / 1e6) : 0; }); // on that bank's own account
         var extra = interest.reduce(function (a, b) { return a + b; }, 0);
         s.coins += each * paying.length + extra;
         events.push({ type: 'bankpay', coins: each * paying.length + extra, each: each, interest: interest, ticks: s.speed, banks: paying.length, at: paying });
@@ -557,7 +568,7 @@
     if (state.over || !(idx >= 0 && idx < N) || (!isBear(state.grid[idx]) && state.grid[idx] !== FOX) || state.coins < PRICE.trap || !(state.stock.trap > 0)) return null;
     var s = clone(state), events = [{ type: 'trap', at: idx }];
     s.undo = snapshot(state); // a tool use can be undone by itself
-    s.coins -= PRICE.trap; s.stock.trap--; if (isBear(s.grid[idx])) s.bearsTrapped++; s.grid[idx] = TOMB;
+    s.coins -= PRICE.trap; s.stock.trap--; if (isBear(s.grid[idx])) s.bearsTrapped++; else s.foxesTrapped++; s.grid[idx] = TOMB;
     resolveAt(s, idx, events);
     settleCrystals(s, events);
     noteTop(s, events);
@@ -806,7 +817,7 @@
     return { state: s, events: [{ type: 'reclaim', at: idx, price: price }] };
   }
   // Treasury: the account of the bank on cell `bankIdx` is the one named by its place in bankOrder (0 = Bank 1). `balance` is that account before the call.
-  function treasuryNet(amount) { return amount - Math.floor(amount * TREASURY_FEE); }
+  function treasuryNet(amount, title) { return amount - (title && TITLES[title] && TITLES[title].noFee ? 0 : Math.floor(amount * TREASURY_FEE)); } // Gold Keeper pays no fee
   function treasuryRank(state, bankIdx) { return state.grid[bankIdx] === BANK ? state.bankOrder.indexOf(bankIdx) : -1; }
   // Deposit `amount` coins of this game through that bank: the account gets the amount minus the fee and must have room. Returns {state, net, fee, rank}
   // or null. A free action; it clears Undo (the accounts live outside the state, so undoing a deposit would copy coins).
@@ -814,7 +825,7 @@
     dim(state);
     var rank = treasuryRank(state, bankIdx);
     if (state.over || rank < 0 || !(amount >= 1) || amount !== (amount | 0) || amount > state.coins) return null;
-    var net = treasuryNet(amount);
+    var net = treasuryNet(amount, state.title);
     if (!(balance >= 0) || balance + net > TREASURY_BANK_CAP) return null;
     var s = clone(state); s.coins -= amount; s.undo = null; s.vault[rank] = balance + net; // the mirror follows the account
     if (isOver(s)) return null; // never into a stuck game
@@ -938,6 +949,7 @@
       if (!Array.isArray(x.vault) || x.vault.length !== 3) x.vault = [0, 0, 0]; // mirror of the saved bank accounts, for the interest
       if (typeof x.title !== 'string') x.title = ''; // titles and the trapped-bears counter came later
       if (typeof x.bearsTrapped !== 'number') x.bearsTrapped = 0;
+      if (typeof x.foxesTrapped !== 'number') x.foxesTrapped = 0;
       if (typeof x.tick !== 'number') x.tick = 0; // the calendar and banks came later
       if (typeof x.speed !== 'number') x.speed = 1;
       if (!Array.isArray(x.loans)) x.loans = [];
@@ -993,7 +1005,7 @@
     if (s.leveled !== (s.leveled | 0) || s.leveled < 0) return ['bad leveled count'];
     if (!Array.isArray(s.vault) || s.vault.length !== 3 || s.vault.some(function (v) { return v !== (v | 0) || v < 0 || v > TREASURY_BANK_CAP; })) return ['bad vault'];
     if (s.title !== '' && !TITLES[s.title]) return ['bad title'];
-    if (s.bearsTrapped !== (s.bearsTrapped | 0) || s.bearsTrapped < 0) return ['bad bears trapped count'];
+    if (s.bearsTrapped !== (s.bearsTrapped | 0) || s.bearsTrapped < 0 || s.foxesTrapped !== (s.foxesTrapped | 0) || s.foxesTrapped < 0) return ['bad trapped count'];
     if (s.map === 'island' && (s.w !== ISLAND_SIZE || s.h !== ISLAND_SIZE)) return ['an island is the biggest board'];
     var lr = 0, tb = 0;
     s.land.forEach(function (side, k) {
