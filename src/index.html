@@ -22,16 +22,15 @@
     <div class="stat"><small>Score</small><b id="score">0</b></div>
     <div class="stat"><small>Best</small><b id="best">0</b></div>
     <div class="stat coins"><small>Coins</small><b id="coins">0</b></div>
+    <button id="menuBtn" class="tray newtray menutray" type="button" aria-label="Menu" aria-haspopup="dialog">
+      <small>Menu</small><span class="emoji">☰</span><i id="menuDot" class="dot" hidden></i>
+    </button>
   </header>
 
   <div class="topinfo">
-    <div><span id="turn">Turn 0</span> · <span id="seed">seed</span><span id="speedBox" hidden> · <a href="#" id="speedLink" aria-label="Game clock speed">⏱ 1×</a></span></div>
-    <div><a href="#" id="helpLink">How to play</a> · <a href="#" id="guideLink">Item guide</a> · <a href="#" id="worldLink">🗺️ World</a> · <a href="#" id="questsLink">🏆 Quests</a> · <a href="#" id="seasonLink" aria-label="Season theme">🎨 Season: auto</a><span class="foot-settings"> · <a href="#" id="hapticLink" role="switch" aria-label="Haptic feedback (vibration)">📳 Haptics: on</a></span></div>
-      <div id="loanLine" class="questline loanline" role="button" tabindex="0" aria-label="Loans: open the bank" hidden></div>
-      <div id="questLine" class="questline" role="button" tabindex="0" aria-label="Lake quest: open the shop"></div>
+    <div><span id="turn">Turn 0</span><span id="speedBox" hidden> · <a href="#" id="speedLink" aria-label="Game clock speed">⏱ 1×</a></span></div>
+    <div id="loanLine" class="questline loanline" role="button" tabindex="0" aria-label="Loans: open the bank" hidden></div>
   </div>
-
-  <div class="updaterow"><button id="updateBtn" class="updatebtn" type="button" aria-label="Check for a newer version and update">↻ Update · v<span id="verNow"></span></button></div>
 
   <div id="boardWrap">
     <div id="board" role="grid" aria-label="Game board"></div>
@@ -100,10 +99,28 @@
   </div>
 </div>
 
+<div id="menu" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Menu">
+  <div class="card">
+    <h2>☰ Menu</h2>
+    <div class="menugrid">
+      <button id="worldLink" class="btn menuitem" type="button">🗺️ World</button>
+      <button id="questsLink" class="btn menuitem" type="button">🏆 Quests<i id="questsDot" class="dot" hidden></i></button>
+      <button id="helpLink" class="btn menuitem" type="button">📖 How to play</button>
+      <button id="guideLink" class="btn menuitem" type="button">🧾 Item guide</button>
+      <button id="seasonLink" class="btn menuitem" type="button" aria-label="Season theme">🎨 Season: auto</button>
+      <button id="hapticLink" class="btn menuitem" type="button" role="switch" aria-pressed="true">📳 Haptics: on</button>
+    </div>
+    <button id="updateBtn" class="updatebtn" type="button" aria-label="Check for a newer version and update">↻ Update · v<span id="verNow"></span></button>
+    <p class="gnote">Game: <span id="seed">seed</span></p>
+    <button id="menuClose" class="btn primary">Close</button>
+  </div>
+</div>
+
 <div id="quests" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Quests">
   <div class="card">
     <h2>🏆 Quests</h2>
     <p id="questsSummary" class="gnote"></p>
+    <p id="questLine" class="gnote" role="status"></p>
     <div class="pager"><button id="questsPrev" class="btn" aria-label="Previous page">‹ Back</button><span id="questsLabel" aria-live="polite"></span><button id="questsNext" class="btn" aria-label="Next page">Next ›</button></div>
     <div id="questsBody"></div>
     <button id="questsClose" class="btn primary">Close</button>

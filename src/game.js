@@ -87,6 +87,11 @@
     return out.concat(ACHIEVEMENTS);
   }
   function questDone(q, st) { return (st[q.stat] || 0) >= q.goal; }
+  function refreshDots() { // a gold dot on the menu button (and on Quests) when something is new: a finished quest not seen yet, or a newer version of the game
+    var e = store.get('tt-earned', []), n = Array.isArray(e) ? e.length : 0, fresh = n > store.get('tt-quests-seen', n);
+    $('questsDot').hidden = !fresh;
+    $('menuDot').hidden = !(fresh || $('updateBtn').classList.contains('ready'));
+  }
   var news = []; // toasts waiting for the effects layer to be cleared (animate shows them)
   function checkEarned() { // announce what has just been completed
     var st = viewStats(), done = store.get('tt-earned', null), fresh = false, first = !Array.isArray(done); // the very first time, what is already done is recorded without announcing it
@@ -95,6 +100,8 @@
       if (questDone(q, st) && done.indexOf(q.id) < 0) { done.push(q.id); fresh = true; if (!first) news.push(q.title ? q.icon + ' Title earned: ' + q.name + '! Pick it in New game.' : '🏆 ' + q.icon + ' ' + q.name + ' done!'); }
     });
     if (fresh || first) store.set('tt-earned', done);
+    if (first) store.set('tt-quests-seen', done.length); // what was already done is not 'new'
+    refreshDots();
   }
   function addStat(key, n) { var s = stats(); s[key] += n || 1; store.set('tt-stats', s); checkEarned(); }
   function setMax(key, v) { var s = stats(); if (v > s[key]) { s[key] = Math.floor(v); store.set('tt-stats', s); checkEarned(); } }
@@ -1037,7 +1044,7 @@
   $('toolCancel').addEventListener('click', function () { mode = null; moveFrom = -1; sel = -1; render([]); });
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
-    if (!$('tour').classList.contains('hidden')) endTour(); else closeShop();
+    if (!$('tour').classList.contains('hidden')) endTour(); else { closeShop(); closeMenu(); }
   });
   $('newBtn').addEventListener('click', function () { closeShop(); openNewGame(); });
   $('newCancel').addEventListener('click', function () { $('newGame').classList.add('hidden'); });
@@ -1109,8 +1116,15 @@
   function openFirstLoanBank() { if (state.loans.length) openBank(state.loans[0].bank); }
   $('loanLine').addEventListener('click', openFirstLoanBank);
   $('loanLine').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openFirstLoanBank(); } });
-  $('questLine').addEventListener('click', openShop);
-  $('questLine').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openShop(); } });
+  // ---- the menu: the less used buttons live here (World, Quests, How to play, Item guide, Season, Haptics, Update, game info). Choosing a screen closes it; Season and
+  // Haptics stay open so you can see them change.
+  function openMenu() { closeShop(); refreshDots(); $('menu').classList.remove('hidden'); }
+  function closeMenu() { $('menu').classList.add('hidden'); }
+  $('menuBtn').addEventListener('click', openMenu);
+  $('menuClose').addEventListener('click', closeMenu);
+  $('menu').addEventListener('click', function (e) {
+    if (e.target === this || (e.target.closest && e.target.closest('#worldLink, #questsLink, #helpLink, #guideLink, #updateBtn'))) closeMenu();
+  });
   // ---- the quests screen: titles first, then the achievements, each with its progress
   var questsPage = 0;
   function renderQuests() {
@@ -1126,7 +1140,10 @@
     }).join('');
     $('quests').querySelector('.card').scrollTop = 0;
   }
-  $('questsLink').addEventListener('click', function (e) { e.preventDefault(); closeShop(); questsPage = 0; renderQuests(); $('quests').classList.remove('hidden'); });
+  $('questsLink').addEventListener('click', function (e) {
+    e.preventDefault(); closeShop(); questsPage = 0; renderQuests(); $('quests').classList.remove('hidden');
+    var ea = store.get('tt-earned', []); store.set('tt-quests-seen', Array.isArray(ea) ? ea.length : 0); refreshDots();
+  });
   $('questsPrev').addEventListener('click', function () { questsPage = 0; renderQuests(); });
   $('questsNext').addEventListener('click', function () { questsPage = 1; renderQuests(); });
   $('questsClose').addEventListener('click', function () { $('quests').classList.add('hidden'); });
@@ -1151,7 +1168,11 @@
     if (!/^https?:$/.test(location.protocol) || updating) return;
     fetch('sw.js?c=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (t) {
       var m = /triple-three-([0-9a-f]{8})/.exec(t);
-      if (m && m[1] !== $('buildId').textContent) { var b = $('updateBtn'); b.classList.add('ready'); b.textContent = '⬆️ New version v' + m[1] + ': tap to update'; }
+      if (m && m[1] !== $('buildId').textContent) {
+        var b = $('updateBtn'), fresh = !b.classList.contains('ready');
+        b.classList.add('ready'); b.textContent = '⬆️ New version v' + m[1] + ': tap to update'; refreshDots();
+        if (fresh) toast('⬆️ New version: ☰ Menu → Update', 0.3);
+      }
     }).catch(function () {});
   }
   setTimeout(checkUpdate, 1500);
@@ -1231,11 +1252,9 @@
     { target: '.panel', title: '🌱 Place and Next', text: '<b>Place</b> is the item you will put down now, <b>Next</b> is the one after it. <b>Tap the ⇄ button between them to swap them</b> (tapping the Next item works too): free, as often as you like.' },
     { target: '#holdBtn', title: '📦 Reserve', text: 'Store the current item here for later. Tap it again to swap with what is stored. Also free.' },
     { target: '.hud .stat', title: '⭐ Score and coins', text: 'Every merge adds to your <b>score</b> and pays 🪙 <b>coins</b> (bigger groups pay more). Coins buy things in the shop. <b>Best</b> is your top score on this map.' },
-    { target: '#worldLink', title: '🗺️ World', text: 'Nine regions in a 3×3 grid, each its own game with its own save: the calm Meadow in the middle, harder ones further out. Build a 🏘️ village in the Meadow to open the next regions. <b>Custom game</b> there is the normal New game with any map.', when: function () { return $('worldLink').offsetParent !== null; } },
-    { target: '#questsLink', title: '🏆 Quests', text: 'Quests and achievements with your progress, saved across games: bears and foxes trapped, lakes, banks, regions... Four of them give a <b>title</b> (Bears Hunter, Hawkeyes, Master of Tides, Gold Keeper) that you can pick in New game for a bonus.', when: function () { return $('questsLink').offsetParent !== null; } },
-    { target: '#updateBtn', title: '↻ Update', text: 'Tap to get the latest version of the game: it keeps your saved game and best scores. The button glows <b>⬆️ New version</b> when a newer build is out.', when: function () { return $('updateBtn').offsetParent !== null; } },
+    { target: '#menuBtn', title: '☰ Menu', text: 'Everything else is in here: <b>🗺️ World</b> (nine regions in a 3×3 grid, each its own game: the calm Meadow in the middle, harder ones further out; build a 🏘️ village in the Meadow to open the next), <b>🏆 Quests</b> (quests, achievements and titles with your progress), <b>How to play</b> and this tour, the <b>Item guide</b>, the <b>🎨 Season</b> theme, <b>Haptics</b>, and <b>↻ Update</b> (it keeps your saved game and best scores). A <b>gold dot</b> on the button means something is new: a finished quest or a newer version.' },
     { target: '#newBtn', title: '⟳ New game', text: 'In a region it restarts that region on its own map. In the <b>Custom game</b> (🗺️ World) it lets you choose the <b>map</b>, the <b>bear mode</b> (Classic, Wild or No bears) and whether <b>foxes</b> appear; switch both animals off for a calm game. It erases the game you are playing, and warns you first.' },
-    { target: '.topinfo', title: '📋 Turn, rules and settings', text: 'The turn counter with the 📅 calendar and, once you own a bank, the ⏱ clock speed (tap to cycle 1×, 2×, 3×, paused) (10 turns = a month, 12 months = a year) and game seed, <b>How to play</b> (the rules and this tour), the <b>Item guide</b> (every item and what it merges into), the <b>🎨 Season</b> theme (Auto follows the calendar; tap to cycle spring, summer, autumn, winter), the 🏞️ <b>lake quest</b> line (tap it to open the shop) and, on phones with vibration, the <b>📳 Haptics</b> switch.' },
+    { target: '.topinfo', title: '📋 Turn and calendar', text: 'The turn counter with the 📅 calendar (10 turns = a month, 12 months = a year) and, once you own a bank, the ⏱ clock speed (tap to cycle 1×, 2×, 3×, paused). The 🏞️ lake quest lives in 🏆 Quests now, and the game seed and map are at the bottom of the ☰ Menu.' },
     { target: '#undoBtn', title: '↶ Undo', text: 'Takes back your last move, or your last 🚚 mover, 🔨 hammer or 🪤 trap use (a mover drop that merges at once, say). It costs a few coins, and only one step can be undone.' },
     { target: '#previewBtn', title: '👁 Preview', text: 'Shows what a tap would do before you place. Turn it off to place with a single tap.' },
     { target: '#shopBtn', title: '🛒 Shop', text: 'Opens the shop. Everything you can spend coins on is in there.', when: function () { return $('shopBtn').offsetParent !== null; } },

@@ -110,6 +110,14 @@ def tap_cell(page, idx, preview_on):
     page.tap(sel)
 
 
+def menu_tap(page, selector):
+    """The less used buttons (World, Quests, How to play, Item guide, Season, Haptics, Update) live in the Menu: open it if needed, then tap."""
+    if page.locator('#menu').is_hidden():
+        page.tap('#menuBtn')
+    assert page.locator('#menu').is_visible(), 'the menu opens'
+    page.tap(selector)
+
+
 def open_shop(page):
     """The shop is a pop-up sheet on phones: open it (a no-op when it is already open)."""
     if page.locator('#shopSheet').is_hidden():
@@ -160,7 +168,7 @@ with sync_playwright() as p:
             page.tap('#tourNext'); page.wait_for_timeout(100); assert page.inner_text('#tourStep').lower().startswith('step 3 of')
         page.tap('#tourNext')
     assert len(steps) >= 15, steps
-    for need in ['🗺️ The map', '🌱 Place and Next', '📦 Reserve', '↶ Undo', '👁 Preview', '⟳ New game', '📋 Turn, rules and settings', '🛒 Shop', '🪤 Trap', '🔨 Hammer', '🚚 Mover', '💧 Pond', '⬆️⬇️⬅️➡️ Land']:
+    for need in ['🗺️ The map', '🌱 Place and Next', '📦 Reserve', '↶ Undo', '👁 Preview', '⟳ New game', '☰ Menu', '📋 Turn and calendar', '🛒 Shop', '🪤 Trap', '🔨 Hammer', '🚚 Mover', '💧 Pond', '⬆️⬇️⬅️➡️ Land']:
         assert need in steps, f'the tour misses {need}: {steps}'
     assert page.locator('#shopSheet').is_hidden() and page.evaluate("localStorage.getItem('tt-seen-help')") == '1', 'the tour ends with the shop closed and remembered'
     page.evaluate('navigator.serviceWorker.ready')
@@ -388,19 +396,21 @@ with sync_playwright() as p:
     # ---- haptic feedback can be switched off (and back on), and the choice is remembered
     g = [0] * 36
     load(g, cur=1, next=1)
-    assert page.locator('#hapticLink').is_visible() and 'on' in page.inner_text('#hapticLink')
+    page.tap('#menuBtn'); assert page.locator('#hapticLink').is_visible() and 'on' in page.inner_text('#hapticLink'); page.tap('#menuClose')
     page.evaluate('window.__vib.length = 0')
     tap_cell(page, 3, True)
     assert page.evaluate('window.__vib.length') >= 1, 'placing buzzes while haptics are on'
-    page.tap('#hapticLink')
+    menu_tap(page, '#hapticLink')
     assert 'off' in page.inner_text('#hapticLink') and page.evaluate("JSON.parse(localStorage.getItem('tt-haptics'))") is False
+    page.tap('#menuClose')
     page.evaluate('window.__vib.length = 0')
     tap_cell(page, 5, True)
     assert page.evaluate('window.__vib.length') == 0, 'no buzzing once haptics are off'
     page.reload(); page.wait_for_selector('#board .cell')
     assert 'off' in page.inner_text('#hapticLink'), 'the choice survives a reload'
-    page.tap('#hapticLink')
+    menu_tap(page, '#hapticLink')
     assert 'on' in page.inner_text('#hapticLink') and page.evaluate('window.__vib.length') >= 1, 'switching it on gives a sample buzz'
+    page.tap('#menuClose')
     page.evaluate('window.__vib.length = 0')
     tap_cell(page, 7, True)
     assert page.evaluate('window.__vib.length') >= 1
@@ -526,7 +536,7 @@ with sync_playwright() as p:
     load(g, map='medium', coins=100)
     seen = {}
     for want in ['autumn', 'winter', 'auto', 'spring', 'summer']:
-        page.tap('#seasonLink')
+        menu_tap(page, '#seasonLink')
         cur = sea()
         assert (cur == want) if want != 'auto' else ('auto' in page.inner_text('#seasonLink') and cur in PLANTS), (cur, want)
         seen[cur] = page.evaluate("[document.querySelectorAll('#seasonFx i').length, [1, 2, 3].map(c => window.ttDebug.emoji(c))]")
@@ -636,7 +646,7 @@ with sync_playwright() as p:
     page.tap('#board .cell[data-i="13"]'); assert state(page)['turn'] == sz['turn'], 'a seized lot is just a dead tile'
 
     # ---- version id and "Get the latest version": reloads without touching the saved game
-    page.tap('#helpLink')
+    menu_tap(page, '#helpLink')
     import re as _re
     assert _re.fullmatch(r'[0-9a-f]{8}', page.inner_text('#buildId')), page.inner_text('#buildId')
     # How to play is paged
@@ -648,9 +658,9 @@ with sync_playwright() as p:
         page.tap('#helpNext'); assert vis()[k] and sum(vis()) == 1 and pages[k] in page.inner_text('#helpPageLabel')
     assert page.is_disabled('#helpNext') and not page.is_disabled('#helpPrev')
     page.tap('#helpPrev'); assert vis()[3]
-    page.tap('#helpClose'); page.tap('#helpLink'); assert vis() == [True, False, False, False, False], 'it opens on the first page again'
+    page.tap('#helpClose'); menu_tap(page, '#helpLink'); assert vis() == [True, False, False, False, False], 'it opens on the first page again'
     # the Update button is at the top of the game (not in How to play), shows the version, and one tap reloads on a fresh URL that is tidied afterwards
-    page.tap('#helpClose')
+    page.tap('#helpClose'); page.tap('#menuBtn')
     assert page.locator('#updateBtn').is_visible() and page.locator('#updateLink').count() == 0
     assert page.inner_text('#verNow') == page.inner_text('#buildId') and not page.evaluate("document.getElementById('updateBtn').classList.contains('ready')")
     before = state(page)
@@ -665,6 +675,7 @@ with sync_playwright() as p:
     page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
     page.wait_for_function("document.getElementById('updateBtn').classList.contains('ready')")
     assert 'deadbeef' in page.inner_text('#updateBtn') and 'New version' in page.inner_text('#updateBtn')
+    assert page.locator('#menuDot').is_visible() and 'New version' in page.inner_text('#fx'), 'a gold dot on the menu button and a toast announce it'
     # the same build on the server: nothing to announce
     SW_OVERRIDE['body'] = "const C='triple-three-" + page.inner_text('#buildId') + "';"
     page.reload(); page.wait_for_selector('#board .cell'); page.wait_for_timeout(2200)
@@ -798,11 +809,10 @@ with sync_playwright() as p:
     assert state(page)['score'] == before, 'a lone pond pays nothing'
     # a poor player cannot dig
     assert page.evaluate("document.getElementById('bridgeBtn').hidden"), 'a dug pond cannot be bridged, so the tool stays hidden'
-    # the lake quest is always in view at the top; tapping it opens the shop
+    # the lake quest is at the top of the Quests screen (it left the main screen to save room)
+    menu_tap(page, '#questsLink')
     assert 'Lake quest 2×2' in page.inner_text('#questLine') and 'biggest 1×1' in page.inner_text('#questLine') and '🪙200' in page.inner_text('#questLine')
-    qb = page.evaluate("[document.getElementById('questLine').getBoundingClientRect().bottom, document.querySelector('.panel').getBoundingClientRect().top]")
-    assert qb[0] <= qb[1], f'the quest line sits above the Place row: {qb}'
-    page.tap('#questLine'); assert page.locator('#shopSheet').is_visible(); page.tap('#shopClose')
+    page.tap('#questsClose')
     # eight ponds and the ninth one dug: the 3x3 block pays points and coins every turn (ceil(BASE[4] / 20) = 14 points, 1 coin each)
     gb = [0] * 36
     for i in (0, 1, 2, 6, 7, 8, 12, 13): gb[i] = 21
@@ -824,7 +834,7 @@ with sync_playwright() as p:
     shop_tap(page, '#pondBtn'); tap_cell(page, 7, True)
     done = check_consistent(page, 'lake quest')
     assert done['lake'] == 1 and done['coins'] == 1000 - 60 + 200 and done['score'] >= 30 * 90, done
-    assert 'Lake quest 3×3' in page.inner_text('#questLine'), page.inner_text('#questLine')
+    assert 'Lake quest 3×3' in page.inner_text('#questLine'), page.inner_text('#questLine')   # (read from the Quests screen's line; the screen is closed, the text is current)
     # a poor player cannot dig
     load(g, coins=50, top=4)
     open_shop(page); assert page.locator('#pondBtn').is_disabled(); page.tap('#shopClose')
@@ -959,7 +969,7 @@ with sync_playwright() as p:
     page.evaluate("localStorage.removeItem('tt-world'); localStorage.removeItem('tt-region'); ['c','n','e','s','w','nw','ne','sw','se'].forEach(k => localStorage.removeItem('tt-save-' + k))")
     load([0] * 36, coins=50, top=3)
     free_before = page.evaluate("(() => { const s = JSON.parse(localStorage.getItem('tt-save')); return [s.turn, s.coins, s.top, s.grid.join(',')].join('|'); })()")
-    page.tap('#worldLink')
+    menu_tap(page, '#worldLink')
     assert page.locator('#world').is_visible() and page.locator('#worldGrid .regioncard').count() == 9
     order = page.evaluate("[...document.querySelectorAll('#worldGrid .regioncard')].map(b => b.dataset.region)")
     assert order == ['nw', 'n', 'ne', 'w', 'c', 'e', 'sw', 's', 'se'], order
@@ -981,7 +991,7 @@ with sync_playwright() as p:
     page.reload(); page.wait_for_selector('#board .cell')
     tap_cell(page, 20, True)
     assert 'is open' in page.inner_text('#fx'), 'a toast announces the newly opened regions'
-    page.tap('#worldLink')
+    menu_tap(page, '#worldLink')
     opened = page.evaluate("[...document.querySelectorAll('#worldGrid .regioncard')].filter(b => !b.disabled).map(b => b.dataset.region)")
     assert opened == ['n', 'w', 'c', 'e', 's'], opened
     assert 'T4' in page.inner_text('#worldGrid .regioncard[data-region="c"]')
@@ -991,14 +1001,14 @@ with sync_playwright() as p:
     assert orch['map'] == 'standard' and orch['bears'] is True and orch['wild'] is False and 'Orchard' in page.inner_text('#seed') and sum(1 for v in orch['grid'] if v) == 5
     tap_cell(page, orch['grid'].index(0), True)                # the Orchard starts with 5 random plants: play on a free tile
     assert json_turn(page, 'tt-save-n') == 1 and json_turn(page, 'tt-save-c') == 4
-    page.tap('#worldLink'); page.tap('#worldGrid .regioncard[data-region="c"]')
+    menu_tap(page, '#worldLink'); page.tap('#worldGrid .regioncard[data-region="c"]')
     back = check_consistent(page, 'back in the meadow')
     assert back['turn'] == 4 and back['map'] == 'easy' and 'Meadow' in page.inner_text('#seed'), 'the Meadow is exactly where it was'
-    page.tap('#worldLink'); page.tap('#worldGrid .regioncard[data-region="n"]')
+    menu_tap(page, '#worldLink'); page.tap('#worldGrid .regioncard[data-region="n"]')
     assert state(page)['turn'] == 1 and state(page)['map'] == 'standard', 'and so is the Orchard'
     # a corner opens from a school in a side region; New game inside a region only restarts it on its own map
     page.evaluate("localStorage.setItem('tt-world', JSON.stringify({ tops: { c: 7, n: 8 } }))")
-    page.tap('#worldLink')
+    menu_tap(page, '#worldLink')
     opened = page.evaluate("[...document.querySelectorAll('#worldGrid .regioncard')].filter(b => !b.disabled).map(b => b.dataset.region)")
     assert opened == ['nw', 'n', 'ne', 'w', 'c', 'e', 's'], opened
     page.tap('#worldGrid .regioncard[data-region="nw"]')
@@ -1010,12 +1020,12 @@ with sync_playwright() as p:
     again = state(page)
     assert again['map'] == 'hard' and again['wild'] is True and again['turn'] == 0 and again['seed'] != corner['seed'], 'restarted on the same map with a new seed'
     # back to the free game: the normal New game dialog again
-    page.tap('#worldLink'); page.tap('#worldFree')
+    menu_tap(page, '#worldLink'); page.tap('#worldFree')
     assert page.evaluate("JSON.parse(localStorage.getItem('tt-region'))") == '' and page.evaluate("(() => { const s = JSON.parse(localStorage.getItem('tt-save')); return [s.turn, s.coins, s.top, s.grid.join(',')].join('|'); })()") == free_before
     page.tap('#newBtn'); assert page.locator('#dlgSetup').is_visible() and page.inner_text('#newTitle') == 'New game'; page.tap('#newCancel')
     # a locked region refuses
     page.evaluate("localStorage.removeItem('tt-world')")
-    page.tap('#worldLink'); assert page.locator('#worldGrid .regioncard[data-region="se"]').is_disabled(); page.tap('#worldClose'); assert page.locator('#world').is_hidden()
+    menu_tap(page, '#worldLink'); assert page.locator('#worldGrid .regioncard[data-region="se"]').is_disabled(); page.tap('#worldClose'); assert page.locator('#world').is_hidden()
     page.evaluate("localStorage.removeItem('tt-region')")
 
     # ---- a brand-new player starts in the Meadow (nothing saved, no region chosen yet); the custom game is still one tap away
@@ -1024,7 +1034,7 @@ with sync_playwright() as p:
     fresh_c = check_consistent(page, 'new player')
     assert fresh_c['map'] == 'easy' and fresh_c['bears'] is False and fresh_c['foxes'] is False and 'Meadow' in page.inner_text('#seed')
     assert page.evaluate("JSON.parse(localStorage.getItem('tt-region'))") == 'c' and page.evaluate("localStorage.getItem('tt-save-c') !== null && localStorage.getItem('tt-save') === null")
-    page.tap('#worldLink'); assert 'Custom game' in page.inner_text('#worldFree'); page.tap('#worldFree')
+    menu_tap(page, '#worldLink'); assert 'Custom game' in page.inner_text('#worldFree'); page.tap('#worldFree')
     assert page.evaluate("JSON.parse(localStorage.getItem('tt-region'))") == '' and page.evaluate("localStorage.getItem('tt-save') !== null"), 'the custom game has its own save'
     page.evaluate("localStorage.removeItem('tt-test-fresh'); localStorage.setItem('tt-region', '\"\"')")
 
@@ -1040,7 +1050,7 @@ with sync_playwright() as p:
     # ---- quests: titles and achievements with progress, saved across games; finishing one is announced
     page.evaluate("['tt-stats', 'tt-earned', 'tt-title', 'tt-treasury'].forEach(k => localStorage.removeItem(k))")
     load([0] * 36, coins=50, top=3)
-    page.tap('#questsLink')
+    menu_tap(page, '#questsLink')
     assert page.locator('#quests').is_visible() and '0 / 19 done' in page.inner_text('#questsSummary'), page.inner_text('#questsSummary')
     assert page.inner_text('#questsLabel').startswith('1 / 2 · Titles') and page.is_disabled('#questsPrev')
     names = page.evaluate("[...document.querySelectorAll('#questsBody .questrow')].map(r => r.dataset.quest)")
@@ -1063,7 +1073,7 @@ with sync_playwright() as p:
     assert lk['lake'] == 3 and len(lk['ponds']) == 16
     assert page.evaluate("JSON.parse(localStorage.getItem('tt-stats')).lake4") == 1 and 'tides' in page.evaluate("JSON.parse(localStorage.getItem('tt-earned'))")
     assert 'Title earned: Master of Tides' in page.inner_text('#fx'), 'the title is announced'
-    page.tap('#questsLink'); assert 'done' in page.inner_text('#questsBody .questrow[data-quest="tides"]') and page.evaluate("document.querySelector('#questsBody .questrow[data-quest=tides]').classList.contains('done')")
+    menu_tap(page, '#questsLink'); assert 'done' in page.inner_text('#questsBody .questrow[data-quest="tides"]') and page.evaluate("document.querySelector('#questsBody .questrow[data-quest=tides]').classList.contains('done')")
     page.tap('#questsClose')
     page.tap('#newBtn')
     assert page.evaluate("[...document.querySelectorAll('#titleOpts .opt')].map(b => b.dataset.title)") == ['', 'hunter', 'hawkeye', 'tides', 'gold']
@@ -1091,6 +1101,23 @@ with sync_playwright() as p:
     page.wait_for_timeout(200)
     assert set(page.evaluate("JSON.parse(localStorage.getItem('tt-earned'))")) >= {'hunter', 'village'} and page.inner_text('#fx') == ''
     page.evaluate("['tt-stats', 'tt-earned', 'tt-title', 'tt-treasury'].forEach(k => localStorage.removeItem(k))")
+
+    # ---- the menu: the less used buttons live in it, the top of the game is the header plus one slim line; a gold dot says something is new
+    load([0] * 36, coins=50, top=3)
+    assert page.locator('#menuBtn').is_visible() and all(page.locator(x).is_hidden() for x in ['#helpLink', '#guideLink', '#worldLink', '#questsLink', '#seasonLink', '#updateBtn'])
+    assert page.evaluate("document.querySelector('.topinfo').getBoundingClientRect().height") < 40, 'a single slim info line'
+    assert page.evaluate("document.getElementById('menuBtn').getBoundingClientRect().right <= document.querySelector('.hud').getBoundingClientRect().right + 1 && document.getElementById('menuBtn').getBoundingClientRect().top < 80"), 'the menu button sits at the top right'
+    page.tap('#menuBtn')
+    assert all(page.locator(x).is_visible() for x in ['#worldLink', '#questsLink', '#helpLink', '#guideLink', '#seasonLink', '#hapticLink', '#updateBtn', '#seed']), 'every button is in the menu'
+    page.keyboard.press('Escape'); assert page.locator('#menu').is_hidden()
+    page.tap('#menuBtn'); page.mouse.click(5, 5); assert page.locator('#menu').is_hidden(), 'a tap outside closes it'
+    page.evaluate("localStorage.setItem('tt-earned', JSON.stringify(['village'])); localStorage.setItem('tt-quests-seen', '0')")
+    page.reload(); page.wait_for_selector('#board .cell')
+    assert page.locator('#menuDot').is_visible(), 'a finished quest nobody has seen puts a gold dot on the menu button'
+    page.tap('#menuBtn'); assert page.locator('#questsDot').is_visible()
+    page.tap('#questsLink'); assert page.locator('#menu').is_hidden() and page.locator('#quests').is_visible(), 'choosing a screen closes the menu'
+    page.tap('#questsClose'); assert page.locator('#menuDot').is_hidden(), 'seen: the dot goes away'
+    page.evaluate("localStorage.removeItem('tt-earned'); localStorage.removeItem('tt-quests-seen')")
 
     # ---- shop: higher tiers unlock once built; stock runs out -> price doubles (shown on the button)
     load([0] * 36, coins=500)
@@ -1180,12 +1207,12 @@ with sync_playwright() as p:
 
     # ---- item guide lists both merge chains
     # the tour can be replayed from How to play, and skipped or escaped at any time
-    page.tap('#helpLink'); assert page.locator('#help').is_visible()
+    menu_tap(page, '#helpLink'); assert page.locator('#help').is_visible()
     page.tap('#helpTour'); assert page.locator('#tour').is_visible() and page.locator('#help').is_hidden()
     page.tap('#tourNext'); page.tap('#tourSkip'); assert page.locator('#tour').is_hidden()
-    page.tap('#helpLink'); page.tap('#helpTour'); page.keyboard.press('Escape'); assert page.locator('#tour').is_hidden()
-    page.tap('#helpLink'); page.tap('#helpClose'); assert page.locator('#help').is_hidden()
-    page.tap('#guideLink')
+    menu_tap(page, '#helpLink'); page.tap('#helpTour'); page.keyboard.press('Escape'); assert page.locator('#tour').is_hidden()
+    menu_tap(page, '#helpLink'); page.tap('#helpClose'); assert page.locator('#help').is_hidden()
+    menu_tap(page, '#guideLink')
     assert page.locator('#guide').is_visible()
     # the item guide is paged: buildings, animals and gems, banks and loans, water and terrain
     gl = page.inner_text('#guidePageLabel')
@@ -1205,7 +1232,7 @@ with sync_playwright() as p:
     for w in ['bridge', 'pond', 'mountain', 'hole', 'Reclaim', 'long bridge']:
         assert w in terr, f'the terrain page misses {w}'
     page.tap('#guidePrev'); assert '3 / 4' in page.inner_text('#guidePageLabel')
-    page.tap('#guideClose'); page.tap('#guideLink'); assert page.inner_text('#guidePageLabel').startswith('1 / 4'), 'it opens on the first page again'
+    page.tap('#guideClose'); menu_tap(page, '#guideLink'); assert page.inner_text('#guidePageLabel').startswith('1 / 4'), 'it opens on the first page again'
     page.tap('#guideClose')
     assert page.locator('#guide').is_hidden()
 
