@@ -824,7 +824,7 @@ with sync_playwright() as p:
     load(g, coins=1000, top=4, score=0, milestone=0)
     open_shop(page)
     assert page.locator('#pondBtn').is_visible() and page.inner_text('#pondBtn .tp') == '🪙60' and page.inner_text('#pondBtn .tb') == '∞'
-    assert 'Ponds 0 ' in page.inner_text('#pondNote') and '3×3 block' in page.inner_text('#pondNote') and '2×2' in page.inner_text('#pondNote') and '🪙200' in page.inner_text('#pondNote')
+    assert 'Ponds 0 ' in page.inner_text('#pondNote') and '3×3 block' in page.inner_text('#pondNote') and 'quest' not in page.inner_text('#pondNote')
     assert page.locator('#bridgeBtn').is_hidden(), 'no water on this map: no bridge tool'
     shop_tap(page, '#pondBtn')
     assert page.get_attribute('#pondBtn', 'aria-pressed') == 'true', page.get_attribute('#pondBtn', 'aria-pressed')
@@ -844,10 +844,8 @@ with sync_playwright() as p:
     assert state(page)['score'] == before, 'a lone pond pays nothing'
     # a poor player cannot dig
     assert page.evaluate("document.getElementById('bridgeBtn').hidden"), 'a dug pond cannot be bridged, so the tool stays hidden'
-    # the lake quest is at the top of the Quests screen (it left the main screen to save room)
-    menu_tap(page, '#questsLink')
-    assert 'Lake quest 2×2' in page.inner_text('#questLine') and 'biggest 1×1' in page.inner_text('#questLine') and '🪙200' in page.inner_text('#questLine')
-    page.tap('#questsClose')
+    # no lake quest lines any more (Master of Tides covers it): neither the Quests screen nor the pond note carries one
+    assert page.locator('#questLine').count() == 0 and 'lake' not in page.inner_text('#pondNote').lower() and 'quest' not in page.inner_text('#pondNote').lower()
     # eight ponds and the ninth one dug: the 3x3 block pays points and coins every turn (ceil(BASE[4] / 20) = 14 points, 1 coin each)
     gb = [0] * 36
     for i in (0, 1, 2, 6, 7, 8, 12, 13): gb[i] = 21
@@ -869,7 +867,6 @@ with sync_playwright() as p:
     shop_tap(page, '#pondBtn'); tap_cell(page, 7, True)
     done = check_consistent(page, 'lake quest')
     assert done['lake'] == 1 and done['coins'] == 1000 - 60 + 200 and done['score'] >= 30 * 90, done
-    assert 'Lake quest 3×3' in page.inner_text('#questLine'), page.inner_text('#questLine')   # (read from the Quests screen's line; the screen is closed, the text is current)
     # a poor player cannot dig
     load(g, coins=50, top=4)
     open_shop(page); assert page.locator('#pondBtn').is_disabled(); page.tap('#shopClose')
