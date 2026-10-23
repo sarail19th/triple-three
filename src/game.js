@@ -34,9 +34,16 @@
   function modeLabel(st) {
     return (st.wild ? ' · wild bears' : '') + (st.bears === false && st.foxes === false ? ' · calm' : (st.bears === false ? ' · no bears' : '') + (st.foxes === false ? ' · no foxes' : '')) + (st.boost > 0 ? ' · 🏛️ treasury coins' : '') + (st.title ? ' · ' + TITLE_ICON[st.title] + ' ' + TITLE_NAMES[st.title] : '');
   }
-  // Treasury: a saved purse (tt-treasury, at most TT.TREASURY_CAP) that carries coins between games. The Bank dialog deposits into it (a small fee) and
-  // withdraws from it; a game that has withdrawn has its own best-score board (state.boost).
-  function treasury() { var v = store.get('tt-treasury', 0); return v > 0 ? Math.min(TT.TREASURY_CAP, Math.floor(v)) : 0; }
+  // Treasury: three saved accounts (tt-treasury = [Bank 1, Bank 2, Bank 3], each at most TT.TREASURY_BANK_CAP) that carry coins between games. A bank's dialog
+  // deposits into / withdraws from ITS account (the bank's place in the order they were built). An old single number goes into Bank 1's account.
+  function accounts() {
+    var v = store.get('tt-treasury', 0), out = [0, 0, 0], i;
+    if (Array.isArray(v)) { for (i = 0; i < 3; i++) out[i] = v[i] > 0 ? Math.min(TT.TREASURY_BANK_CAP, Math.floor(v[i])) : 0; }
+    else if (v > 0) { var left = Math.floor(v); for (i = 0; i < 3; i++) { out[i] = Math.min(TT.TREASURY_BANK_CAP, left); left -= out[i]; } }
+    return out;
+  }
+  function setAccount(rank, v) { var a = accounts(); a[rank] = Math.max(0, Math.floor(v)); store.set('tt-treasury', a); }
+  function treasuryTotal() { return accounts().reduce(function (a, b) { return a + b; }, 0); }
   // Titles: quest counters are saved across games (tt-stats); the game on screen adds its own count when it is left (state.bearsTrapped is in the
   // state, so undo takes it back too). A title is earned at its goal and picked per game in the New game dialog (tt-title).
   var TITLE_NAMES = { hunter: 'Bears Hunter' }, TITLE_ICON = { hunter: '🏹' };
@@ -205,8 +212,8 @@
   }
   // the bank's treasury section: deposit part of this game's coins (a fee is kept), or withdraw from the purse into this game
   function renderTreasury() {
-    var tr = treasury(), box = $('trBtns'), cap = TT.treasuryCap(state), room = Math.max(0, cap - tr);
-    $('trBal').textContent = '🪙' + fmt(tr) + ' / ' + fmt(cap);
+    var rank = TT.treasuryRank(state, bankAt), bal = accounts()[rank], box = $('trBtns'), cap = TT.TREASURY_BANK_CAP, room = Math.max(0, cap - bal);
+    $('trBal').textContent = '· Bank ' + (rank + 1) + ' account 🪙' + fmt(bal) + ' / ' + fmt(cap);
     box.textContent = '';
     var add = function (label, amount, act) {
       var b = document.createElement('button');
@@ -219,19 +226,19 @@
       box.appendChild(b);
     };
     var dep = function (amount, go) {
-      var r = TT.deposit(state, amount, treasury());
-      if (r && go) { store.set('tt-treasury', treasury() + r.net); toast('🏛️ +' + fmt(r.net) + ' saved (fee ' + r.fee + ')', 0.4); }
+      var r = TT.deposit(state, bankAt, amount, bal);
+      if (r && go) { setAccount(r.rank, bal + r.net); toast('🏛️ +' + fmt(r.net) + ' saved (fee ' + r.fee + ')', 0.4); }
       return r;
     };
     var wd = function (amount, go) {
-      var r = TT.withdraw(state, amount, treasury());
-      if (r && go) { store.set('tt-treasury', treasury() - r.taken); toast('🏛️ +' + fmt(r.taken) + ' coins from the treasury', 0.4); }
+      var r = TT.withdraw(state, bankAt, amount, bal);
+      if (r && go) { setAccount(r.rank, bal - r.taken); toast('🏛️ +' + fmt(r.taken) + ' coins from the treasury', 0.4); }
       return r;
     };
-    var fit = function (a) { while (a > 0 && TT.treasuryNet(a) > room) a--; return a; }; // the biggest deposit the purse has room for
+    var fit = function (a) { while (a > 0 && TT.treasuryNet(a) > room) a--; return a; }; // the biggest deposit this account has room for
     [[0.25, '¼'], [0.5, '½'], [1, 'All']].forEach(function (f) { add('Deposit ' + f[1] + ' · 🪙' + fmt(fit(Math.floor(state.coins * f[0]))), fit(Math.floor(state.coins * f[0])), dep); });
-    [[0.25, '¼'], [0.5, '½'], [1, 'All']].forEach(function (f) { add('Withdraw ' + f[1] + ' · 🪙' + fmt(Math.floor(tr * f[0])), Math.floor(tr * f[0]), wd); });
-    $('trNote').textContent = 'Coins in the treasury stay between games. Depositing keeps a ' + Math.round(TT.TREASURY_FEE * 100) + '% fee; more banks on the board raise how much the treasury may hold (' + TT.TREASURY_CAPS.map(fmt).join(' / ') + ' for 1 / 2 / 3 banks). A game that has taken coins out has its own best score, and Undo is cleared by either.';
+    [[0.25, '¼'], [0.5, '½'], [1, 'All']].forEach(function (f) { add('Withdraw ' + f[1] + ' · 🪙' + fmt(Math.floor(bal * f[0])), Math.floor(bal * f[0]), wd); });
+    $('trNote').textContent = 'Each bank has its own account (Bank 1, 2 and 3 in the order you built them), saved between games, up to 🪙' + fmt(cap) + ' each. Depositing keeps a ' + Math.round(TT.TREASURY_FEE * 100) + '% fee. A game that has taken coins out has its own best score, and Undo is cleared by either.';
   }
   function renderLoanLine() {
     var el = $('loanLine'), n = state.loans.length;
@@ -803,7 +810,7 @@
     var best = store.get(bestKey(), 0), newBest = state.score >= best && state.score > 0;
     $('overTitle').textContent = newBest ? 'New best!' : 'Town full!';
     $('overText').textContent = 'Score ' + state.score + ' in ' + state.turn + ' turns' + (newBest ? '' : ' · best ' + best);
-    $('overTreasury').textContent = '🏛️ Treasury 🪙' + treasury() + ' · deposit coins at a bank in one game, withdraw them at a bank in another.';
+    $('overTreasury').textContent = '🏛️ Treasury 🪙' + fmt(treasuryTotal()) + ' in all · deposit coins at a bank in one game, withdraw them at a bank in another.';
     var tst = statsNow(), q = TT.TITLES.hunter;
     $('overStats').textContent = state.bearsTrapped || tst.bears < q.goal
       ? TITLE_ICON.hunter + ' ' + state.bearsTrapped + ' bears trapped this game · ' + Math.min(tst.bears, q.goal) + '/' + q.goal + ' for ' + TITLE_NAMES.hunter : TITLE_ICON.hunter + ' ' + TITLE_NAMES.hunter + ' earned: pick it in New game.';

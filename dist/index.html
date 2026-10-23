@@ -544,12 +544,12 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
         <h3>Banks and loans</h3>
         <ul>
         <li>🏦 <b>Banks</b> (shop, once a village is built): a bank is placed like an item, is a dead tile for animals, can be carried by the 🚚 mover (unless a loan locks it; use it to line three banks up) and is broken only by the hammer. It cannot go in the reserve. It pays <b>coins every turn</b> (the 📅 date at the top counts 10 turns to a month). At most 3, each dearer than the last; three connected banks merge into 💵 cash. <b>Loans</b>: tap a bank to borrow half the shop price of the dearest building next to it; that building and the bank are locked until you repay it with simple interest (15% a year, 30% at the second bank, 60% at the third). A year unpaid and the building is lost and its tile seized until you pay the debt, and that bank stops paying. The ⏱ clock speed (tap it: 1×, 2×, 3×, paused) sets how fast the calendar, income and interest run.</li>
-        <li>🏛️ <b>Treasury</b>: tap a bank to <b>deposit</b> coins from this game into your treasury (a 5% fee is kept; the treasury may hold 🪙200,000 with one bank on the board, 🪙500,000 with two and 🪙1,000,000 with three) or <b>withdraw</b> them. The treasury is saved between games, so coins earned on a calm map can pay for a hard one. You need a bank on the board for either. A game that has taken coins out has its own best score, and Undo is cleared after a deposit or withdrawal.</li>
+        <li>🏛️ <b>Treasury</b>: tap a bank to <b>deposit</b> coins from this game into <b>that bank's own account</b> (a 5% fee is kept; Bank 1, 2 and 3 are the banks in the order you built them, each holds up to 🪙1,000,000) or <b>withdraw</b> them. The accounts are saved between games, so coins earned on a calm map can pay for a hard one. You need a bank on the board for either. A game that has taken coins out has its own best score, and Undo is cleared after a deposit or withdrawal.</li>
         </ul>
       </section>
     </div>
     <div class="pager"><button id="helpPrev" class="btn" aria-label="Previous page">‹ Back</button><span id="helpPageLabel" aria-live="polite"></span><button id="helpNext" class="btn" aria-label="Next page">Next ›</button></div>
-    <p class="gnote">Version <b id="buildId">d20e97a0</b> · <a href="#" id="updateLink">↻ Get the latest version</a><br>(keeps your saved game and best scores)</p>
+    <p class="gnote">Version <b id="buildId">cae3f946</b> · <a href="#" id="updateLink">↻ Get the latest version</a><br>(keeps your saved game and best scores)</p>
     <div class="helpbtns"><button id="helpTour" class="btn">▶ Quick tour</button><button id="helpClose" class="btn primary">Got it</button></div>
   </div>
 </div>
@@ -591,10 +591,10 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   // game in the New game dialog (state.title) and applied by the logic: hunter = after BEARS trapped in total, a share of the bears in the
   // queue turn into grass. The extra random number is only drawn when the title is on, so games without one replay exactly as before.
   var TITLES = { hunter: { stat: 'bears', goal: 100, bearCut: 0.3 } };
-  // Treasury: a saved purse (kept by the page, outside the game state) that carries coins from one game to the next. A game with a bank on
-  // the board can deposit coins into it (TREASURY_FEE is kept) or withdraw coins from it; a deposit may fill the purse up to TREASURY_CAPS[banks on the board - 1] (200000 / 500000 / 1000000: more banks, more room). A game that has
-  // withdrawn has state.boost > 0 (the total taken) and its own best-score board.
-  var TREASURY_FEE = 0.05, TREASURY_CAPS = [200000, 500000, 1000000], TREASURY_CAP = TREASURY_CAPS[TREASURY_CAPS.length - 1]; // TREASURY_CAP: the most any purse can hold
+  // Treasury: saved accounts (kept by the page, outside the game state) that carry coins from one game to the next. Every bank has its OWN account,
+  // named by the order the banks were placed (Bank 1, 2, 3 = the place in state.bankOrder), each holding at most TREASURY_BANK_CAP; a deposit
+  // through a bank keeps TREASURY_FEE. A game that has withdrawn has state.boost > 0 (the total taken) and its own best-score board.
+  var TREASURY_FEE = 0.05, TREASURY_BANK_CAP = 1000000;
   var STANDARD_ITEMS = 5;
   // Calendar: every turn advances the game clock by `speed` ticks (1 = normal; 0 pauses it), 10 ticks = a month, 12 months = a year.
   // Banks (a shop item, at most MAX_BANKS on the board) pay coins every turn; three connected banks merge into cash.
@@ -1354,26 +1354,28 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     s.coins -= price; s.reclaimed++; s.grid[idx] = EMPTY;
     return { state: s, events: [{ type: 'reclaim', at: idx, price: price }] };
   }
-  // Treasury: deposit `amount` coins of this game (needs a bank on the board): the purse gets the amount minus the fee, and it must have room.
-  // `treasury` is the purse before the deposit. Returns {state, net, fee} or null. A free action; it clears Undo (the purse lives outside the
-  // state, so undoing a deposit would copy coins).
-  function treasuryCap(state) { var n = Math.min(bankCount(state), TREASURY_CAPS.length); return TREASURY_CAPS[Math.max(1, n) - 1]; } // how full a deposit may make the purse, by the banks on the board
+  // Treasury: the account of the bank on cell `bankIdx` is the one named by its place in bankOrder (0 = Bank 1). `balance` is that account before the call.
   function treasuryNet(amount) { return amount - Math.floor(amount * TREASURY_FEE); }
-  function deposit(state, amount, treasury) {
+  function treasuryRank(state, bankIdx) { return state.grid[bankIdx] === BANK ? state.bankOrder.indexOf(bankIdx) : -1; }
+  // Deposit `amount` coins of this game through that bank: the account gets the amount minus the fee and must have room. Returns {state, net, fee, rank}
+  // or null. A free action; it clears Undo (the accounts live outside the state, so undoing a deposit would copy coins).
+  function deposit(state, bankIdx, amount, balance) {
     dim(state);
-    if (state.over || bankCount(state) < 1 || !(amount >= 1) || amount !== (amount | 0) || amount > state.coins) return null;
+    var rank = treasuryRank(state, bankIdx);
+    if (state.over || rank < 0 || !(amount >= 1) || amount !== (amount | 0) || amount > state.coins) return null;
     var net = treasuryNet(amount);
-    if (!(treasury >= 0) || treasury + net > treasuryCap(state)) return null;
+    if (!(balance >= 0) || balance + net > TREASURY_BANK_CAP) return null;
     var s = clone(state); s.coins -= amount; s.undo = null;
     if (isOver(s)) return null; // never into a stuck game
-    return { state: s, net: net, fee: amount - net };
+    return { state: s, net: net, fee: amount - net, rank: rank };
   }
-  // Withdraw `amount` coins from the purse into this game (needs a bank on the board). Returns {state, taken} or null.
-  function withdraw(state, amount, treasury) {
+  // Withdraw `amount` coins from that bank's account into this game. Returns {state, taken, rank} or null.
+  function withdraw(state, bankIdx, amount, balance) {
     dim(state);
-    if (state.over || bankCount(state) < 1 || !(amount >= 1) || amount !== (amount | 0) || !(amount <= treasury)) return null;
+    var rank = treasuryRank(state, bankIdx);
+    if (state.over || rank < 0 || !(amount >= 1) || amount !== (amount | 0) || !(amount <= balance)) return null;
     var s = clone(state); s.coins += amount; s.boost += amount; s.undo = null;
-    return { state: s, taken: amount };
+    return { state: s, taken: amount, rank: rank };
   }
 
   // Shop: buy one more row (top/bottom) or column (left/right) of land; each side once, dearer every time. Free action.
@@ -1618,7 +1620,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     RESTOCK: RESTOCK, MILESTONES: MILESTONES, milestoneScore: milestoneScore, milestoneProgress: milestoneProgress, canUndo: canUndo, canHammer: canHammer, migrate: migrate,
     rand: rand, drawItem: drawItem, newGame: newGame, neighbors: neighbors, group: group,
     place: place, swap: swap, swapNext: swapNext, undo: undo, validate: validate, emptyCount: emptyCount,
-    buy: buy, hammer: hammer, trap: trap, move: move, open: open, buyLand: buyLand, buyBridge: buyBridge, borrow: borrow, repay: repay, setSpeed: setSpeed, lockedCells: lockedCells, loanOptions: loanOptions, loanOwed: loanOwed, loanMonthsLeft: loanMonthsLeft, bankRate: bankRate, SEIZED: SEIZED, LOAN_RATE: LOAN_RATE, LOAN_TICKS: LOAN_TICKS, MAX_SPEED: MAX_SPEED, buyBank: buyBank, bankPrice: bankPrice, bankCount: bankCount, bankSlots: bankSlots, bankIncome: bankIncome, canBuyBank: canBuyBank, isBankAvailable: isBankAvailable, calendar: calendar, BANK: BANK, MAX_BANKS: MAX_BANKS, BANK_PRICE: BANK_PRICE, BANK_MIN_TIER: BANK_MIN_TIER, TICKS_PER_MONTH: TICKS_PER_MONTH, MONTHS_PER_YEAR: MONTHS_PER_YEAR, buyPond: buyPond, pondPrice: pondPrice, pondPoints: pondPoints, pondCoins: pondCoins, payingPonds: payingPonds, pondPriceAt: pondPriceAt, longBridgeCells: longBridgeCells, longBridgeIncome: longBridgeIncome, LONG_BRIDGE_MIN: LONG_BRIDGE_MIN, reclaimSpots: reclaimSpots, reclaimPrice: reclaimPrice, canReclaim: canReclaim, buyReclaim: buyReclaim, MAX_RECLAIM: MAX_RECLAIM, RECLAIM_PRICE: RECLAIM_PRICE, ISLAND_SIZE: ISLAND_SIZE, TITLES: TITLES, MOUNTAIN: MOUNTAIN, HOLE: HOLE, levelSpots: levelSpots, levelPrice: levelPrice, canLevel: canLevel, buyLevel: buyLevel, fillCount: fillCount, isTerrain: isTerrain, deposit: deposit, withdraw: withdraw, treasuryNet: treasuryNet, treasuryCap: treasuryCap, TREASURY_FEE: TREASURY_FEE, TREASURY_CAPS: TREASURY_CAPS, TREASURY_CAP: TREASURY_CAP, canPond: canPond, bestLake: bestLake, POND_PRICE: POND_PRICE, LAKE_SIZES: LAKE_SIZES, LAKE_BONUS: LAKE_BONUS, LAKE_COINS: LAKE_COINS, bridgeSpots: bridgeSpots, bridgePrice: bridgePrice, canBridge: canBridge, freeCount: freeCount, MAX_BRIDGES: MAX_BRIDGES, BRIDGE_PRICE: BRIDGE_PRICE, preview: preview, previewMove: previewMove, isOver: isOver,
+    buy: buy, hammer: hammer, trap: trap, move: move, open: open, buyLand: buyLand, buyBridge: buyBridge, borrow: borrow, repay: repay, setSpeed: setSpeed, lockedCells: lockedCells, loanOptions: loanOptions, loanOwed: loanOwed, loanMonthsLeft: loanMonthsLeft, bankRate: bankRate, SEIZED: SEIZED, LOAN_RATE: LOAN_RATE, LOAN_TICKS: LOAN_TICKS, MAX_SPEED: MAX_SPEED, buyBank: buyBank, bankPrice: bankPrice, bankCount: bankCount, bankSlots: bankSlots, bankIncome: bankIncome, canBuyBank: canBuyBank, isBankAvailable: isBankAvailable, calendar: calendar, BANK: BANK, MAX_BANKS: MAX_BANKS, BANK_PRICE: BANK_PRICE, BANK_MIN_TIER: BANK_MIN_TIER, TICKS_PER_MONTH: TICKS_PER_MONTH, MONTHS_PER_YEAR: MONTHS_PER_YEAR, buyPond: buyPond, pondPrice: pondPrice, pondPoints: pondPoints, pondCoins: pondCoins, payingPonds: payingPonds, pondPriceAt: pondPriceAt, longBridgeCells: longBridgeCells, longBridgeIncome: longBridgeIncome, LONG_BRIDGE_MIN: LONG_BRIDGE_MIN, reclaimSpots: reclaimSpots, reclaimPrice: reclaimPrice, canReclaim: canReclaim, buyReclaim: buyReclaim, MAX_RECLAIM: MAX_RECLAIM, RECLAIM_PRICE: RECLAIM_PRICE, ISLAND_SIZE: ISLAND_SIZE, TITLES: TITLES, MOUNTAIN: MOUNTAIN, HOLE: HOLE, levelSpots: levelSpots, levelPrice: levelPrice, canLevel: canLevel, buyLevel: buyLevel, fillCount: fillCount, isTerrain: isTerrain, deposit: deposit, withdraw: withdraw, treasuryNet: treasuryNet, treasuryRank: treasuryRank, TREASURY_FEE: TREASURY_FEE, TREASURY_BANK_CAP: TREASURY_BANK_CAP, canPond: canPond, bestLake: bestLake, POND_PRICE: POND_PRICE, LAKE_SIZES: LAKE_SIZES, LAKE_BONUS: LAKE_BONUS, LAKE_COINS: LAKE_COINS, bridgeSpots: bridgeSpots, bridgePrice: bridgePrice, canBridge: canBridge, freeCount: freeCount, MAX_BRIDGES: MAX_BRIDGES, BRIDGE_PRICE: BRIDGE_PRICE, preview: preview, previewMove: previewMove, isOver: isOver,
     priceOf: priceOf, isMovable: isMovable, canMove: canMove, isAvailable: isAvailable, unlockedTop: unlockedTop, landPrice: landPrice, canLand: canLand
   };
 });
@@ -1659,9 +1661,16 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   function modeLabel(st) {
     return (st.wild ? ' · wild bears' : '') + (st.bears === false && st.foxes === false ? ' · calm' : (st.bears === false ? ' · no bears' : '') + (st.foxes === false ? ' · no foxes' : '')) + (st.boost > 0 ? ' · 🏛️ treasury coins' : '') + (st.title ? ' · ' + TITLE_ICON[st.title] + ' ' + TITLE_NAMES[st.title] : '');
   }
-  // Treasury: a saved purse (tt-treasury, at most TT.TREASURY_CAP) that carries coins between games. The Bank dialog deposits into it (a small fee) and
-  // withdraws from it; a game that has withdrawn has its own best-score board (state.boost).
-  function treasury() { var v = store.get('tt-treasury', 0); return v > 0 ? Math.min(TT.TREASURY_CAP, Math.floor(v)) : 0; }
+  // Treasury: three saved accounts (tt-treasury = [Bank 1, Bank 2, Bank 3], each at most TT.TREASURY_BANK_CAP) that carry coins between games. A bank's dialog
+  // deposits into / withdraws from ITS account (the bank's place in the order they were built). An old single number goes into Bank 1's account.
+  function accounts() {
+    var v = store.get('tt-treasury', 0), out = [0, 0, 0], i;
+    if (Array.isArray(v)) { for (i = 0; i < 3; i++) out[i] = v[i] > 0 ? Math.min(TT.TREASURY_BANK_CAP, Math.floor(v[i])) : 0; }
+    else if (v > 0) { var left = Math.floor(v); for (i = 0; i < 3; i++) { out[i] = Math.min(TT.TREASURY_BANK_CAP, left); left -= out[i]; } }
+    return out;
+  }
+  function setAccount(rank, v) { var a = accounts(); a[rank] = Math.max(0, Math.floor(v)); store.set('tt-treasury', a); }
+  function treasuryTotal() { return accounts().reduce(function (a, b) { return a + b; }, 0); }
   // Titles: quest counters are saved across games (tt-stats); the game on screen adds its own count when it is left (state.bearsTrapped is in the
   // state, so undo takes it back too). A title is earned at its goal and picked per game in the New game dialog (tt-title).
   var TITLE_NAMES = { hunter: 'Bears Hunter' }, TITLE_ICON = { hunter: '🏹' };
@@ -1830,8 +1839,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   }
   // the bank's treasury section: deposit part of this game's coins (a fee is kept), or withdraw from the purse into this game
   function renderTreasury() {
-    var tr = treasury(), box = $('trBtns'), cap = TT.treasuryCap(state), room = Math.max(0, cap - tr);
-    $('trBal').textContent = '🪙' + fmt(tr) + ' / ' + fmt(cap);
+    var rank = TT.treasuryRank(state, bankAt), bal = accounts()[rank], box = $('trBtns'), cap = TT.TREASURY_BANK_CAP, room = Math.max(0, cap - bal);
+    $('trBal').textContent = '· Bank ' + (rank + 1) + ' account 🪙' + fmt(bal) + ' / ' + fmt(cap);
     box.textContent = '';
     var add = function (label, amount, act) {
       var b = document.createElement('button');
@@ -1844,19 +1853,19 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       box.appendChild(b);
     };
     var dep = function (amount, go) {
-      var r = TT.deposit(state, amount, treasury());
-      if (r && go) { store.set('tt-treasury', treasury() + r.net); toast('🏛️ +' + fmt(r.net) + ' saved (fee ' + r.fee + ')', 0.4); }
+      var r = TT.deposit(state, bankAt, amount, bal);
+      if (r && go) { setAccount(r.rank, bal + r.net); toast('🏛️ +' + fmt(r.net) + ' saved (fee ' + r.fee + ')', 0.4); }
       return r;
     };
     var wd = function (amount, go) {
-      var r = TT.withdraw(state, amount, treasury());
-      if (r && go) { store.set('tt-treasury', treasury() - r.taken); toast('🏛️ +' + fmt(r.taken) + ' coins from the treasury', 0.4); }
+      var r = TT.withdraw(state, bankAt, amount, bal);
+      if (r && go) { setAccount(r.rank, bal - r.taken); toast('🏛️ +' + fmt(r.taken) + ' coins from the treasury', 0.4); }
       return r;
     };
-    var fit = function (a) { while (a > 0 && TT.treasuryNet(a) > room) a--; return a; }; // the biggest deposit the purse has room for
+    var fit = function (a) { while (a > 0 && TT.treasuryNet(a) > room) a--; return a; }; // the biggest deposit this account has room for
     [[0.25, '¼'], [0.5, '½'], [1, 'All']].forEach(function (f) { add('Deposit ' + f[1] + ' · 🪙' + fmt(fit(Math.floor(state.coins * f[0]))), fit(Math.floor(state.coins * f[0])), dep); });
-    [[0.25, '¼'], [0.5, '½'], [1, 'All']].forEach(function (f) { add('Withdraw ' + f[1] + ' · 🪙' + fmt(Math.floor(tr * f[0])), Math.floor(tr * f[0]), wd); });
-    $('trNote').textContent = 'Coins in the treasury stay between games. Depositing keeps a ' + Math.round(TT.TREASURY_FEE * 100) + '% fee; more banks on the board raise how much the treasury may hold (' + TT.TREASURY_CAPS.map(fmt).join(' / ') + ' for 1 / 2 / 3 banks). A game that has taken coins out has its own best score, and Undo is cleared by either.';
+    [[0.25, '¼'], [0.5, '½'], [1, 'All']].forEach(function (f) { add('Withdraw ' + f[1] + ' · 🪙' + fmt(Math.floor(bal * f[0])), Math.floor(bal * f[0]), wd); });
+    $('trNote').textContent = 'Each bank has its own account (Bank 1, 2 and 3 in the order you built them), saved between games, up to 🪙' + fmt(cap) + ' each. Depositing keeps a ' + Math.round(TT.TREASURY_FEE * 100) + '% fee. A game that has taken coins out has its own best score, and Undo is cleared by either.';
   }
   function renderLoanLine() {
     var el = $('loanLine'), n = state.loans.length;
@@ -2428,7 +2437,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     var best = store.get(bestKey(), 0), newBest = state.score >= best && state.score > 0;
     $('overTitle').textContent = newBest ? 'New best!' : 'Town full!';
     $('overText').textContent = 'Score ' + state.score + ' in ' + state.turn + ' turns' + (newBest ? '' : ' · best ' + best);
-    $('overTreasury').textContent = '🏛️ Treasury 🪙' + treasury() + ' · deposit coins at a bank in one game, withdraw them at a bank in another.';
+    $('overTreasury').textContent = '🏛️ Treasury 🪙' + fmt(treasuryTotal()) + ' in all · deposit coins at a bank in one game, withdraw them at a bank in another.';
     var tst = statsNow(), q = TT.TITLES.hunter;
     $('overStats').textContent = state.bearsTrapped || tst.bears < q.goal
       ? TITLE_ICON.hunter + ' ' + state.bearsTrapped + ' bears trapped this game · ' + Math.min(tst.bears, q.goal) + '/' + q.goal + ' for ' + TITLE_NAMES.hunter : TITLE_ICON.hunter + ' ' + TITLE_NAMES.hunter + ' earned: pick it in New game.';
