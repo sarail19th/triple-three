@@ -129,15 +129,15 @@
   // ---- the world: a 3x3 grid of regions, each a normal game in its own save slot (tt-save-<id>; the free game keeps tt-save). Layout: easy in the middle, a mix
   // of maps on the four sides, wild bears in the corners. `needs` = the neighbours that unlock a region once one of them has reached building tier `need`.
   var REGIONS = [
-    { id: 'nw', name: 'Thornwood', icon: '🌲', map: 'hard', wild: true, bears: true, foxes: true, seed: 4, need: 8, needs: ['n', 'w'] },
+    { id: 'nw', name: 'Thornwood', icon: '🌲', map: 'hard', wild: true, bears: true, foxes: true, starters: 10, seed: 4, need: 8, needs: ['n', 'w'] },
     { id: 'n', name: 'Orchard', icon: '🍎', map: 'standard', wild: false, bears: true, foxes: true, seed: 3, need: 7, needs: ['c'] },
-    { id: 'ne', name: 'Black Marsh', icon: '🪷', map: 'medium', wild: true, bears: true, foxes: true, seed: 1, need: 8, needs: ['n', 'e'] },
-    { id: 'w', name: 'Isle', icon: '🏝️', map: 'island', wild: false, bears: true, foxes: true, seed: 1, need: 7, needs: ['c'] },
+    { id: 'ne', name: 'Black Marsh', icon: '🪷', map: 'medium', wild: true, bears: true, foxes: true, starters: 18, seed: 1, need: 8, needs: ['n', 'e'] },
+    { id: 'w', name: 'Isle', icon: '🏝️', map: 'island', wild: false, bears: true, foxes: true, starters: 3, seed: 1, need: 7, needs: ['c'] },
     { id: 'c', name: 'Meadow', icon: '🌼', map: 'easy', wild: false, bears: false, foxes: false, seed: 1, need: 0, needs: [] },
-    { id: 'e', name: 'River Bend', icon: '🌊', map: 'medium', wild: false, bears: true, foxes: true, seed: 1, need: 7, needs: ['c'] },
-    { id: 'sw', name: 'Crag', icon: '🪨', map: 'highlands', wild: true, bears: true, foxes: true, seed: 8, need: 8, needs: ['s', 'w'] },
-    { id: 's', name: 'Highlands', icon: '⛰️', map: 'highlands', wild: false, bears: true, foxes: true, seed: 3, need: 7, needs: ['c'] },
-    { id: 'se', name: 'Atoll', icon: '🐚', map: 'island', wild: true, bears: true, foxes: true, seed: 5, need: 8, needs: ['s', 'e'] }
+    { id: 'e', name: 'River Bend', icon: '🌊', map: 'medium', wild: false, bears: true, foxes: true, starters: 8, seed: 1, need: 7, needs: ['c'] },
+    { id: 'sw', name: 'Crag', icon: '🪨', map: 'highlands', wild: true, bears: true, foxes: true, starters: 9, seed: 8, need: 8, needs: ['s', 'w'] },
+    { id: 's', name: 'Highlands', icon: '⛰️', map: 'highlands', wild: false, bears: true, foxes: true, starters: 5, seed: 3, need: 7, needs: ['c'] },
+    { id: 'se', name: 'Atoll', icon: '🐚', map: 'island', wild: true, bears: true, foxes: true, starters: 6, seed: 5, need: 8, needs: ['s', 'e'] }
   ];
   function regionById(id) { for (var i = 0; i < REGIONS.length; i++) if (REGIONS[i].id === id) return REGIONS[i]; return null; }
   // '' = the custom game (any map). A brand-new player (nothing saved, no region ever chosen) starts in the Meadow; players with a game keep it as the custom game.
@@ -148,7 +148,7 @@
     return !r.needs.length || r.needs.some(function (id) { return (tops[id] || 0) >= r.need; });
   }
   function saveKey(id) { return id ? 'tt-save-' + id : 'tt-save'; }
-  function regionOptions(r) { return { map: r.map, wild: r.wild, bears: r.bears, foxes: r.foxes }; }
+  function regionOptions(r) { return { map: r.map, wild: r.wild, bears: r.bears, foxes: r.foxes, starters: r.starters || 0 }; }
   function noteWorld() { // remember the best building tier of the region on screen; tell when that opens another region
     if (!region || !state || !(state.top > (worldTops()[region] || 0))) return;
     var before = worldTops(), after = Object.assign({}, before);
@@ -164,7 +164,7 @@
     state = TT.newGame(seed || randomSeed(), {
       wild: o.wild === undefined ? wildPref() : o.wild, map: o.map === undefined ? mapPref() : o.map,
       bears: o.bears === undefined ? bearsPref() : o.bears, foxes: o.foxes === undefined ? foxesPref() : o.foxes,
-      title: titleUnlocked(want, now) ? want : '' });
+      starters: o.starters || 0, title: titleUnlocked(want, now) ? want : '' });
     state.vault = accounts();
     sel = -1; hover = -1; mode = null; moveFrom = -1;
     $('overlay').classList.add('hidden');
@@ -971,8 +971,8 @@
   var dlg = { map: 'easy', bears: 'classic', foxes: true, title: '' };
   // sample maps: the real generator with fixed seeds, drawn as tiny boards (water blue, plants as emoji). Easy and Medium are the same every game.
   var SAMPLE_SEEDS = { easy: [1], standard: [3, 8, 21], medium: [1], hard: [4, 9, 17], highlands: [3, 8, 21], island: [1, 5, 9] }, CARD_SEED = { easy: 1, standard: 3, medium: 1, hard: 4, highlands: 3, island: 1 };
-  function miniMap(map, seed, into) {
-    var g = TT.newGame(seed, { map: map }).grid, side = Math.round(Math.sqrt(g.length));
+  function miniMap(map, seed, into, starters) {
+    var g = TT.newGame(seed, { map: map, starters: starters }).grid, side = Math.round(Math.sqrt(g.length));
     into.textContent = '';
     into.style.gridTemplate = 'repeat(' + side + ', 1fr) / repeat(' + side + ', 1fr)'; // the island and the river map are 8x8
     g.forEach(function (v) {
@@ -1052,7 +1052,7 @@
   });
   $('newBtn').addEventListener('click', function () { closeShop(); openNewGame(); });
   $('newCancel').addEventListener('click', function () { $('newGame').classList.add('hidden'); });
-  $('againBtn').addEventListener('click', function () { startNew(0, { wild: state.wild, map: state.map, bears: state.bears, foxes: state.foxes }); });
+  $('againBtn').addEventListener('click', function () { startNew(0, region ? regionOptions(regionById(region)) : { wild: state.wild, map: state.map, bears: state.bears, foxes: state.foxes }); });
   // item guide: built from the logic tables so it can never drift from the real merge chains
   function chip(code, label) {
     return '<div class="chip"><span class="ce">' + em(code) + '</span><small>' + (label || nm(code)) + '</small></div>';
@@ -1201,7 +1201,7 @@
     ['nw', 'n', 'ne', 'w', 'c', 'e', 'sw', 's', 'se'].forEach(function (id) {
       var r = regionById(id), open = regionOpen(r, tops), b = document.createElement('button'), mini = document.createElement('span'), s = store.get(saveKey(id), null);
       b.className = 'opt regioncard'; b.dataset.region = id; b.disabled = !open; b.setAttribute('aria-pressed', id === region);
-      mini.className = 'mini'; mini.setAttribute('aria-hidden', 'true'); miniMap(r.map, r.seed, mini);
+      mini.className = 'mini'; mini.setAttribute('aria-hidden', 'true'); miniMap(r.map, r.seed, mini, r.starters);
       var name = document.createElement('span'), info = document.createElement('small');
       name.textContent = r.icon + ' ' + r.name + (r.wild ? ' ' + em(TT.BEAR) : '');
       info.textContent = !open ? '🔒 ' + em(r.need) + ' in ' + r.needs.map(function (n) { return regionById(n).name; }).join(' or ')

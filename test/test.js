@@ -921,6 +921,28 @@ t('maps: medium has the same river for every seed, across the field from edge to
   assert.strictEqual(seen.size, w.size);
 });
 
+t('starters: any map can scatter extra starter plants (never a group of 3, only on free tiles), reproducibly; without them nothing changes', () => {
+  ['easy', 'medium', 'hard', 'highlands', 'island'].forEach((map) => {
+    const plain = TT.newGame(7, { map }), zero = TT.newGame(7, { map, starters: 0 });
+    assert.strictEqual(JSON.stringify(plain), JSON.stringify(zero), map + ': starters 0 is the old game');
+    [3, 9, 18].forEach((n) => {
+      for (let seed = 1; seed <= 25; seed++) {
+        const s = TT.newGame(seed, { map, starters: n }), base = TT.newGame(seed, { map });
+        const plants = s.grid.filter((v, i) => v >= 1 && v <= 3 && base.grid[i] === 0).length;
+        const cap = Math.min(n, Math.floor(base.grid.filter((v) => v === 0).length / 3));
+        assert(plants > 0 && plants <= cap, map + ' ' + n + ' seed ' + seed + ': ' + plants);
+        if (map !== 'island') assert.strictEqual(plants, cap, map + ' ' + n + ' seed ' + seed);
+        assert.deepStrictEqual(TT.validate(s), [], map + ' seed ' + seed);
+        s.grid.forEach((v, i) => { if (base.grid[i] !== 0) assert.strictEqual(v, base.grid[i], 'the map itself is untouched'); });
+        assert.strictEqual(JSON.stringify(s), JSON.stringify(TT.newGame(seed, { map, starters: n })), 'same seed, same field');
+      }
+    });
+  });
+  const med = TT.newGame(2, { map: 'medium', starters: 18 });
+  assert.strictEqual(med.grid.filter((v) => v >= 1 && v <= 3).length, 18);
+  assert.strictEqual(TT.newGame(2, { map: 'easy', starters: 500 }).grid.filter((v) => v).length, 12, 'capped at a third of the 36 free tiles');
+});
+
 t('maps: hard has random ponds (6..9 water tiles) that leave the land in one piece, reproducibly per seed', () => {
   const layouts = new Set();
   for (let seed = 1; seed <= 150; seed++) {
