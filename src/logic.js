@@ -49,7 +49,7 @@
   // Interest: a paying bank also pays TREASURY_INTEREST of its own account balance per tick (0.03% a turn, about 4% a year of 120 ticks) as coins in the game, on
   // top of its flat income. The balances the page keeps are mirrored in state.vault ([Bank 1, 2, 3]); the page refreshes it before each placement.
   var TREASURY_FEE = 0.05, TREASURY_BANK_CAP = 1000000, TREASURY_INTEREST_PPM = 300, TREASURY_INTEREST = TREASURY_INTEREST_PPM / 1e6; // whole-number maths: 0.0003 * 100000 is 29.999... in floating point
-  var STANDARD_ITEMS = 5;
+  var STANDARD_ITEMS = 5, MAX_STARTERS = 30; // newGame(seed, {starters: n}) scatters n starter grass / bushes / trees (never a group of 3, at most a third of the free tiles) on any map after its own generator (the standard map already has STANDARD_ITEMS of its own); extra rng draws only when n > 0
   // Calendar: every turn advances the game clock by `speed` ticks (1 = normal; 0 pauses it), 10 ticks = a month, 12 months = a year.
   // Banks (a shop item, at most MAX_BANKS on the board) pay coins every turn; three connected banks merge into cash.
   var TICKS_PER_MONTH = 10, MONTHS_PER_YEAR = 12, MAX_SPEED = 3;
@@ -176,6 +176,10 @@
     if (s.map === 'island' || s.map === 'medium') { s.w = s.h = ISLAND_SIZE; s.land = SIDES.slice(); s.grid = new Array(ISLAND_SIZE * ISLAND_SIZE).fill(EMPTY); } // the biggest board, all land bought
     dim(s);
     genMap(s);
+    if (opts && opts.starters > 0) { // the world regions' extra starter plants (the standard map has its own 5); never more than a third of the free tiles, so the start is never cramped
+      for (var f = 0, fi = 0; fi < N; fi++) if (s.grid[fi] === EMPTY) f++;
+      scatter(s, Math.min(opts.starters | 0, MAX_STARTERS, Math.floor(f / 3)));
+    }
     s.next = drawItem(s); // always open with grass
     return s;
   }
@@ -1079,7 +1083,7 @@
 
   return {
     W: DEFAULT_W, H: DEFAULT_H, N: DEFAULT_W * DEFAULT_H, MAX_LAND: SIDES.length, SIDES: SIDES, LAND_PRICE: LAND_PRICE, LAST_BUILDING: LAST_BUILDING, VERSION: VERSION,
-    EMPTY: EMPTY, CASH: CASH, BEAR: BEAR, BEAR_GROWL: BEAR_GROWL, BEAR_ANGRY: BEAR_ANGRY, WATER: WATER, MAUL_MAX: MAUL_MAX, isBear: isBear, MAPS: MAPS, LUCKY_RATE: LUCKY_RATE, LUCKY_MIN_TIER: LUCKY_MIN_TIER, LUCKY_MAX_TIER: LUCKY_MAX_TIER, MEDIUM_WATER: MEDIUM_WATER, MEDIUM_WATER_BIG: MEDIUM_WATER_BIG, STANDARD_ITEMS: STANDARD_ITEMS,
+    EMPTY: EMPTY, CASH: CASH, BEAR: BEAR, BEAR_GROWL: BEAR_GROWL, BEAR_ANGRY: BEAR_ANGRY, WATER: WATER, MAUL_MAX: MAUL_MAX, isBear: isBear, MAPS: MAPS, LUCKY_RATE: LUCKY_RATE, LUCKY_MIN_TIER: LUCKY_MIN_TIER, LUCKY_MAX_TIER: LUCKY_MAX_TIER, MEDIUM_WATER: MEDIUM_WATER, MEDIUM_WATER_BIG: MEDIUM_WATER_BIG, MAX_STARTERS: MAX_STARTERS, STANDARD_ITEMS: STANDARD_ITEMS,
     BREED_MAX_POCKET: BREED_MAX_POCKET, BREED_MAX_BEARS: BREED_MAX_BEARS, BREED_CHANCE: BREED_CHANCE, TOMB: TOMB, CHURCH: CHURCH, CATHEDRAL: CATHEDRAL, CRYSTAL: CRYSTAL, TREASURE: TREASURE, FOX: FOX,
     TREASURE_COINS: TREASURE_COINS, CASH_COINS: CASH_COINS,
     EMOJI: EMOJI, NAME: NAME, NEXT: NEXT, BASE: BASE, WEIGHTS: WEIGHTS, TRAP_DROP: TRAP_DROP,

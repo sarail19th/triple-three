@@ -623,7 +623,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       </section>
     </div>
     <div class="pager"><button id="helpPrev" class="btn" aria-label="Previous page">‹ Back</button><span id="helpPageLabel" aria-live="polite"></span><button id="helpNext" class="btn" aria-label="Next page">Next ›</button></div>
-    <p class="gnote">Version <b id="buildId">0fdedf07</b> · update with the ↻ <b>Update</b> button at the top of the game<br>(it keeps your saved game and best scores)</p>
+    <p class="gnote">Version <b id="buildId">94b5f78d</b> · update with the ↻ <b>Update</b> button at the top of the game<br>(it keeps your saved game and best scores)</p>
     <div class="helpbtns"><button id="helpTour" class="btn">▶ Quick tour</button><button id="helpClose" class="btn primary">Got it</button></div>
   </div>
 </div>
@@ -679,7 +679,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   // Interest: a paying bank also pays TREASURY_INTEREST of its own account balance per tick (0.03% a turn, about 4% a year of 120 ticks) as coins in the game, on
   // top of its flat income. The balances the page keeps are mirrored in state.vault ([Bank 1, 2, 3]); the page refreshes it before each placement.
   var TREASURY_FEE = 0.05, TREASURY_BANK_CAP = 1000000, TREASURY_INTEREST_PPM = 300, TREASURY_INTEREST = TREASURY_INTEREST_PPM / 1e6; // whole-number maths: 0.0003 * 100000 is 29.999... in floating point
-  var STANDARD_ITEMS = 5;
+  var STANDARD_ITEMS = 5, MAX_STARTERS = 30; // newGame(seed, {starters: n}) scatters n starter grass / bushes / trees (never a group of 3, at most a third of the free tiles) on any map after its own generator (the standard map already has STANDARD_ITEMS of its own); extra rng draws only when n > 0
   // Calendar: every turn advances the game clock by `speed` ticks (1 = normal; 0 pauses it), 10 ticks = a month, 12 months = a year.
   // Banks (a shop item, at most MAX_BANKS on the board) pay coins every turn; three connected banks merge into cash.
   var TICKS_PER_MONTH = 10, MONTHS_PER_YEAR = 12, MAX_SPEED = 3;
@@ -806,6 +806,10 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     if (s.map === 'island' || s.map === 'medium') { s.w = s.h = ISLAND_SIZE; s.land = SIDES.slice(); s.grid = new Array(ISLAND_SIZE * ISLAND_SIZE).fill(EMPTY); } // the biggest board, all land bought
     dim(s);
     genMap(s);
+    if (opts && opts.starters > 0) { // the world regions' extra starter plants (the standard map has its own 5); never more than a third of the free tiles, so the start is never cramped
+      for (var f = 0, fi = 0; fi < N; fi++) if (s.grid[fi] === EMPTY) f++;
+      scatter(s, Math.min(opts.starters | 0, MAX_STARTERS, Math.floor(f / 3)));
+    }
     s.next = drawItem(s); // always open with grass
     return s;
   }
@@ -1709,7 +1713,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 
   return {
     W: DEFAULT_W, H: DEFAULT_H, N: DEFAULT_W * DEFAULT_H, MAX_LAND: SIDES.length, SIDES: SIDES, LAND_PRICE: LAND_PRICE, LAST_BUILDING: LAST_BUILDING, VERSION: VERSION,
-    EMPTY: EMPTY, CASH: CASH, BEAR: BEAR, BEAR_GROWL: BEAR_GROWL, BEAR_ANGRY: BEAR_ANGRY, WATER: WATER, MAUL_MAX: MAUL_MAX, isBear: isBear, MAPS: MAPS, LUCKY_RATE: LUCKY_RATE, LUCKY_MIN_TIER: LUCKY_MIN_TIER, LUCKY_MAX_TIER: LUCKY_MAX_TIER, MEDIUM_WATER: MEDIUM_WATER, MEDIUM_WATER_BIG: MEDIUM_WATER_BIG, STANDARD_ITEMS: STANDARD_ITEMS,
+    EMPTY: EMPTY, CASH: CASH, BEAR: BEAR, BEAR_GROWL: BEAR_GROWL, BEAR_ANGRY: BEAR_ANGRY, WATER: WATER, MAUL_MAX: MAUL_MAX, isBear: isBear, MAPS: MAPS, LUCKY_RATE: LUCKY_RATE, LUCKY_MIN_TIER: LUCKY_MIN_TIER, LUCKY_MAX_TIER: LUCKY_MAX_TIER, MEDIUM_WATER: MEDIUM_WATER, MEDIUM_WATER_BIG: MEDIUM_WATER_BIG, MAX_STARTERS: MAX_STARTERS, STANDARD_ITEMS: STANDARD_ITEMS,
     BREED_MAX_POCKET: BREED_MAX_POCKET, BREED_MAX_BEARS: BREED_MAX_BEARS, BREED_CHANCE: BREED_CHANCE, TOMB: TOMB, CHURCH: CHURCH, CATHEDRAL: CATHEDRAL, CRYSTAL: CRYSTAL, TREASURE: TREASURE, FOX: FOX,
     TREASURE_COINS: TREASURE_COINS, CASH_COINS: CASH_COINS,
     EMOJI: EMOJI, NAME: NAME, NEXT: NEXT, BASE: BASE, WEIGHTS: WEIGHTS, TRAP_DROP: TRAP_DROP,
@@ -1853,15 +1857,15 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   // ---- the world: a 3x3 grid of regions, each a normal game in its own save slot (tt-save-<id>; the free game keeps tt-save). Layout: easy in the middle, a mix
   // of maps on the four sides, wild bears in the corners. `needs` = the neighbours that unlock a region once one of them has reached building tier `need`.
   var REGIONS = [
-    { id: 'nw', name: 'Thornwood', icon: '🌲', map: 'hard', wild: true, bears: true, foxes: true, seed: 4, need: 8, needs: ['n', 'w'] },
+    { id: 'nw', name: 'Thornwood', icon: '🌲', map: 'hard', wild: true, bears: true, foxes: true, starters: 10, seed: 4, need: 8, needs: ['n', 'w'] },
     { id: 'n', name: 'Orchard', icon: '🍎', map: 'standard', wild: false, bears: true, foxes: true, seed: 3, need: 7, needs: ['c'] },
-    { id: 'ne', name: 'Black Marsh', icon: '🪷', map: 'medium', wild: true, bears: true, foxes: true, seed: 1, need: 8, needs: ['n', 'e'] },
-    { id: 'w', name: 'Isle', icon: '🏝️', map: 'island', wild: false, bears: true, foxes: true, seed: 1, need: 7, needs: ['c'] },
+    { id: 'ne', name: 'Black Marsh', icon: '🪷', map: 'medium', wild: true, bears: true, foxes: true, starters: 18, seed: 1, need: 8, needs: ['n', 'e'] },
+    { id: 'w', name: 'Isle', icon: '🏝️', map: 'island', wild: false, bears: true, foxes: true, starters: 3, seed: 1, need: 7, needs: ['c'] },
     { id: 'c', name: 'Meadow', icon: '🌼', map: 'easy', wild: false, bears: false, foxes: false, seed: 1, need: 0, needs: [] },
-    { id: 'e', name: 'River Bend', icon: '🌊', map: 'medium', wild: false, bears: true, foxes: true, seed: 1, need: 7, needs: ['c'] },
-    { id: 'sw', name: 'Crag', icon: '🪨', map: 'highlands', wild: true, bears: true, foxes: true, seed: 8, need: 8, needs: ['s', 'w'] },
-    { id: 's', name: 'Highlands', icon: '⛰️', map: 'highlands', wild: false, bears: true, foxes: true, seed: 3, need: 7, needs: ['c'] },
-    { id: 'se', name: 'Atoll', icon: '🐚', map: 'island', wild: true, bears: true, foxes: true, seed: 5, need: 8, needs: ['s', 'e'] }
+    { id: 'e', name: 'River Bend', icon: '🌊', map: 'medium', wild: false, bears: true, foxes: true, starters: 8, seed: 1, need: 7, needs: ['c'] },
+    { id: 'sw', name: 'Crag', icon: '🪨', map: 'highlands', wild: true, bears: true, foxes: true, starters: 9, seed: 8, need: 8, needs: ['s', 'w'] },
+    { id: 's', name: 'Highlands', icon: '⛰️', map: 'highlands', wild: false, bears: true, foxes: true, starters: 5, seed: 3, need: 7, needs: ['c'] },
+    { id: 'se', name: 'Atoll', icon: '🐚', map: 'island', wild: true, bears: true, foxes: true, starters: 6, seed: 5, need: 8, needs: ['s', 'e'] }
   ];
   function regionById(id) { for (var i = 0; i < REGIONS.length; i++) if (REGIONS[i].id === id) return REGIONS[i]; return null; }
   // '' = the custom game (any map). A brand-new player (nothing saved, no region ever chosen) starts in the Meadow; players with a game keep it as the custom game.
@@ -1872,7 +1876,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     return !r.needs.length || r.needs.some(function (id) { return (tops[id] || 0) >= r.need; });
   }
   function saveKey(id) { return id ? 'tt-save-' + id : 'tt-save'; }
-  function regionOptions(r) { return { map: r.map, wild: r.wild, bears: r.bears, foxes: r.foxes }; }
+  function regionOptions(r) { return { map: r.map, wild: r.wild, bears: r.bears, foxes: r.foxes, starters: r.starters || 0 }; }
   function noteWorld() { // remember the best building tier of the region on screen; tell when that opens another region
     if (!region || !state || !(state.top > (worldTops()[region] || 0))) return;
     var before = worldTops(), after = Object.assign({}, before);
@@ -1888,7 +1892,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     state = TT.newGame(seed || randomSeed(), {
       wild: o.wild === undefined ? wildPref() : o.wild, map: o.map === undefined ? mapPref() : o.map,
       bears: o.bears === undefined ? bearsPref() : o.bears, foxes: o.foxes === undefined ? foxesPref() : o.foxes,
-      title: titleUnlocked(want, now) ? want : '' });
+      starters: o.starters || 0, title: titleUnlocked(want, now) ? want : '' });
     state.vault = accounts();
     sel = -1; hover = -1; mode = null; moveFrom = -1;
     $('overlay').classList.add('hidden');
@@ -2695,8 +2699,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   var dlg = { map: 'easy', bears: 'classic', foxes: true, title: '' };
   // sample maps: the real generator with fixed seeds, drawn as tiny boards (water blue, plants as emoji). Easy and Medium are the same every game.
   var SAMPLE_SEEDS = { easy: [1], standard: [3, 8, 21], medium: [1], hard: [4, 9, 17], highlands: [3, 8, 21], island: [1, 5, 9] }, CARD_SEED = { easy: 1, standard: 3, medium: 1, hard: 4, highlands: 3, island: 1 };
-  function miniMap(map, seed, into) {
-    var g = TT.newGame(seed, { map: map }).grid, side = Math.round(Math.sqrt(g.length));
+  function miniMap(map, seed, into, starters) {
+    var g = TT.newGame(seed, { map: map, starters: starters }).grid, side = Math.round(Math.sqrt(g.length));
     into.textContent = '';
     into.style.gridTemplate = 'repeat(' + side + ', 1fr) / repeat(' + side + ', 1fr)'; // the island and the river map are 8x8
     g.forEach(function (v) {
@@ -2776,7 +2780,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   });
   $('newBtn').addEventListener('click', function () { closeShop(); openNewGame(); });
   $('newCancel').addEventListener('click', function () { $('newGame').classList.add('hidden'); });
-  $('againBtn').addEventListener('click', function () { startNew(0, { wild: state.wild, map: state.map, bears: state.bears, foxes: state.foxes }); });
+  $('againBtn').addEventListener('click', function () { startNew(0, region ? regionOptions(regionById(region)) : { wild: state.wild, map: state.map, bears: state.bears, foxes: state.foxes }); });
   // item guide: built from the logic tables so it can never drift from the real merge chains
   function chip(code, label) {
     return '<div class="chip"><span class="ce">' + em(code) + '</span><small>' + (label || nm(code)) + '</small></div>';
@@ -2925,7 +2929,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     ['nw', 'n', 'ne', 'w', 'c', 'e', 'sw', 's', 'se'].forEach(function (id) {
       var r = regionById(id), open = regionOpen(r, tops), b = document.createElement('button'), mini = document.createElement('span'), s = store.get(saveKey(id), null);
       b.className = 'opt regioncard'; b.dataset.region = id; b.disabled = !open; b.setAttribute('aria-pressed', id === region);
-      mini.className = 'mini'; mini.setAttribute('aria-hidden', 'true'); miniMap(r.map, r.seed, mini);
+      mini.className = 'mini'; mini.setAttribute('aria-hidden', 'true'); miniMap(r.map, r.seed, mini, r.starters);
       var name = document.createElement('span'), info = document.createElement('small');
       name.textContent = r.icon + ' ' + r.name + (r.wild ? ' ' + em(TT.BEAR) : '');
       info.textContent = !open ? '🔒 ' + em(r.need) + ' in ' + r.needs.map(function (n) { return regionById(n).name; }).join(' or ')
