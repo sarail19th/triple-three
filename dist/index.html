@@ -608,7 +608,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
         <h3>Maps and water</h3>
         <ul>
         <li>🌍 <b>World</b> (top, next to the item guide): a 3×3 map of regions, each its own game with its own save. The Meadow in the middle is calm (no bears or foxes). The four regions beside it open when you have built a 🏘️ <b>village</b> in the Meadow, and each corner (wild bears, the hard ones) opens when you have built a 🏫 <b>school</b> in a neighbouring side region. Your bank accounts and treasury are shared by every region, so coins earned in the Meadow can pay for a harsh corner. <b>Custom game</b> in the world screen is the normal New game with any map and animals, kept separate (it is also where a shared seed link plays). New players start in the Meadow.</li>
-        <li>🗺️ <b>Maps</b> (also in <b>New</b>): Easy is a plain field, Standard starts with a few plants, Medium has a river across the field, Hard has random ponds, Highlands has mountains and holes, Island is the biggest board, mostly sea (see below). Blue tiles are <b>water</b>: nothing can be placed, merged, moved or smashed there, and animals cannot enter it. Use the 🌉 <b>bridge</b> tool (up to 8, dearer each time) on a water tile that has land on both sides, up/down or left/right (never a corner or the middle of wide water; a bridge counts as land, so wide water opens up one tile at a time): it becomes a road that bears can walk over, but nothing can be built on it. <b>Three or more bridged tiles in a straight line are a long bridge</b>: it glows gold and pays coins every turn (about 1/400 of your best building's shop price per tile).</li>
+        <li>🗺️ <b>Maps</b> (also in <b>New</b>): Easy is a plain field, Standard starts with a few plants, Medium has a river across the biggest board (8×8, all land already bought), Hard has random ponds, Highlands has mountains and holes, Island is the biggest board, mostly sea (see below). Blue tiles are <b>water</b>: nothing can be placed, merged, moved or smashed there, and animals cannot enter it. Use the 🌉 <b>bridge</b> tool (up to 8, dearer each time) on a water tile that has land on both sides, up/down or left/right (never a corner or the middle of wide water; a bridge counts as land, so wide water opens up one tile at a time): it becomes a road that bears can walk over, but nothing can be built on it. <b>Three or more bridged tiles in a straight line are a long bridge</b>: it glows gold and pays coins every turn (about 1/400 of your best building's shop price per tile).</li>
         <li>💧 <b>Ponds</b> (shop): dig a pond on an empty tile. It stays for the whole game, takes a tile away, and pays <b>points and coins every turn</b>, but only while it is inside a <b>3×3 block of dug ponds</b> (a 4×4 pays all 16; the map's own water never pays): points about 5% of your best building's value per paying pond, coins about 1/400 of its shop price. <b>Lake quests</b>: the pond that completes a 2×2, then a 3×3, then a 4×4 block of water pays a one-off bonus of <b>coins and points</b>. The first pond costs only 60 coins, then each one is dearer; there is no limit once the lakes are built, only your coins and free tiles. Animals cannot cross water, and a bear or fox shut in by ponds is trapped like anywhere else.</li>
         <li>⛰️ <b>Highlands</b>: <b>mountains</b> ⛰️ are walls (nothing can be built on them, the hammer and the mover leave them alone, animals cannot enter) until you flatten one with the ⛏️ <b>Level</b> tool for coins (🪙150, then dearer each time). A <b>hole</b> 🕳️ is a wall for animals, but you can place any item into it: the item is used up, the tile becomes flat ground and a turn passes.</li>
         <li>🏝️ <b>Island</b>: the biggest board (8×8), all sea except a small island of 16 to 20 tiles (a new shape every game). Land cannot be bought and the sea cannot be bridged, but the <b>Reclaim</b> tool (shop) turns a sea tile next to the land into new ground: glowing tiles show where, each one dearer than the last (🪙60, then ×1.1). Only the ponds you dig count for lake quests there, not the sea.</li>
@@ -623,7 +623,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       </section>
     </div>
     <div class="pager"><button id="helpPrev" class="btn" aria-label="Previous page">‹ Back</button><span id="helpPageLabel" aria-live="polite"></span><button id="helpNext" class="btn" aria-label="Next page">Next ›</button></div>
-    <p class="gnote">Version <b id="buildId">82b19954</b> · update with the ↻ <b>Update</b> button at the top of the game<br>(it keeps your saved game and best scores)</p>
+    <p class="gnote">Version <b id="buildId">0fdedf07</b> · update with the ↻ <b>Update</b> button at the top of the game<br>(it keeps your saved game and best scores)</p>
     <div class="helpbtns"><button id="helpTour" class="btn">▶ Quick tour</button><button id="helpClose" class="btn primary">Got it</button></div>
   </div>
 </div>
@@ -703,6 +703,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   // each tile max(1, round(PRICE[top] / LONG_BRIDGE_DIV)) per tick, like a bank (nothing while the clock is paused).
   var LONG_BRIDGE_MIN = 3, LONG_BRIDGE_DIV = 400;
   var MEDIUM_WATER = [2, 8, 14, 15, 21, 27, 33]; // a winding river from the top edge to the bottom edge (6x6 indices)
+  // New medium games start on the biggest board (8x8, all four land sides already bought, like the island): the same river one tile in, and it runs on into the new top and bottom rows (what buyLand does to a 6x6 river)
+  var MEDIUM_WATER_BIG = (function () { var out = [MEDIUM_WATER[0] % DEFAULT_W + 1, (ISLAND_SIZE - 1) * ISLAND_SIZE + MEDIUM_WATER[MEDIUM_WATER.length - 1] % DEFAULT_W + 1]; MEDIUM_WATER.forEach(function (i) { out.push((((i / DEFAULT_W) | 0) + 1) * ISLAND_SIZE + (i % DEFAULT_W) + 1); }); return out.sort(function (a, b) { return a - b; }); })();
   function isBear(v) { return v === BEAR || v === BEAR_GROWL || v === BEAR_ANGRY; }
 
   // Cell / item codes. 0 empty. 1..10 building chain (10 = mall), 11 cash (collectible, final), 12 bear, 13 tombstone,
@@ -801,7 +803,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     var bears = !(opts && opts.bears === false), foxes = !(opts && opts.foxes === false);
     var s = { ver: VERSION, wild: bears && !!(opts && opts.wild), bears: bears, foxes: foxes, map: opts && MAPS.indexOf(opts.map) >= 0 ? opts.map : 'easy', bridges: [], ponds: [], reclaimed: 0, vault: [0, 0, 0], leveled: 0, boost: 0, title: opts && TITLES[opts.title] ? opts.title : '', bearsTrapped: 0, foxesTrapped: 0, lake: 0, tick: 0, speed: 1, banksBought: 0, bankOrder: [], loans: [], w: DEFAULT_W, h: DEFAULT_H, land: [], top: 1, grid: new Array(DEFAULT_W * DEFAULT_H).fill(EMPTY), cur: 1, next: 1, hold: 0, score: 0, coins: START_COINS,
       stock: Object.assign({}, START_STOCK), milestone: 0, bonusScore: 0, turn: 0, over: false, rng: seed, seed: seed, undo: null };
-    if (s.map === 'island') { s.w = s.h = ISLAND_SIZE; s.land = SIDES.slice(); s.grid = new Array(ISLAND_SIZE * ISLAND_SIZE).fill(EMPTY); } // the biggest board, all land bought
+    if (s.map === 'island' || s.map === 'medium') { s.w = s.h = ISLAND_SIZE; s.land = SIDES.slice(); s.grid = new Array(ISLAND_SIZE * ISLAND_SIZE).fill(EMPTY); } // the biggest board, all land bought
     dim(s);
     genMap(s);
     s.next = drawItem(s); // always open with grass
@@ -812,7 +814,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   function genMap(s) {
     var i;
     if (s.map === 'standard') scatter(s, STANDARD_ITEMS);
-    else if (s.map === 'medium') for (i = 0; i < MEDIUM_WATER.length; i++) s.grid[MEDIUM_WATER[i]] = WATER;
+    else if (s.map === 'medium') for (i = 0; i < MEDIUM_WATER_BIG.length; i++) s.grid[MEDIUM_WATER_BIG[i]] = WATER;
     else if (s.map === 'hard') ponds(s);
     else if (s.map === 'highlands') highlands(s);
     else if (s.map === 'island') island(s);
@@ -1707,7 +1709,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 
   return {
     W: DEFAULT_W, H: DEFAULT_H, N: DEFAULT_W * DEFAULT_H, MAX_LAND: SIDES.length, SIDES: SIDES, LAND_PRICE: LAND_PRICE, LAST_BUILDING: LAST_BUILDING, VERSION: VERSION,
-    EMPTY: EMPTY, CASH: CASH, BEAR: BEAR, BEAR_GROWL: BEAR_GROWL, BEAR_ANGRY: BEAR_ANGRY, WATER: WATER, MAUL_MAX: MAUL_MAX, isBear: isBear, MAPS: MAPS, LUCKY_RATE: LUCKY_RATE, LUCKY_MIN_TIER: LUCKY_MIN_TIER, LUCKY_MAX_TIER: LUCKY_MAX_TIER, MEDIUM_WATER: MEDIUM_WATER, STANDARD_ITEMS: STANDARD_ITEMS,
+    EMPTY: EMPTY, CASH: CASH, BEAR: BEAR, BEAR_GROWL: BEAR_GROWL, BEAR_ANGRY: BEAR_ANGRY, WATER: WATER, MAUL_MAX: MAUL_MAX, isBear: isBear, MAPS: MAPS, LUCKY_RATE: LUCKY_RATE, LUCKY_MIN_TIER: LUCKY_MIN_TIER, LUCKY_MAX_TIER: LUCKY_MAX_TIER, MEDIUM_WATER: MEDIUM_WATER, MEDIUM_WATER_BIG: MEDIUM_WATER_BIG, STANDARD_ITEMS: STANDARD_ITEMS,
     BREED_MAX_POCKET: BREED_MAX_POCKET, BREED_MAX_BEARS: BREED_MAX_BEARS, BREED_CHANCE: BREED_CHANCE, TOMB: TOMB, CHURCH: CHURCH, CATHEDRAL: CATHEDRAL, CRYSTAL: CRYSTAL, TREASURE: TREASURE, FOX: FOX,
     TREASURE_COINS: TREASURE_COINS, CASH_COINS: CASH_COINS,
     EMOJI: EMOJI, NAME: NAME, NEXT: NEXT, BASE: BASE, WEIGHTS: WEIGHTS, TRAP_DROP: TRAP_DROP,
@@ -2361,7 +2363,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     var lp = TT.landPrice(state);
     document.querySelectorAll('.land').forEach(function (b) {
       var owned = state.land.indexOf(b.dataset.land) >= 0;
-      b.hidden = state.map === 'island'; // nothing to buy there: the whole board is already land
+      b.hidden = state.map === 'island' || (state.map === 'medium' && state.land.length >= TT.MAX_LAND); // nothing to buy there: the whole board is already land
       b.disabled = state.over || owned || !TT.canLand(state);
       b.querySelector('.tp').textContent = owned ? '✓' : '🪙' + fmt(lp);
     });
@@ -2696,7 +2698,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   function miniMap(map, seed, into) {
     var g = TT.newGame(seed, { map: map }).grid, side = Math.round(Math.sqrt(g.length));
     into.textContent = '';
-    into.style.gridTemplate = 'repeat(' + side + ', 1fr) / repeat(' + side + ', 1fr)'; // the island is 8x8
+    into.style.gridTemplate = 'repeat(' + side + ', 1fr) / repeat(' + side + ', 1fr)'; // the island and the river map are 8x8
     g.forEach(function (v) {
       var c = document.createElement('span');
       if (v === TT.WATER) c.className = 'w'; else if (v === TT.HOLE) c.className = 'o'; else if (v) c.textContent = em(v);
@@ -2739,7 +2741,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     $('foxNote').textContent = dlg.foxes ? 'Foxes warp around the board; walls or a full box trap them.' : 'No foxes in the item queue.';
     $('bearNote').textContent = dlg.bears === 'off' ? 'No bears in the item queue' + (dlg.foxes ? '.' : ' (calm mode: no animals at all, nothing to interrupt you).') : dlg.bears === 'wild' ? 'Boxed-in bears growl, get angry, then maul a 🌱🌿🌳🏕️🛖 next to them (one tier down). Bears breed in small pens. Own best scores.' : 'Bears wander and get trapped into tombstones.';
   }
-  var MAP_NOTES = { easy: 'A plain grass field.', standard: 'A plain field with a few grass, bushes and trees already growing (different every game, e.g. these).', medium: 'A river runs across the field and splits it in two (the same map every game).', hard: 'Random ponds eat into the field (different every game, e.g. these).', highlands: 'Mountains (walls until you pay to flatten them) and holes (swallow the next item you place, then the tile is flat) are scattered over the field (different every game, e.g. these).', island: 'The biggest board, all sea except a small island (a different shape every game, e.g. these). You cannot buy land, but you can reclaim sea tiles next to it (dearer each time) to grow it.' };
+  var MAP_NOTES = { easy: 'A plain grass field.', standard: 'A plain field with a few grass, bushes and trees already growing (different every game, e.g. these).', medium: 'The biggest board (8×8, all land already bought) with a river across it that splits the field in two (the same map every game).', hard: 'Random ponds eat into the field (different every game, e.g. these).', highlands: 'Mountains (walls until you pay to flatten them) and holes (swallow the next item you place, then the tile is flat) are scattered over the field (different every game, e.g. these).', island: 'The biggest board, all sea except a small island (a different shape every game, e.g. these). You cannot buy land, but you can reclaim sea tiles next to it (dearer each time) to grow it.' };
   function openNewGame() {
     var inRegion = !!region, r = inRegion ? regionById(region) : null;
     $('dlgSetup').hidden = inRegion; // a region keeps its own map and animals: New only restarts it

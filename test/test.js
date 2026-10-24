@@ -892,8 +892,24 @@ t('maps: standard scatters a few grass / bush / tree, never a mergeable group, r
   assert.strictEqual(kinds.size, 3, 'all three kinds show up'); assert(differ, 'different seeds give different fields');
 });
 
-t('maps: medium has the same river for every seed, across the field from edge to edge, and nothing else', () => {
+// an old-style 6x6 medium game (saves made before medium started on the biggest board, and the layout most river tests are written against)
+function med6(seed) { const s = TT.newGame(seed); s.map = 'medium'; TT.MEDIUM_WATER.forEach((i) => { s.grid[i] = TT.WATER; }); return s; }
+
+t('maps: a new medium game starts on the biggest board (8x8, all land bought, like the island) with the river running edge to edge', () => {
   const a = TT.newGame(1, { map: 'medium' }), b = TT.newGame(999, { map: 'medium' });
+  assert.strictEqual(a.w, 8); assert.strictEqual(a.h, 8); assert.deepStrictEqual(a.land, ['top', 'bottom', 'left', 'right']);
+  assert.strictEqual(TT.buyLand(Object.assign(a, { coins: 99999 }), 'top'), null, 'nothing left to buy');
+  assert.deepStrictEqual(waterCells(a), TT.MEDIUM_WATER_BIG); assert.deepStrictEqual(waterCells(b), TT.MEDIUM_WATER_BIG);
+  // it is exactly the 6x6 river after buying all four sides
+  let g = Object.assign(med6(1), { coins: 99999 }); ['top', 'bottom', 'left', 'right'].forEach((side) => { g = TT.buyLand(g, side).state; });
+  assert.deepStrictEqual(waterCells(g), TT.MEDIUM_WATER_BIG);
+  const rows = new Set(TT.MEDIUM_WATER_BIG.map((i) => (i / 8) | 0));
+  assert.strictEqual(rows.size, 8, 'water in every row: the river runs from the top edge to the bottom edge');
+  assert(TT.bridgeSpots(Object.assign(a, { coins: 99999 })).length > 0, 'bridges can cross it');
+});
+
+t('maps: medium has the same river for every seed, across the field from edge to edge, and nothing else', () => {
+  const a = med6(1), b = med6(999);
   assert.deepStrictEqual(waterCells(a), TT.MEDIUM_WATER); assert.deepStrictEqual(waterCells(b), TT.MEDIUM_WATER);
   assert(a.grid.every((v) => v === 0 || v === TT.WATER));
   assert.deepStrictEqual(TT.validate(a), []);
@@ -920,7 +936,7 @@ t('maps: hard has random ponds (6..9 water tiles) that leave the land in one pie
 });
 
 t('water: nothing can be placed, hammered, moved or trapped there; animals treat it as a wall and never enter it', () => {
-  const s = TT.newGame(3, { map: 'medium' });
+  const s = med6(3);
   s.coins = 500;
   const wi = TT.MEDIUM_WATER[0];
   assert.strictEqual(TT.place(s, wi), null, 'cannot place on water'); assert.strictEqual(TT.preview(s, wi), null);
@@ -930,7 +946,7 @@ t('water: nothing can be placed, hammered, moved or trapped there; animals treat
   assert(!TT.isMovable(TT.WATER));
   // a bear next to water never steps into it
   for (let seed = 1; seed <= 60; seed++) {
-    const g = withGridKeep(Object.assign(TT.newGame(seed, { map: 'medium' }), { cur: 2 }), { [I(0, 1)]: TT.BEAR });
+    const g = withGridKeep(Object.assign(med6(seed), { cur: 2 }), { [I(0, 1)]: TT.BEAR });
     const r = TT.place(g, I(5, 5));
     assert.deepStrictEqual(waterCells(r.state), TT.MEDIUM_WATER, 'water never changes');
   }
@@ -953,13 +969,13 @@ t('water: nothing can be placed, hammered, moved or trapped there; animals treat
 function withGridKeep(base, cells) { const s = JSON.parse(JSON.stringify(base)); for (const k in cells) s.grid[k] = cells[k]; return s; }
 
 t('water: the board is full when every non-water tile is used; land adds plain tiles and keeps the water', () => {
-  const s = TT.newGame(4, { map: 'medium' });
+  const s = med6(4);
   s.grid = s.grid.map((v, i) => (v === TT.WATER ? v : ((((i / 6) | 0) + (i % 6)) % 2 ? 5 : 6)));
   s.grid[I(0, 0)] = 0; s.stock.hammer = 0; s.coins = 0; s.cur = 4;
   const r = TT.place(s, I(0, 0));
   assert(r.state.over, 'water does not count as a free tile');
   assert.deepStrictEqual(TT.validate(r.state), []);
-  const rich = Object.assign(TT.newGame(4, { map: 'medium' }), { coins: 1000 });
+  const rich = Object.assign(med6(4), { coins: 1000 });
   const l = TT.buyLand(rich, 'top').state;
   assert.deepStrictEqual(waterCells(l), [2].concat(TT.MEDIUM_WATER.map((i) => i + 6)), 'the river moved down one row and runs on into the new top row');
   assert.deepStrictEqual(TT.validate(l), []);
@@ -967,7 +983,7 @@ t('water: the board is full when every non-water tile is used; land adds plain t
 
 t('land: water on the edge carries on into the new row / column, everything else is plain land', () => {
   const rich = (opts) => Object.assign(TT.newGame(4, opts), { coins: 5000 });
-  const m = rich({ map: 'medium' }); // river tiles 2 (top edge) and 33 (bottom edge)
+  const m = Object.assign(med6(4), { coins: 5000 }); // river tiles 2 (top edge) and 33 (bottom edge)
   assert.deepStrictEqual(waterCells(TT.buyLand(m, 'bottom').state), TT.MEDIUM_WATER.concat([39]), 'bottom: only under the river end (col 3)');
   assert.deepStrictEqual(waterCells(TT.buyLand(m, 'left').state), TT.MEDIUM_WATER.map((i) => i + 1 + ((i / 6) | 0)), 'left / right: the river does not touch those edges, so no new water');
   assert.deepStrictEqual(waterCells(TT.buyLand(m, 'right').state), TT.MEDIUM_WATER.map((i) => i + ((i / 6) | 0)));
@@ -976,7 +992,7 @@ t('land: water on the edge carries on into the new row / column, everything else
   const l = TT.buyLand(e, 'left').state;
   assert.deepStrictEqual(waterCells(l), [2 * 7, 2 * 7 + 1, 3 * 7, 3 * 7 + 1]);
   assert.deepStrictEqual(TT.validate(l), []);
-  const eb = rich({ map: 'medium' }); eb.bridges = [2]; eb.grid[2] = 0;
+  const eb = Object.assign(med6(4), { coins: 5000 }); eb.bridges = [2]; eb.grid[2] = 0;
   assert.strictEqual(TT.buyLand(eb, 'top').state.grid[2], TT.WATER, 'a bridged edge tile carries the river on');
 });
 
@@ -1024,7 +1040,7 @@ t('breeding: not in classic games, not with 1 bear, not with only 1 empty tile, 
 });
 
 // ---- bridges
-const medium = (over = {}) => Object.assign(TT.newGame(3, { map: 'medium' }), { coins: 100000 }, over);
+const medium = (over = {}) => Object.assign(med6(3), { coins: 100000 }, over);
 // medium river water indices: 2 8 14 15 21 27 33 (the winding river); 14 and 15 are the double-wide part
 
 t('bridge spots: water tiles with dry land on both opposite sides, so edges yes, corners and the middle of water no', () => {
@@ -1543,7 +1559,7 @@ t('island: the biggest board, all sea except a small random island of 16-20 tile
   assert.strictEqual(TT.validate(Object.assign({}, s, { w: 6, h: 6, grid: s.grid.slice(0, 36) })).length > 0, true);
   assert.deepStrictEqual(TT.validate(ringIsland()), [], 'the old ring island is still a valid game');
   // the other maps are untouched by the island code
-  ['easy', 'standard', 'medium', 'hard'].forEach((m) => { const o = TT.newGame(5, { map: m }); assert.strictEqual(o.w, 6); assert.strictEqual(o.reclaimed, 0); assert.strictEqual(TT.reclaimSpots(Object.assign(o, { coins: 99999 })).length, 0); assert.strictEqual(TT.canReclaim(o), false); });
+  ['easy', 'standard', 'medium', 'hard'].forEach((m) => { const o = TT.newGame(5, { map: m }); assert.strictEqual(o.w, m === 'medium' ? 8 : 6); assert.strictEqual(o.reclaimed, 0); assert.strictEqual(TT.reclaimSpots(Object.assign(o, { coins: 99999 })).length, 0); assert.strictEqual(TT.canReclaim(o), false); });
 });
 
 t('island: reclaiming a sea tile next to the land is a free action that costs coins, dearer every time', () => {
@@ -1605,7 +1621,7 @@ t('island: lake quests only count the ponds you dug, never the sea around the is
   r = TT.buyPond(r.state, I8(2, 3)); r = TT.buyPond(r.state, I8(2, 4));
   assert.strictEqual(r.state.lake, 1, 'four ponds in a square are a 2x2 lake'); assert(r.events.some((e) => e.type === 'lake' && e.size === 2));
   // on the medium map the river still counts
-  const m = Object.assign(TT.newGame(3, { map: 'medium' }), { coins: 100000 });
+  const m = Object.assign(med6(3), { coins: 100000 });
   assert(TT.bestLake(m) >= 1);
 });
 

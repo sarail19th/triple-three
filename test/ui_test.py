@@ -745,14 +745,14 @@ with sync_playwright() as p:
         assert page.get_attribute(f'.opt[data-map="{m}"]', 'aria-pressed') == 'true' and page.inner_text('#mapNote') != ''
     # sample maps: every card has a 6x6 thumbnail; the selected category lists examples (3 for the random maps, 1 for the fixed ones)
     cnt = lambda sel: page.evaluate("s => [...document.querySelectorAll(s)].map(e => e.children.length)", sel)
-    assert cnt('#newGame .mapcard .mini') == [36] * 5 + [64], 'a 6x6 sample on each map card (the island is 8x8)'
-    assert page.evaluate("[...document.querySelectorAll('#newGame .mapcard')].map(c => c.querySelectorAll('.mini span.w').length)")[:3] == [0, 0, 7]
+    assert cnt('#newGame .mapcard .mini') == [36, 36, 64, 36, 36, 64], 'a 6x6 sample on each map card (the island and the river map are 8x8)'
+    assert page.evaluate("[...document.querySelectorAll('#newGame .mapcard')].map(c => c.querySelectorAll('.mini span.w').length)")[:3] == [0, 0, 9]
     waters = {}
     for m, n in [('easy', 1), ('standard', 3), ('medium', 1), ('hard', 3), ('highlands', 3), ('island', 3)]:
         page.tap(f'.opt[data-map="{m}"]')
-        assert cnt('#mapSamples .mini') == [64 if m == 'island' else 36] * n, (m, cnt('#mapSamples .mini'))
+        assert cnt('#mapSamples .mini') == [64 if m in ('island', 'medium') else 36] * n, (m, cnt('#mapSamples .mini'))
         waters[m] = page.evaluate("[...document.querySelectorAll('#mapSamples .mini')].map(e => e.querySelectorAll('span.w').length)")
-    assert waters['easy'] == [0] and waters['standard'] == [0, 0, 0] and waters['medium'] == [7] and waters['highlands'] == [0, 0, 0] and all(44 <= w <= 48 for w in waters['island']) and all(6 <= w <= 9 for w in waters['hard']), waters
+    assert waters['easy'] == [0] and waters['standard'] == [0, 0, 0] and waters['medium'] == [9] and waters['highlands'] == [0, 0, 0] and all(44 <= w <= 48 for w in waters['island']) and all(6 <= w <= 9 for w in waters['hard']), waters
     page.tap('.opt[data-map="hard"]')
     assert page.evaluate("new Set([...document.querySelectorAll('#mapSamples .mini')].map(e => e.textContent + [...e.children].map(c => c.className).join())).size") == 3, 'the hard samples differ'
     page.tap('.opt[data-map="standard"]'); page.tap('#newStart')
@@ -763,7 +763,8 @@ with sync_playwright() as p:
     assert hard['map'] == 'hard' and 6 <= hard['grid'].count(21) <= 9 and page.locator('#board .cell[data-c="21"]').count() == hard['grid'].count(21)
     menu_tap(page, '#newBtn'); page.tap('.opt[data-map="medium"]'); page.tap('.opt[data-bears="classic"]'); page.tap('#newStart')
     med = check_consistent(page, 'medium map')
-    assert med['map'] == 'medium' and [i for i, v in enumerate(med['grid']) if v == 21] == [2, 8, 14, 15, 21, 27, 33]
+    assert med['map'] == 'medium' and [i for i, v in enumerate(med['grid']) if v == 21] == [3, 11, 19, 27, 28, 36, 44, 52, 60]
+    assert med['w'] == 8 and med['h'] == 8 and len(med['land']) == 4 and page.locator('.land:visible').count() == 0, 'medium starts on the biggest board: no land to buy'
     assert page.evaluate("JSON.parse(localStorage.getItem('tt-map'))") == 'medium', 'the map pick is remembered'
     assert page.locator('#board svg.water').count() == 1 and page.locator('#board svg.water #wcells rect').count() >= 7, 'water is one soft SVG layer under the tiles'
     assert page.evaluate("getComputedStyle(document.querySelector('#board .cell[data-i=\"2\"]')).backgroundImage") == 'none', 'the water tiles themselves are transparent'
