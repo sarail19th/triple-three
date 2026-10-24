@@ -639,7 +639,7 @@
     var lp = TT.landPrice(state);
     document.querySelectorAll('.land').forEach(function (b) {
       var owned = state.land.indexOf(b.dataset.land) >= 0;
-      b.hidden = state.map === 'island'; // nothing to buy there: the whole board is already land
+      b.hidden = state.map === 'island' || (state.map === 'medium' && state.land.length >= TT.MAX_LAND); // nothing to buy there: the whole board is already land
       b.disabled = state.over || owned || !TT.canLand(state);
       b.querySelector('.tp').textContent = owned ? '✓' : '🪙' + fmt(lp);
     });
@@ -974,7 +974,7 @@
   function miniMap(map, seed, into) {
     var g = TT.newGame(seed, { map: map }).grid, side = Math.round(Math.sqrt(g.length));
     into.textContent = '';
-    into.style.gridTemplate = 'repeat(' + side + ', 1fr) / repeat(' + side + ', 1fr)'; // the island is 8x8
+    into.style.gridTemplate = 'repeat(' + side + ', 1fr) / repeat(' + side + ', 1fr)'; // the island and the river map are 8x8
     g.forEach(function (v) {
       var c = document.createElement('span');
       if (v === TT.WATER) c.className = 'w'; else if (v === TT.HOLE) c.className = 'o'; else if (v) c.textContent = em(v);
@@ -1017,7 +1017,7 @@
     $('foxNote').textContent = dlg.foxes ? 'Foxes warp around the board; walls or a full box trap them.' : 'No foxes in the item queue.';
     $('bearNote').textContent = dlg.bears === 'off' ? 'No bears in the item queue' + (dlg.foxes ? '.' : ' (calm mode: no animals at all, nothing to interrupt you).') : dlg.bears === 'wild' ? 'Boxed-in bears growl, get angry, then maul a 🌱🌿🌳🏕️🛖 next to them (one tier down). Bears breed in small pens. Own best scores.' : 'Bears wander and get trapped into tombstones.';
   }
-  var MAP_NOTES = { easy: 'A plain grass field.', standard: 'A plain field with a few grass, bushes and trees already growing (different every game, e.g. these).', medium: 'A river runs across the field and splits it in two (the same map every game).', hard: 'Random ponds eat into the field (different every game, e.g. these).', highlands: 'Mountains (walls until you pay to flatten them) and holes (swallow the next item you place, then the tile is flat) are scattered over the field (different every game, e.g. these).', island: 'The biggest board, all sea except a small island (a different shape every game, e.g. these). You cannot buy land, but you can reclaim sea tiles next to it (dearer each time) to grow it.' };
+  var MAP_NOTES = { easy: 'A plain grass field.', standard: 'A plain field with a few grass, bushes and trees already growing (different every game, e.g. these).', medium: 'The biggest board (8×8, all land already bought) with a river across it that splits the field in two (the same map every game).', hard: 'Random ponds eat into the field (different every game, e.g. these).', highlands: 'Mountains (walls until you pay to flatten them) and holes (swallow the next item you place, then the tile is flat) are scattered over the field (different every game, e.g. these).', island: 'The biggest board, all sea except a small island (a different shape every game, e.g. these). You cannot buy land, but you can reclaim sea tiles next to it (dearer each time) to grow it.' };
   function openNewGame() {
     var inRegion = !!region, r = inRegion ? regionById(region) : null;
     $('dlgSetup').hidden = inRegion; // a region keeps its own map and animals: New only restarts it

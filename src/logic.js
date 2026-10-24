@@ -73,6 +73,8 @@
   // each tile max(1, round(PRICE[top] / LONG_BRIDGE_DIV)) per tick, like a bank (nothing while the clock is paused).
   var LONG_BRIDGE_MIN = 3, LONG_BRIDGE_DIV = 400;
   var MEDIUM_WATER = [2, 8, 14, 15, 21, 27, 33]; // a winding river from the top edge to the bottom edge (6x6 indices)
+  // New medium games start on the biggest board (8x8, all four land sides already bought, like the island): the same river one tile in, and it runs on into the new top and bottom rows (what buyLand does to a 6x6 river)
+  var MEDIUM_WATER_BIG = (function () { var out = [MEDIUM_WATER[0] % DEFAULT_W + 1, (ISLAND_SIZE - 1) * ISLAND_SIZE + MEDIUM_WATER[MEDIUM_WATER.length - 1] % DEFAULT_W + 1]; MEDIUM_WATER.forEach(function (i) { out.push((((i / DEFAULT_W) | 0) + 1) * ISLAND_SIZE + (i % DEFAULT_W) + 1); }); return out.sort(function (a, b) { return a - b; }); })();
   function isBear(v) { return v === BEAR || v === BEAR_GROWL || v === BEAR_ANGRY; }
 
   // Cell / item codes. 0 empty. 1..10 building chain (10 = mall), 11 cash (collectible, final), 12 bear, 13 tombstone,
@@ -171,7 +173,7 @@
     var bears = !(opts && opts.bears === false), foxes = !(opts && opts.foxes === false);
     var s = { ver: VERSION, wild: bears && !!(opts && opts.wild), bears: bears, foxes: foxes, map: opts && MAPS.indexOf(opts.map) >= 0 ? opts.map : 'easy', bridges: [], ponds: [], reclaimed: 0, vault: [0, 0, 0], leveled: 0, boost: 0, title: opts && TITLES[opts.title] ? opts.title : '', bearsTrapped: 0, foxesTrapped: 0, lake: 0, tick: 0, speed: 1, banksBought: 0, bankOrder: [], loans: [], w: DEFAULT_W, h: DEFAULT_H, land: [], top: 1, grid: new Array(DEFAULT_W * DEFAULT_H).fill(EMPTY), cur: 1, next: 1, hold: 0, score: 0, coins: START_COINS,
       stock: Object.assign({}, START_STOCK), milestone: 0, bonusScore: 0, turn: 0, over: false, rng: seed, seed: seed, undo: null };
-    if (s.map === 'island') { s.w = s.h = ISLAND_SIZE; s.land = SIDES.slice(); s.grid = new Array(ISLAND_SIZE * ISLAND_SIZE).fill(EMPTY); } // the biggest board, all land bought
+    if (s.map === 'island' || s.map === 'medium') { s.w = s.h = ISLAND_SIZE; s.land = SIDES.slice(); s.grid = new Array(ISLAND_SIZE * ISLAND_SIZE).fill(EMPTY); } // the biggest board, all land bought
     dim(s);
     genMap(s);
     s.next = drawItem(s); // always open with grass
@@ -182,7 +184,7 @@
   function genMap(s) {
     var i;
     if (s.map === 'standard') scatter(s, STANDARD_ITEMS);
-    else if (s.map === 'medium') for (i = 0; i < MEDIUM_WATER.length; i++) s.grid[MEDIUM_WATER[i]] = WATER;
+    else if (s.map === 'medium') for (i = 0; i < MEDIUM_WATER_BIG.length; i++) s.grid[MEDIUM_WATER_BIG[i]] = WATER;
     else if (s.map === 'hard') ponds(s);
     else if (s.map === 'highlands') highlands(s);
     else if (s.map === 'island') island(s);
@@ -1077,7 +1079,7 @@
 
   return {
     W: DEFAULT_W, H: DEFAULT_H, N: DEFAULT_W * DEFAULT_H, MAX_LAND: SIDES.length, SIDES: SIDES, LAND_PRICE: LAND_PRICE, LAST_BUILDING: LAST_BUILDING, VERSION: VERSION,
-    EMPTY: EMPTY, CASH: CASH, BEAR: BEAR, BEAR_GROWL: BEAR_GROWL, BEAR_ANGRY: BEAR_ANGRY, WATER: WATER, MAUL_MAX: MAUL_MAX, isBear: isBear, MAPS: MAPS, LUCKY_RATE: LUCKY_RATE, LUCKY_MIN_TIER: LUCKY_MIN_TIER, LUCKY_MAX_TIER: LUCKY_MAX_TIER, MEDIUM_WATER: MEDIUM_WATER, STANDARD_ITEMS: STANDARD_ITEMS,
+    EMPTY: EMPTY, CASH: CASH, BEAR: BEAR, BEAR_GROWL: BEAR_GROWL, BEAR_ANGRY: BEAR_ANGRY, WATER: WATER, MAUL_MAX: MAUL_MAX, isBear: isBear, MAPS: MAPS, LUCKY_RATE: LUCKY_RATE, LUCKY_MIN_TIER: LUCKY_MIN_TIER, LUCKY_MAX_TIER: LUCKY_MAX_TIER, MEDIUM_WATER: MEDIUM_WATER, MEDIUM_WATER_BIG: MEDIUM_WATER_BIG, STANDARD_ITEMS: STANDARD_ITEMS,
     BREED_MAX_POCKET: BREED_MAX_POCKET, BREED_MAX_BEARS: BREED_MAX_BEARS, BREED_CHANCE: BREED_CHANCE, TOMB: TOMB, CHURCH: CHURCH, CATHEDRAL: CATHEDRAL, CRYSTAL: CRYSTAL, TREASURE: TREASURE, FOX: FOX,
     TREASURE_COINS: TREASURE_COINS, CASH_COINS: CASH_COINS,
     EMOJI: EMOJI, NAME: NAME, NEXT: NEXT, BASE: BASE, WEIGHTS: WEIGHTS, TRAP_DROP: TRAP_DROP,

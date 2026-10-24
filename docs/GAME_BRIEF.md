@@ -3,7 +3,7 @@
 Single-file HTML game, (no framework, installable PWA, no image assets).
 
 ## Rules
-- 6x6 grid (the player can buy up to four extra rows/columns, one per side). Maps chosen at the start: easy (plain field), standard (a few random plants), medium (a river across the field), hard (random ponds); blue water tiles are dead tiles. Each turn the player places the "next item" on an empty cell.
+- 6x6 grid (the player can buy up to four extra rows/columns, one per side). Maps chosen at the start: easy (plain field), standard (a few random plants), medium (a river across the field; starts on the biggest 8x8 board like the island), hard (random ponds); blue water tiles are dead tiles. Each turn the player places the "next item" on an empty cell.
 - 3+ orthogonally connected identical items merge into one of the next tier, placed on the cell just tapped.
 - Tiers: grass, bush, tree, camp, hut, house, village, school, hospital, mall, then cash (collectible for coins).
 - Bears wander one step randomly each turn into empty cells. Bears in a closed pocket with no empty cell left are trapped and become tombstones; bears sharing a pocket that still has room are safe, and the church forms on the cell just played. 3 connected tombstones merge into a church, then cathedral.
