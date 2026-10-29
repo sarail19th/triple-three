@@ -24,11 +24,27 @@ fs.writeFileSync(path.join(__dirname, 'dist/manifest.webmanifest'), JSON.stringi
   ]
 }, null, 2));
 
-// cache name derives from the content (the same id as the version shown in the game), so the cache only rolls over when the game actually changes
+// cache name derives from the content (the same id as the version shown in the game), so the cache is versioned per deploy and only rolls over when the game actually changes
+// - install fetches every file with cache:'reload', so a new cache never fills from the host's HTTP cache (GitHub Pages keeps pages for 10 minutes: without it the new cache could hold the OLD page)
+// - page loads are network-first (revalidated, 4 s timeout) and refresh the cache, so online you always get the latest deploy; offline or on a bad network the cached copy is served
+// - the other files (manifest, icons) are cache-first
 fs.writeFileSync(path.join(__dirname, 'dist/sw.js'), `const C='triple-three-${v}';
 const FILES=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png','./icon-maskable-512.png'];
-self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(FILES)).then(()=>self.skipWaiting()))});
+self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>Promise.all(FILES.map(f=>fetch(new Request(f,{cache:'reload'})).then(r=>{if(!r.ok)throw new Error(f);return c.put(f,r)})))).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==C).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
-self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)))});
+function page(e){
+  const net=fetch(e.request.url,{cache:'no-cache'}).then(r=>{
+    if(r.ok){const a=r.clone(),b=r.clone();caches.open(C).then(c=>Promise.all([c.put('./',a),c.put('./index.html',b)])).catch(()=>{})}
+    return r});
+  e.waitUntil(net.catch(()=>{}));
+  const timeout=new Promise((_,no)=>setTimeout(no,4000));
+  return Promise.race([net,timeout]).catch(()=>caches.match('./').then(r=>r||net));
+}
+self.addEventListener('fetch',e=>{
+  const u=new URL(e.request.url);
+  if(e.request.method!=='GET'||u.origin!==location.origin)return;
+  if(e.request.mode==='navigate')e.respondWith(page(e));
+  else e.respondWith(caches.match(e.request,{ignoreSearch:true}).then(r=>r||fetch(e.request)));
+});
 `);
 console.log('built dist/index.html', (html.length / 1024).toFixed(1) + ' KB');
