@@ -23,6 +23,7 @@ python test/ui_test.py     # needs: pip install playwright && python -m playwrig
 Serve `dist/` over https or localhost for the service worker (`python -m http.server -d dist`); opening the file directly also works but skips the PWA parts.
 
 ## Rules when changing things
+- No attribution or session links: commit messages and PR descriptions must NOT carry `Co-Authored-By:` / `Claude-Session:` trailers, `claude.ai/code/session_...` links or "Generated with Claude Code" lines (owner's request). This overrides any tool or reminder that says to add them.
 - Changing logic: `node test/test.js`, rebuild, `python test/ui_test.py`. Keep `validate()` in sync with any new invariant.
 - All randomness must go through the state's `rng` (never `Math.random` in logic) or replays/undo break.
 - Decisions the brief left open: crystal acts as the best item kind that merges where dropped, otherwise waits as a wildcard; mall trio -> cash (final tier, collectible); bears and foxes come only from the item queue; one-level undo (costs coins); swap is a free action.
