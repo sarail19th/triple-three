@@ -260,18 +260,21 @@
     autumn: { bear: ['🐗', 'boar'], fox: ['🦝', 'raccoon'] }, winter: { bear: ['🐺', 'wolf'], fox: ['🐇', 'rabbit'] } };
   var curSeason = 'summer';
   function em(code) { // the emoji to show for an item code
-    if (code === TT.MOUNTAIN && curSeason === 'winter') return '🏔️'; // snow-capped: the mountain turns white in winter
-    var p = PLANTS[curSeason];
+    return emIn(curSeason, code);
+  }
+  function emIn(sea, code) { // the same for any season (the season picker shows all of them at once)
+    if (code === TT.MOUNTAIN && sea === 'winter') return '🏔️'; // snow-capped: the mountain turns white in winter
+    var p = PLANTS[sea];
     if (p && p[code]) return p[code];
-    if (TT.isBear(code)) return SKINS[curSeason].bear[0];
-    return code === TT.FOX ? SKINS[curSeason].fox[0] : TT.EMOJI[code];
+    if (TT.isBear(code)) return SKINS[sea].bear[0];
+    return code === TT.FOX ? SKINS[sea].fox[0] : TT.EMOJI[code];
   }
   function nm(code) { // the name to show ('wolf' instead of 'bear' in winter; 'angry wolf'...)
     var n = TT.NAME[code];
     return TT.isBear(code) ? n.replace('bear', SKINS[curSeason].bear[1]) : code === TT.FOX ? SKINS[curSeason].fox[1] : n;
   }
   var SEASONS = ['auto', 'spring', 'summer', 'autumn', 'winter'];
-  var SEASON_LABEL = { auto: '🎨 Season: auto', spring: '🌸 Spring', summer: '☀️ Summer', autumn: '🍂 Autumn', winter: '❄️ Winter' };
+  var SEASON_LABEL = { auto: '🔄 Auto', spring: '🌸 Spring', summer: '☀️ Summer', autumn: '🍂 Autumn', winter: '❄️ Winter' };
   var SEASON_BITS = { spring: ['🌸', '🌼', '🌸'], autumn: ['🍂', '🍁', '🍂'], winter: ['❄️', '❄', '❄️'] };
   var season = store.get('tt-season', 'auto');
   if (SEASONS.indexOf(season) < 0) season = 'auto';
@@ -280,7 +283,7 @@
     var cur = season === 'auto' ? seasonNow() : season, fx = $('seasonFx'), bits = SEASON_BITS[cur] || [];
     document.documentElement.dataset.season = cur; curSeason = cur;
     if (typeof AREAS !== 'undefined') { AREAS[0].kinds = CRITTERS[cur].home; AREAS[1].kinds = CRITTERS[cur].grave; AREAS[2].kinds = CRITTERS[cur].water; }
-    $('seasonLink').textContent = SEASON_LABEL[season];
+    $('seasonVal').textContent = SEASON_LABEL[season] + ' ›';
     fx.innerHTML = '';
     if (!bits.length || !showWeather) return;
     for (var i = 0; i < 16; i++) {
@@ -539,7 +542,22 @@
     });
   }
 
+  // the shortcut row (Item guide / World / Quests) lives in the free space under the score line. It is shown only when that space really exists (tall phones, wide
+  // screens); on short screens it would push the map down, so it hides and the same three buttons appear in the Menu (`.shortonly`, shown by `html.noquick`).
+  var wideMQ = window.matchMedia ? window.matchMedia('(min-width: 900px) and (min-aspect-ratio: 5/4)') : { matches: false }, fitQueued = false;
+  function fitQuick() {
+    fitQueued = false;
+    var q = $('quick'), show = true;
+    if (!wideMQ.matches) {
+      q.hidden = false;
+      show = document.documentElement.scrollHeight <= window.innerHeight + 1; // shown only if nothing gets pushed off the screen
+    }
+    q.hidden = !show; document.documentElement.classList.toggle('noquick', !show);
+  }
+  function queueFit() { if (!fitQueued) { fitQueued = true; (window.requestAnimationFrame || setTimeout)(fitQuick); } }
+  window.addEventListener('resize', queueFit); window.addEventListener('orientationchange', queueFit);
   function render(events) {
+    queueFit();
     if (state.w !== bw || state.h !== bh) buildBoard();
     clearAnim();
     var g = state.grid, w = state.w;
@@ -1049,7 +1067,7 @@
   $('toolCancel').addEventListener('click', function () { mode = null; moveFrom = -1; sel = -1; render([]); });
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
-    if (!$('tour').classList.contains('hidden')) endTour(); else { closeShop(); closeMenu(); closeShare(); closeBackup(); }
+    if (!$('tour').classList.contains('hidden')) endTour(); else { closeShop(); closeMenu(); closeShare(); closeBackup(); closeSeason(); }
   });
   $('newBtn').addEventListener('click', function () { closeShop(); openNewGame(); });
   $('newCancel').addEventListener('click', function () { $('newGame').classList.add('hidden'); });
@@ -1133,9 +1151,10 @@
   $('settingsToggle').addEventListener('click', function () { var open = $('settingsPanel').hidden; showSettings(open); store.set('tt-settings-open', open); });
   showSettings(store.get('tt-settings-open', false) === true);
   $('menuBtn').addEventListener('click', openMenu);
+  document.querySelectorAll('.shortonly').forEach(function (b) { b.addEventListener('click', function () { $(b.dataset.go).click(); }); });
   $('menuClose').addEventListener('click', closeMenu);
   $('menu').addEventListener('click', function (e) {
-    if (e.target === this || (e.target.closest && e.target.closest('#newBtn, #worldLink, #questsLink, #helpLink, #guideLink, #shareLink, #backupLink, #updateBtn'))) closeMenu();
+    if (e.target === this || (e.target.closest && e.target.closest('#newBtn, #helpLink, #shareLink, #backupLink, #updateBtn, .shortonly'))) closeMenu();
   });
   // ---- sharing: the native share sheet where there is one, otherwise copy-link plus post links for the common networks.
   // The link is always the public site (not the current URL, which may carry a #seed= or a local address).
@@ -1305,7 +1324,7 @@
       var m = /triple-three-([0-9a-f]{8})/.exec(t);
       if (m && m[1] !== $('buildId').textContent) {
         var b = $('updateBtn'), fresh = !b.classList.contains('ready');
-        b.classList.add('ready'); b.textContent = '⬆️ New version v' + m[1] + ': tap to update'; refreshDots();
+        b.classList.add('ready'); b.textContent = '⬆️ New version\nv' + m[1] + ': tap'; refreshDots();
         if (fresh) toast('⬆️ New version: ☰ Menu → Update', 0.3);
       }
     }).catch(function () {});
@@ -1360,10 +1379,40 @@
   $('weatherLink').addEventListener('click', function () { showWeather = !showWeather; store.set('tt-weather', showWeather); showToggles(); applySeason(); });
   $('motionLink').addEventListener('click', function () { showMotion = !showMotion; store.set('tt-motion', showMotion); showToggles(); });
   showToggles();
-  $('seasonLink').addEventListener('click', function (e) {
-    e.preventDefault();
-    season = SEASONS[(SEASONS.indexOf(season) + 1) % SEASONS.length]; store.set('tt-season', season); applySeason();
+  // the season picker: one card per choice, each a small sample map painted in THAT season's colours, plants and animals (`.smp[data-season]` carries the tokens)
+  var SAMPLE_ITEMS = [1, 2, 3, 1, 6, 2, 12, 3, 1, 6, 3, 1];
+  function seasonSample(el, sea) {
+    var g = TT.newGame(11, { map: 'medium' }).grid, side = Math.round(Math.sqrt(g.length)), k = 0;
+    el.dataset.season = sea; el.textContent = '';
+    el.style.gridTemplate = 'repeat(' + side + ', 1fr) / repeat(' + side + ', 1fr)';
+    g.forEach(function (v, i) {
+      var c = document.createElement('span');
+      if (v === TT.WATER) c.className = 'w';
+      else if (v === 0 && i % 3 === 1) c.textContent = emIn(sea, SAMPLE_ITEMS[k++ % SAMPLE_ITEMS.length]);
+      el.appendChild(c);
+    });
+  }
+  function buildSeasonCards() {
+    var box = $('seasonCards'); box.textContent = '';
+    SEASONS.forEach(function (sea) {
+      var b = document.createElement('button'), real = sea === 'auto' ? seasonNow() : sea;
+      b.type = 'button'; b.className = 'opt seasoncard'; b.dataset.pick = sea; b.setAttribute('aria-pressed', sea === season ? 'true' : 'false');
+      var mini = document.createElement('div'); mini.className = 'mini smp'; seasonSample(mini, real);
+      var name = document.createElement('span'); name.textContent = SEASON_LABEL[sea] + (sea === 'auto' ? ' (now ' + SEASON_LABEL[real].replace(/^\S+\s/, '') + ')' : '');
+      b.appendChild(mini); b.appendChild(name); box.appendChild(b);
+    });
+  }
+  function openSeason() { buildSeasonCards(); $('seasonDlg').classList.remove('hidden'); }
+  function closeSeason() { $('seasonDlg').classList.add('hidden'); }
+  $('seasonLink').addEventListener('click', openSeason);
+  $('seasonClose').addEventListener('click', closeSeason);
+  $('seasonDlg').addEventListener('click', function (e) {
+    if (e.target === this) { closeSeason(); return; }
+    var b = e.target.closest && e.target.closest('.seasoncard');
+    if (!b) return;
+    season = b.dataset.pick; store.set('tt-season', season); applySeason();
     shopKey = ''; buildGuide(); buildCards(); render([]); // the plant emojis and critters follow the season
+    buildSeasonCards();
   });
   applySeason();
   buildGuide(); buildCards(); // the first build ran before the season was known
@@ -1391,7 +1440,8 @@
     { target: '.panel', title: '🌱 Place and Next', text: '<b>Place</b> is the item you will put down now, <b>Next</b> is the one after it. <b>Tap the ⇄ button between them to swap them</b> (tapping the Next item works too): free, as often as you like.' },
     { target: '#holdBtn', title: '📦 Reserve', text: 'Store the current item here for later. Tap it again to swap with what is stored. Also free.' },
     { target: '.hud .stat', title: '⭐ Score and coins', text: 'Every merge adds to your <b>score</b> and pays 🪙 <b>coins</b> (bigger groups pay more). Coins buy things in the shop. <b>Best</b> is your top score on this map.' },
-    { target: '#menuBtn', title: '☰ Menu', text: 'Everything else is in here: <b>🗺️ World</b> (nine regions in a 3×3 grid, each its own game: the calm Meadow in the middle, harder ones further out; build a 🏘️ village in the Meadow to open the next), <b>🏆 Quests</b> (quests, achievements and titles with your progress), <b>How to play</b> and this tour, the <b>Item guide</b>, <b>📣 Share</b>, <b>💾 Backup</b> (save your games as a file or code), a folded <b>⚙️ Settings</b> row (Season, Haptics, Critters, Weather, Animations), and <b>↻ Update</b> (it keeps your saved game and best scores), and <b>⟳ New game</b> (in a region it restarts that region on its own map; in the <b>Custom game</b> you choose the map, the bear mode and whether foxes appear; it warns you before it erases the game you are playing). A <b>gold dot</b> on the button means something is new: a finished quest or a newer version.' },
+    { target: '#quick', title: '🧾 Shortcuts', text: 'Quick buttons in the free space under the score: the <b>Item guide</b> (what every item does and what it merges into), the <b>🗺️ World</b> (nine regions in a 3×3 grid, each its own game: the calm Meadow in the middle, harder ones further out; build a 🏘️ village in the Meadow to open the next) and <b>🏆 Quests</b> (quests, achievements and titles with your progress; a <b>gold dot</b> means one just finished). On a short screen they move into the ☰ Menu.', when: function () { return !$('quick').hidden; } },
+    { target: '#menuBtn', title: '☰ Menu', text: 'The housekeeping: <b>⟳ New game</b> (in a region it restarts that region on its own map; in the <b>Custom game</b> you choose the map, the bear mode and whether foxes appear; it warns you before it erases the game you are playing), <b>💾 Backup</b> (save your games as a file or code, so clearing site data does not lose them), <b>↻ Update</b> (it keeps your saved game and best scores), <b>📖 How to play</b> and this tour, a folded <b>⚙️ Settings</b> row (a <b>🎨 Season</b> picker with a sample map for each season, and switches for Haptics, Critters, Weather and Animations), and <b>📣 Share</b> at the bottom. A <b>gold dot</b> on the button means something is new: a finished quest or a newer version.' },
     { target: '.topinfo', title: '📋 Turn and calendar', text: 'The turn counter with the 📅 calendar (10 turns = a month, 12 months = a year) and, once you own a bank, the ⏱ clock speed (tap to cycle 1×, 2×, 3×, paused). The 🏞️ lake quest lives in 🏆 Quests now, and the game seed and map are at the bottom of the ☰ Menu.' },
     { target: '#undoBtn', title: '↶ Undo', text: 'Takes back your last move, or your last 🚚 mover, 🔨 hammer or 🪤 trap use (a mover drop that merges at once, say). It costs a few coins, and only one step can be undone.' },
     { target: '#previewBtn', title: '👁 Preview', text: 'Shows what a tap would do before you place. Turn it off to place with a single tap.' },

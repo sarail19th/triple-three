@@ -112,6 +112,11 @@ def tap_cell(page, idx, preview_on):
 
 def menu_tap(page, selector):
     """The less used buttons (World, Quests, How to play, Item guide, Season, Haptics, Update) live in the Menu: open it if needed, then tap."""
+    short = {'#guideLink': '#menuGuide', '#worldLink': '#menuWorld', '#questsLink': '#menuQuests'}
+    if selector in short:   # the shortcut row under the score line (tall screens) or the same button in the menu (short screens)
+        if page.locator('#quick').is_visible():
+            page.tap(selector); return
+        selector = short[selector]
     if page.locator('#menu').is_hidden():
         page.tap('#menuBtn')
     assert page.locator('#menu').is_visible(), 'the menu opens'
@@ -610,7 +615,7 @@ with sync_playwright() as p:
     HOME = {'summer': {'🐇', '🐤'}, 'spring': {'🐇', '🐤', '🦋'}, 'autumn': {'🐿️', '🦔'}, 'winter': {'🦌', '🐦'}}
     SKIN = {'summer': ('🐻', 'bear', '🦊', 'fox'), 'spring': ('🐻', 'bear', '🦊', 'fox'), 'autumn': ('🐗', 'boar', '🦝', 'raccoon'), 'winter': ('🐺', 'wolf', '🐇', 'rabbit')}
     WATER = {'summer': {'🦢', '🐟'}, 'spring': {'🦢', '🐸'}, 'autumn': {'🦆', '🐟'}, 'winter': {'🦢', '🦆'}}
-    assert 'Summer' in page.inner_text('#seasonLink') and sea() == 'summer'
+    assert 'Summer' in page.text_content('#seasonLink') and sea() == 'summer'
     g = [0] * 36
     for i in (12, 14, 16, 25, 27): g[i] = 5      # five huts (not touching, so they do not merge): rabbits / chicks / squirrels live here
     for i in (2, 8): g[i] = 21                   # a little water for the swans and fish
@@ -618,10 +623,23 @@ with sync_playwright() as p:
     g[33] = 12; g[34] = 18; g[35] = 13           # a bear, a fox and a tombstone
     load(g, map='medium', coins=100)
     seen = {}
+    menu_tap(page, '#seasonLink')
+    assert page.locator('#seasonDlg').is_visible() and page.locator('#seasonCards .seasoncard').count() == 5, 'the season picker shows Auto + four seasons'
+    for sname in ('spring', 'summer', 'autumn', 'winter'):   # each card is a small sample map in THAT season: its own colours, plants and animals
+        samp = page.locator(f'#seasonCards .seasoncard[data-pick="{sname}"] .smp')
+        assert samp.get_attribute('data-season') == sname and PLANTS[sname][0] in samp.inner_text(), f'the {sname} sample shows the {sname} plants'
+        assert samp.locator('span.w').count() > 0, 'and a river'
+    greens = page.evaluate("['spring', 'summer', 'autumn', 'winter'].map(s => getComputedStyle(document.querySelector('#seasonCards .seasoncard[data-pick=' + s + '] .smp')).getPropertyValue('--g1').trim())")
+    assert len(set(greens)) == 4 and all(greens), f'four different grounds: {greens}'
+    assert 'now' in page.inner_text('#seasonCards .seasoncard[data-pick="auto"]'), 'Auto says which season it is now'
+    page.tap('#seasonClose'); page.tap('#menuClose')
     for want in ['autumn', 'winter', 'auto', 'spring', 'summer']:
         menu_tap(page, '#seasonLink')
+        page.tap(f'#seasonCards .seasoncard[data-pick="{want}"]')
+        assert page.get_attribute(f'#seasonCards .seasoncard[data-pick="{want}"]', 'aria-pressed') == 'true', 'the chosen card is marked'
+        page.tap('#seasonClose'); page.tap('#menuClose')
         cur = sea()
-        assert (cur == want) if want != 'auto' else ('auto' in page.inner_text('#seasonLink') and cur in PLANTS), (cur, want)
+        assert (cur == want) if want != 'auto' else ('Auto' in page.text_content('#seasonLink') and cur in PLANTS), (cur, want)
         seen[cur] = page.evaluate("[document.querySelectorAll('#seasonFx i').length, [1, 2, 3].map(c => window.ttDebug.emoji(c))]")
         tree_ok = {PLANTS[cur][2], '🍁'} if cur == 'autumn' else {PLANTS[cur][2]}   # 🪾 falls back to 🍁 where the font lacks it (as in this headless browser)
         assert seen[cur][1][:2] == PLANTS[cur][:2] and seen[cur][1][2] in tree_ok, (cur, seen[cur])
@@ -640,10 +658,10 @@ with sync_playwright() as p:
         if want == 'winter':
             assert page.evaluate("JSON.parse(localStorage.getItem('tt-season'))") == 'winter'
             page.reload(); page.wait_for_selector('#board .cell'); page.wait_for_timeout(300)
-            assert 'Winter' in page.inner_text('#seasonLink') and sea() == 'winter', 'the pick survives a reload'
+            assert 'Winter' in page.text_content('#seasonLink') and sea() == 'winter', 'the pick survives a reload'
     assert seen['summer'][0] == 0 and all(seen[k][0] > 0 for k in ('spring', 'autumn', 'winter')), seen
     assert page.evaluate("document.getElementById('guideBody').textContent.includes('🐇')"), 'the item guide follows the season too'
-    assert 'Summer' in page.inner_text('#seasonLink') and sea() == 'summer'
+    assert 'Summer' in page.text_content('#seasonLink') and sea() == 'summer'
     check_consistent(page, 'after the season tour')
 
     # ---- banks and the calendar: the bank is sold once a village has stood on the board, goes in as the current item, never in the reserve,
@@ -1185,11 +1203,17 @@ with sync_playwright() as p:
 
     # ---- the menu: the less used buttons live in it, the top of the game is the header plus one slim line; a gold dot says something is new
     load([0] * 36, coins=50, top=3)
-    assert page.locator('#menuBtn').is_visible() and all(page.locator(x).is_hidden() for x in ['#helpLink', '#guideLink', '#worldLink', '#questsLink', '#seasonLink', '#updateBtn'])
+    assert page.locator('#menuBtn').is_visible() and all(page.locator(x).is_hidden() for x in ['#helpLink', '#backupLink', '#shareLink', '#seasonLink', '#updateBtn'])
+    assert all(page.locator(x).is_visible() for x in ['#guideLink', '#worldLink', '#questsLink']), 'Item guide, World and Quests are shortcuts under the score line'
+    assert page.evaluate("document.getElementById('quick').getBoundingClientRect().bottom <= document.querySelector('.panel').getBoundingClientRect().top && document.getElementById('quick').getBoundingClientRect().top >= document.querySelector('.topinfo').getBoundingClientRect().bottom"), 'the shortcut row sits in the free space, between the turn line and the item row'
+    assert page.evaluate("document.documentElement.scrollHeight <= innerHeight + 1"), 'the shortcut row pushes nothing off the screen'
+    assert page.evaluate("document.getElementById('menuGuide').getBoundingClientRect().width") == 0, 'the menu copies of the shortcuts are hidden while the row shows'
     assert page.evaluate("document.querySelector('.topinfo').getBoundingClientRect().height") < 40, 'a single slim info line'
     assert page.evaluate("document.getElementById('menuBtn').getBoundingClientRect().right <= document.querySelector('.hud').getBoundingClientRect().right + 1 && document.getElementById('menuBtn').getBoundingClientRect().top < 80"), 'the menu button sits at the top right'
     page.tap('#menuBtn')
-    assert all(page.locator(x).is_visible() for x in ['#worldLink', '#questsLink', '#helpLink', '#guideLink', '#shareLink', '#backupLink', '#settingsToggle', '#updateBtn', '#seed']), 'every button is in the menu'
+    assert all(page.locator(x).is_visible() for x in ['#newBtn', '#backupLink', '#updateBtn', '#helpLink', '#settingsToggle', '#shareLink', '#seed', '#verNow']), 'every button is in the menu'
+    ys = page.evaluate("['newBtn', 'backupLink', 'updateBtn', 'helpLink', 'settingsToggle', 'shareLink', 'menuClose'].map(id => Math.round(document.getElementById(id).getBoundingClientRect().top))")
+    assert ys[0] < ys[1] == ys[2] < ys[3] < ys[4] < ys[5] < ys[6], f'menu order: New game, Backup | Update, How to play, Settings, Share (last action), Close: {ys}'
     if page.locator('#settingsPanel').is_visible(): page.tap('#settingsToggle')   # earlier tests left it unfolded (the pick is remembered)
     assert page.locator('#settingsPanel').is_hidden() and all(page.locator(x).is_hidden() for x in ['#seasonLink', '#hapticLink', '#critterLink', '#weatherLink', '#motionLink']), 'the switches are folded under Settings'
     page.tap('#settingsToggle')
@@ -1198,12 +1222,21 @@ with sync_playwright() as p:
     page.tap('#settingsToggle')
     assert page.locator('#settingsPanel').is_hidden() and page.evaluate("JSON.parse(localStorage.getItem('tt-settings-open'))") is False, 'and folds again'
     page.keyboard.press('Escape'); assert page.locator('#menu').is_hidden()
+    # a short screen has no free space: the shortcut row hides and the same three buttons move into the menu
+    page.set_viewport_size({'width': 412, 'height': 520}); page.wait_for_timeout(300)
+    assert page.locator('#quick').is_hidden() and page.evaluate("document.documentElement.classList.contains('noquick')"), 'the shortcut row hides when it would not fit'
+    page.tap('#menuBtn')
+    assert all(page.locator(x).is_visible() for x in ['#menuGuide', '#menuWorld', '#menuQuests']), 'the menu carries the shortcuts instead'
+    page.tap('#menuGuide'); assert page.locator('#guide').is_visible() and page.locator('#menu').is_hidden(), 'the menu copy opens the guide and closes the menu'
+    page.tap('#guideClose')
+    page.set_viewport_size({'width': 412, 'height': 860}); page.wait_for_timeout(300)
+    assert page.locator('#quick').is_visible() and not page.evaluate("document.documentElement.classList.contains('noquick')"), 'and it comes back on a tall screen'
     page.tap('#menuBtn'); page.mouse.click(5, 5); assert page.locator('#menu').is_hidden(), 'a tap outside closes it'
     page.evaluate("localStorage.setItem('tt-earned', JSON.stringify(['village'])); localStorage.setItem('tt-quests-seen', '0')")
     page.reload(); page.wait_for_selector('#board .cell')
     assert page.locator('#menuDot').is_visible(), 'a finished quest nobody has seen puts a gold dot on the menu button'
-    page.tap('#menuBtn'); assert page.locator('#questsDot').is_visible()
-    page.tap('#questsLink'); assert page.locator('#menu').is_hidden() and page.locator('#quests').is_visible(), 'choosing a screen closes the menu'
+    assert page.locator('#questsDot').is_visible(), 'the Quests shortcut carries the gold dot'
+    page.tap('#questsLink'); assert page.locator('#quests').is_visible()
     page.tap('#questsClose'); assert page.locator('#menuDot').is_hidden(), 'seen: the dot goes away'
     page.evaluate("localStorage.removeItem('tt-earned'); localStorage.removeItem('tt-quests-seen')")
 
