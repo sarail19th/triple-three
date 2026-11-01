@@ -5,6 +5,7 @@
 <h1 align="center">Triple Three 🌱🌿🌳</h1>
 
 <p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license"></a><br>
   <a href="https://sarail19th.github.io/triple-three/"><b>▶ Play now</b></a> ·
   <a href="https://twitter.com/intent/tweet?text=Triple%20Three%20%F0%9F%8C%B1%E2%86%92%F0%9F%8F%AC%20A%20free%20emoji%20merge%20puzzle%3A%20match%203%2C%20trap%20the%20bears%2C%20build%20banks.&url=https%3A%2F%2Fsarail19th.github.io%2Ftriple-three%2F">Post on X</a> ·
   <a href="https://www.facebook.com/sharer/sharer.php?u=https%3A%2F%2Fsarail19th.github.io%2Ftriple-three%2F">Facebook</a> ·
@@ -91,3 +92,7 @@ Pushing to `main` runs `.github/workflows/pages.yml`: tests, build, icons, then 
 ## Contributing
 
 Run `node test/test.js` and `python test/ui_test.py` before a change. When changing the logic, keep `validate()` in sync with any new invariant, and never use `Math.random` in the logic. `CLAUDE.md` lists the rest of the rules.
+
+## License
+
+[MIT](LICENSE). Free to use, copy, modify and share. The game draws its art from the emoji font of your own device; no font or image files are bundled besides the app icon and the preview card.
