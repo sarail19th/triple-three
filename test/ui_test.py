@@ -15,7 +15,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 DIST = os.path.join(ROOT, 'dist')
 EMOJI = ['', '🌱', '🌿', '🌳', '🏕️', '🛖', '🏠', '🏘️', '🏫', '🏥', '🏬', '💵', '🐻', '🪦', '⛪', '🕌', '💎', '💰', '🦊', '🐻', '🐻', '', '🏦', '🏚️', '⛰️', '🕳️']
 BEAR, TOMB, CHURCH, CRYSTAL, TREASURE, FOX = 12, 13, 14, 16, 17, 18
-LAND_PRICE = [150, 400, 1000, 2500]
+LAND_PRICE = [1000, 2500, 6000, 15000]
 MIN_TURNS = 50   # random turns that must be played
 MAX_TURNS = 600  # safety cap: a full board must be reached long before this
 
@@ -1257,10 +1257,10 @@ with sync_playwright() as p:
     # ---- land: a new row/column on the chosen side, each side once, board and DOM grow
     g = [0] * 36
     g[0] = 1
-    load(g, coins=5000)
+    load(g, coins=30000)
     shop_tap(page, '.land[data-land="top"]')
     after = check_consistent(page, 'land top')
-    assert after['h'] == 7 and after['w'] == 6 and after['grid'][6] == 1 and after['coins'] == 5000 - 150 and after['turn'] == 3
+    assert after['h'] == 7 and after['w'] == 6 and after['grid'][6] == 1 and after['coins'] == 30000 - LAND_PRICE[0] and after['turn'] == 3
     assert page.locator('.land[data-land="top"]').is_disabled(), 'each side only once'
     assert page.inner_text('#landNote').startswith('Land 1/4')
     shop_tap(page, '.land[data-land="left"]')

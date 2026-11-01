@@ -285,7 +285,7 @@ t('a full board with money but no hammers left is game over, unless land can sti
   const s = withGrid(cells, { cur: 4, coins: TT.LAND_PRICE[0] - 1 });
   s.stock.hammer = 0;
   assert(TT.place(s, 35).state.over, 'no hammer and too poor for land');
-  const rich = withGrid(cells, { cur: 4, coins: 500 });
+  const rich = withGrid(cells, { cur: 4, coins: TT.LAND_PRICE[0] });
   rich.stock.hammer = 0;
   const f = TT.place(rich, 35).state;
   assert(!f.over, 'can still buy land');
@@ -605,13 +605,13 @@ t('hammer can clear a fox; crystal and fox queue weights are valid', () => {
 });
 
 t('land: each side once, dearer every time, items keep their place, board grows', () => {
-  let s = withGrid({ [I(0, 0)]: 1, [I(5, 5)]: 2 }, { coins: 10000 });
+  let s = withGrid({ [I(0, 0)]: 1, [I(5, 5)]: 2 }, { coins: 100000 });
   assert.strictEqual(TT.landPrice(s), TT.LAND_PRICE[0]);
   assert(TT.LAND_PRICE.every((p, k) => k === 0 || p > TT.LAND_PRICE[k - 1]), 'prices rise');
   let r = TT.buyLand(s, 'top');
   assert.strictEqual(r.state.h, 7); assert.strictEqual(r.state.w, 6); assert.strictEqual(r.state.grid.length, 42);
   assert.strictEqual(r.state.grid[6 + 0], 1, 'old (0,0) is now (1,0)'); assert.strictEqual(r.state.grid[6 + 35], 2);
-  assert.strictEqual(r.state.coins, 10000 - TT.LAND_PRICE[0]); assert.strictEqual(r.state.turn, s.turn, 'free action');
+  assert.strictEqual(r.state.coins, 100000 - TT.LAND_PRICE[0]); assert.strictEqual(r.state.turn, s.turn, 'free action');
   assert.deepStrictEqual(TT.validate(r.state), []);
   s = r.state;
   assert.strictEqual(TT.buyLand(s, 'top'), null, 'one row per side');
@@ -620,7 +620,7 @@ t('land: each side once, dearer every time, items keep their place, board grows'
   s = r.state;
   assert.strictEqual(s.w, 7); assert.strictEqual(s.grid.length, 49);
   assert.strictEqual(s.grid[7 * 1 + 1], 1, 'old item shifted down a row and right a column');
-  assert.strictEqual(r.state.coins, 10000 - TT.LAND_PRICE[0] - TT.LAND_PRICE[1]);
+  assert.strictEqual(r.state.coins, 100000 - TT.LAND_PRICE[0] - TT.LAND_PRICE[1]);
   s = TT.buyLand(s, 'right').state; s = TT.buyLand(s, 'bottom').state;
   assert.strictEqual(s.w, 8); assert.strictEqual(s.h, 8); assert.strictEqual(s.grid.length, 64);
   assert.strictEqual(TT.landPrice(s), null); assert.strictEqual(TT.buyLand(s, 'top'), null, 'at most 4');

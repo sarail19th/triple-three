@@ -118,7 +118,7 @@
   function milestoneScore(n) { return n < MILESTONES.length ? MILESTONES[n] : MILESTONES[MILESTONES.length - 1] * (n - MILESTONES.length + 2); }
   // Land: one extra row/column per side, each side once, dearer every time.
   var SIDES = ['top', 'bottom', 'left', 'right'];
-  var LAND_PRICE = [150, 400, 1000, 2500];
+  var LAND_PRICE = [1000, 2500, 6000, 15000]; // one row or column each; the first is a mid-game purchase (owner: the starter price must be higher)
   // The shop always sells grass, bush and tree; a higher building tier is unlocked once one has stood on the board.
   var STARTER_TIER = 3;
 
