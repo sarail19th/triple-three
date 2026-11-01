@@ -444,20 +444,20 @@ with sync_playwright() as p:
     load(g, cur=1, next=1)
     page.tap('#menuBtn')
     if page.locator('#settingsPanel').is_hidden(): page.tap('#settingsToggle')
-    assert page.locator('#hapticLink').is_visible() and 'on' in page.inner_text('#hapticLink'); page.tap('#menuClose')
+    assert page.locator('#hapticLink').is_visible() and page.get_attribute('#hapticLink', 'aria-checked') == 'true'; page.tap('#menuClose')
     page.evaluate('window.__vib.length = 0')
     tap_cell(page, 3, True)
     assert page.evaluate('window.__vib.length') >= 1, 'placing buzzes while haptics are on'
     menu_tap(page, '#hapticLink')
-    assert 'off' in page.inner_text('#hapticLink') and page.evaluate("JSON.parse(localStorage.getItem('tt-haptics'))") is False
+    assert page.get_attribute('#hapticLink', 'aria-checked') == 'false' and page.evaluate("JSON.parse(localStorage.getItem('tt-haptics'))") is False
     page.tap('#menuClose')
     page.evaluate('window.__vib.length = 0')
     tap_cell(page, 5, True)
     assert page.evaluate('window.__vib.length') == 0, 'no buzzing once haptics are off'
     page.reload(); page.wait_for_selector('#board .cell')
-    assert 'off' in page.inner_text('#hapticLink'), 'the choice survives a reload'
+    assert page.get_attribute('#hapticLink', 'aria-checked') == 'false', 'the choice survives a reload'
     menu_tap(page, '#hapticLink')
-    assert 'on' in page.inner_text('#hapticLink') and page.evaluate('window.__vib.length') >= 1, 'switching it on gives a sample buzz'
+    assert page.get_attribute('#hapticLink', 'aria-checked') == 'true' and page.evaluate('window.__vib.length') >= 1, 'switching it on gives a sample buzz'
     page.tap('#menuClose')
     page.evaluate('window.__vib.length = 0')
     tap_cell(page, 7, True)
@@ -471,26 +471,26 @@ with sync_playwright() as p:
     crit = lambda: page.evaluate('window.ttDebug.critters().length')
     assert crit() > 0, 'critters live on the houses'
     menu_tap(page, '#critterLink')
-    assert 'off' in page.inner_text('#critterLink') and page.evaluate("JSON.parse(localStorage.getItem('tt-critters'))") is False and crit() == 0 and page.locator('#critters .crit').count() == 0
+    assert page.get_attribute('#critterLink', 'aria-checked') == 'false' and page.evaluate("JSON.parse(localStorage.getItem('tt-critters'))") is False and crit() == 0 and page.locator('#critters .crit').count() == 0
     page.tap('#menuClose'); tap_cell(page, 1, True)
     assert crit() == 0, 'still none after a move'
     page.reload(); page.wait_for_selector('#board .cell'); page.wait_for_timeout(500)
-    assert crit() == 0 and 'off' in page.inner_text('#critterLink'), 'the choice survives a reload'
+    assert crit() == 0 and page.get_attribute('#critterLink', 'aria-checked') == 'false', 'the choice survives a reload'
     menu_tap(page, '#critterLink'); page.tap('#menuClose')
-    assert 'on' in page.inner_text('#critterLink') and crit() > 0, 'switching them back on brings them back'
+    assert page.get_attribute('#critterLink', 'aria-checked') == 'true' and crit() > 0, 'switching them back on brings them back'
     page.evaluate("localStorage.setItem('tt-season', JSON.stringify('winter'))"); page.reload(); page.wait_for_selector('#board .cell')
     flakes = lambda: page.locator('#seasonFx i').count()
     assert flakes() > 0, 'snow falls in winter'
     menu_tap(page, '#weatherLink')
-    assert 'off' in page.inner_text('#weatherLink') and flakes() == 0 and page.evaluate("JSON.parse(localStorage.getItem('tt-weather'))") is False, 'no snowfall'
+    assert page.get_attribute('#weatherLink', 'aria-checked') == 'false' and flakes() == 0 and page.evaluate("JSON.parse(localStorage.getItem('tt-weather'))") is False, 'no snowfall'
     page.tap('#menuClose'); page.reload(); page.wait_for_selector('#board .cell')
     assert flakes() == 0, 'the choice survives a reload'
-    menu_tap(page, '#weatherLink'); assert flakes() > 0 and 'on' in page.inner_text('#weatherLink')
+    menu_tap(page, '#weatherLink'); assert flakes() > 0 and page.get_attribute('#weatherLink', 'aria-checked') == 'true'
     html_class = lambda: page.evaluate("document.documentElement.classList.contains('no-anim')")
     anim = lambda: page.evaluate("getComputedStyle(document.querySelector('#seasonFx i')).animationName")
     assert not html_class() and anim() == 'sfall'
     menu_tap(page, '#motionLink')
-    assert html_class() and anim() == 'none' and 'off' in page.inner_text('#motionLink') and page.evaluate("JSON.parse(localStorage.getItem('tt-motion'))") is False, 'animations off'
+    assert html_class() and anim() == 'none' and page.get_attribute('#motionLink', 'aria-checked') == 'false' and page.evaluate("JSON.parse(localStorage.getItem('tt-motion'))") is False, 'animations off'
     page.tap('#menuClose'); page.reload(); page.wait_for_selector('#board .cell')
     assert html_class(), 'the choice survives a reload'
     menu_tap(page, '#motionLink'); page.tap('#menuClose')
