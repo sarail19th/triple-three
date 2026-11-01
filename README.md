@@ -1,10 +1,30 @@
-# Triple Three 🌱🌿🌳
+<p align="center">
+  <img src="docs/icon.png" width="128" height="128" alt="Triple Three icon">
+</p>
+
+<h1 align="center">Triple Three 🌱🌿🌳</h1>
+
+<p align="center">
+  <a href="https://sarail19th.github.io/triple-three/"><b>▶ Play now</b></a> ·
+  <a href="https://twitter.com/intent/tweet?text=Triple%20Three%20%F0%9F%8C%B1%E2%86%92%F0%9F%8F%AC%20A%20free%20emoji%20merge%20puzzle%3A%20match%203%2C%20trap%20the%20bears%2C%20build%20banks.&url=https%3A%2F%2Fsarail19th.github.io%2Ftriple-three%2F">Post on X</a> ·
+  <a href="https://www.facebook.com/sharer/sharer.php?u=https%3A%2F%2Fsarail19th.github.io%2Ftriple-three%2F">Facebook</a> ·
+  <a href="https://www.reddit.com/submit?url=https%3A%2F%2Fsarail19th.github.io%2Ftriple-three%2F&title=Triple%20Three%3A%20a%20free%20emoji%20merge%20puzzle">Reddit</a> ·
+  <a href="https://t.me/share/url?url=https%3A%2F%2Fsarail19th.github.io%2Ftriple-three%2F&text=Triple%20Three%3A%20a%20free%20emoji%20merge%20puzzle">Telegram</a>
+</p>
+
+<p align="center">
+  <img src="docs/screenshot.png" width="300" alt="Triple Three on a phone: a 6x6 board of emoji plants and huts, with the reserve, next item and shop buttons">
+</p>
 
 A merge-puzzle game played in the browser, built from emoji. Place the next item on a 6x6 board, line up three of a kind and they merge into the next tier, while bears wander the board and get trapped into tombstones. It is a free hobby project inspired by the classic genre, with its own name, code and art.
 
 Plain HTML, CSS and JavaScript. No framework, no runtime dependencies, no image files. It installs as a PWA and works offline.
 
 **Play:** <https://sarail19th.github.io/triple-three/> (deployed from `main` by GitHub Pages)
+
+## Spread the word
+
+Like it? Tell a friend. In the game, **☰ Menu → 📣 Share** opens the phone's share sheet (or copy-link and post buttons for X, Facebook, WhatsApp, Telegram and Reddit) with your score. Links to the site show a preview card (`docs/social.png`) on social networks.
 
 ## How to play
 
@@ -60,6 +80,7 @@ python test/ui_test.py
 | `gen/icons.js` | Pure Node PNG writer for the PWA icons. |
 | `test/` | Node logic tests and the Playwright UI test. |
 | `docs/GAME_BRIEF.md` | The game spec. |
+| `docs/icon.png`, `docs/screenshot.png`, `docs/social.png` | README icon and screenshot, and the 1200x630 link-preview card (`build.js` copies `social.png` to `dist/`). |
 | `docs/IDEAS.md` | Roadmap notes. |
 | `CLAUDE.md` | Detailed design notes and rules for working on the code. |
 

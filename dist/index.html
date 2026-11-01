@@ -6,6 +6,20 @@
 <meta name="theme-color" content="#14301f">
 <meta name="mobile-web-app-capable" content="yes">
 <title>Triple Three</title>
+<meta name="description" content="Triple Three: a free emoji merge-puzzle game. Match 3 to grow 🌱 into 🏬, trap the bears, build banks. Plays in your browser, installs as an app.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Triple Three">
+<meta property="og:title" content="Triple Three 🌱🌿🌳🏠🏬">
+<meta property="og:description" content="A free emoji merge-puzzle game. Match 3 to grow 🌱 into 🏬, trap the bears, build banks. Plays in your browser, installs as an app.">
+<meta property="og:url" content="https://sarail19th.github.io/triple-three/">
+<meta property="og:image" content="https://sarail19th.github.io/triple-three/social.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Triple Three 🌱🌿🌳🏠🏬">
+<meta name="twitter:description" content="A free emoji merge-puzzle game. Match 3 to grow 🌱 into 🏬, trap the bears, build banks.">
+<meta name="twitter:image" content="https://sarail19th.github.io/triple-three/social.png">
+<link rel="canonical" href="https://sarail19th.github.io/triple-three/">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -233,6 +247,8 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 .menugrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 8px 0; }
 .menuitem { position: relative; margin: 0; padding: 12px 6px; font-size: 14px; }
 .menuitem[hidden] { display: none; }
+a.btn.menuitem { display: flex; align-items: center; justify-content: center; text-decoration: none; color: var(--ink); }
+#share .menuitem.primary { background: var(--accent); color: #2b2100; border-color: var(--accent); }
 .menuitem.wide { grid-column: 1 / -1; }
 #menu .updatebtn { display: block; width: 100%; margin: 4px 0 8px; padding: 10px 12px; }
 .dot { position: absolute; top: 5px; right: 5px; width: 11px; height: 11px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px #14301f; }
@@ -455,6 +471,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     <div class="menugrid">
       <button id="newBtn" class="btn menuitem wide" type="button" aria-label="New game">⟳ New game</button>
       <button id="worldLink" class="btn menuitem" type="button">🗺️ World</button>
+      <button id="shareLink" class="btn menuitem" type="button">📣 Share</button>
       <button id="questsLink" class="btn menuitem" type="button">🏆 Quests<i id="questsDot" class="dot" hidden></i></button>
       <button id="helpLink" class="btn menuitem" type="button">📖 How to play</button>
       <button id="guideLink" class="btn menuitem" type="button">🧾 Item guide</button>
@@ -468,6 +485,23 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
     <p class="gnote">Game: <span id="seed">seed</span></p>
     <p class="gnote"><a href="https://github.com/sarail19th/triple-three" target="_blank" rel="noopener noreferrer">Source on GitHub</a></p>
     <button id="menuClose" class="btn primary">Close</button>
+  </div>
+</div>
+
+<div id="share" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Share">
+  <div class="card">
+    <h2>📣 Share Triple Three</h2>
+    <p id="shareText" class="gnote"></p>
+    <div class="menugrid">
+      <button id="shareNative" class="btn menuitem wide primary" type="button" hidden>📤 Share…</button>
+      <button id="shareCopy" class="btn menuitem wide" type="button">🔗 Copy link</button>
+      <a class="btn menuitem" id="shareX" target="_blank" rel="noopener noreferrer">𝕏 Post</a>
+      <a class="btn menuitem" id="shareFb" target="_blank" rel="noopener noreferrer">Facebook</a>
+      <a class="btn menuitem" id="shareWa" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+      <a class="btn menuitem" id="shareTg" target="_blank" rel="noopener noreferrer">Telegram</a>
+      <a class="btn menuitem wide" id="shareRd" target="_blank" rel="noopener noreferrer">Reddit</a>
+    </div>
+    <button id="shareClose" class="btn primary">Close</button>
   </div>
 </div>
 
@@ -624,7 +658,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
       </section>
     </div>
     <div class="pager"><button id="helpPrev" class="btn" aria-label="Previous page">‹ Back</button><span id="helpPageLabel" aria-live="polite"></span><button id="helpNext" class="btn" aria-label="Next page">Next ›</button></div>
-    <p class="gnote">Version <b id="buildId">fe29de73</b> · update with the ↻ <b>Update</b> button at the top of the game<br>(it keeps your saved game and best scores)</p>
+    <p class="gnote">Version <b id="buildId">820d4300</b> · update with the ↻ <b>Update</b> button at the top of the game<br>(it keeps your saved game and best scores)</p>
     <div class="helpbtns"><button id="helpTour" class="btn">▶ Quick tour</button><button id="helpClose" class="btn primary">Got it</button></div>
   </div>
 </div>
@@ -2777,7 +2811,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   $('toolCancel').addEventListener('click', function () { mode = null; moveFrom = -1; sel = -1; render([]); });
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
-    if (!$('tour').classList.contains('hidden')) endTour(); else { closeShop(); closeMenu(); }
+    if (!$('tour').classList.contains('hidden')) endTour(); else { closeShop(); closeMenu(); closeShare(); }
   });
   $('newBtn').addEventListener('click', function () { closeShop(); openNewGame(); });
   $('newCancel').addEventListener('click', function () { $('newGame').classList.add('hidden'); });
@@ -2856,7 +2890,38 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
   $('menuBtn').addEventListener('click', openMenu);
   $('menuClose').addEventListener('click', closeMenu);
   $('menu').addEventListener('click', function (e) {
-    if (e.target === this || (e.target.closest && e.target.closest('#newBtn, #worldLink, #questsLink, #helpLink, #guideLink, #updateBtn'))) closeMenu();
+    if (e.target === this || (e.target.closest && e.target.closest('#newBtn, #worldLink, #questsLink, #helpLink, #guideLink, #shareLink, #updateBtn'))) closeMenu();
+  });
+  // ---- sharing: the native share sheet where there is one, otherwise copy-link plus post links for the common networks.
+  // The link is always the public site (not the current URL, which may carry a #seed= or a local address).
+  var SITE_URL = 'https://sarail19th.github.io/triple-three/';
+  function shareMessage() {
+    return state.turn > 0 && state.score > 0
+      ? 'I scored ' + fmt(state.score) + ' in Triple Three 🌱→🏬 Can you beat it? Free emoji merge puzzle, plays in the browser.'
+      : 'Triple Three 🌱→🏬 A free emoji merge puzzle: match 3, trap the bears, build banks. Plays in the browser.';
+  }
+  function openShare() {
+    var msg = shareMessage(), u = encodeURIComponent(SITE_URL), t = encodeURIComponent(msg);
+    $('shareText').textContent = msg;
+    $('shareX').href = 'https://twitter.com/intent/tweet?text=' + t + '&url=' + u;
+    $('shareFb').href = 'https://www.facebook.com/sharer/sharer.php?u=' + u;
+    $('shareWa').href = 'https://wa.me/?text=' + encodeURIComponent(msg + ' ' + SITE_URL);
+    $('shareTg').href = 'https://t.me/share/url?url=' + u + '&text=' + t;
+    $('shareRd').href = 'https://www.reddit.com/submit?url=' + u + '&title=' + encodeURIComponent('Triple Three: a free emoji merge puzzle');
+    $('shareNative').hidden = !navigator.share;
+    $('share').classList.remove('hidden');
+  }
+  function closeShare() { $('share').classList.add('hidden'); }
+  $('shareLink').addEventListener('click', openShare);
+  $('shareClose').addEventListener('click', closeShare);
+  $('share').addEventListener('click', function (e) { if (e.target === this) closeShare(); });
+  $('shareNative').addEventListener('click', function () {
+    try { navigator.share({ title: 'Triple Three', text: shareMessage(), url: SITE_URL }).catch(function () {}); } catch (err) {}
+  });
+  $('shareCopy').addEventListener('click', function () {
+    var b = this, done = function () { b.textContent = '✅ Link copied'; setTimeout(function () { b.textContent = '🔗 Copy link'; }, 1800); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(SITE_URL).then(done, function () { window.prompt('Copy this link', SITE_URL); });
+    else window.prompt('Copy this link', SITE_URL);
   });
   // ---- the quests screen: titles first, then the achievements, each with its progress
   var questsPage = 0;

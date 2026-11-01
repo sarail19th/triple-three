@@ -14,6 +14,9 @@ const html = template.replace('__BUILD__', v);
 fs.mkdirSync(path.join(__dirname, 'dist'), { recursive: true });
 fs.writeFileSync(path.join(__dirname, 'dist/index.html'), html);
 
+// the link-preview card used by the og:image / twitter:image meta tags
+if (fs.existsSync(path.join(__dirname, 'docs/social.png'))) fs.copyFileSync(path.join(__dirname, 'docs/social.png'), path.join(__dirname, 'dist/social.png'));
+
 fs.writeFileSync(path.join(__dirname, 'dist/manifest.webmanifest'), JSON.stringify({
   name: 'Triple Three', short_name: 'Triple Three', start_url: './', scope: './', display: 'standalone',
   orientation: 'portrait', background_color: '#0f2418', theme_color: '#14301f',
