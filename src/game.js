@@ -1124,6 +1124,13 @@
   // Haptics stay open so you can see them change.
   function openMenu() { closeShop(); refreshDots(); $('menu').classList.remove('hidden'); }
   function closeMenu() { $('menu').classList.add('hidden'); }
+  // the rarely changed switches (Season, Haptics, Critters, Weather, Animations) fold away under one Settings row; the pick is remembered
+  function showSettings(open) {
+    $('settingsPanel').hidden = !open; $('settingsToggle').setAttribute('aria-expanded', open ? 'true' : 'false');
+    $('settingsToggle').textContent = open ? '⚙️ Settings ▴' : '⚙️ Settings ▾';
+  }
+  $('settingsToggle').addEventListener('click', function () { var open = $('settingsPanel').hidden; showSettings(open); store.set('tt-settings-open', open); });
+  showSettings(store.get('tt-settings-open', false) === true);
   $('menuBtn').addEventListener('click', openMenu);
   $('menuClose').addEventListener('click', closeMenu);
   $('menu').addEventListener('click', function (e) {
@@ -1383,7 +1390,7 @@
     { target: '.panel', title: '🌱 Place and Next', text: '<b>Place</b> is the item you will put down now, <b>Next</b> is the one after it. <b>Tap the ⇄ button between them to swap them</b> (tapping the Next item works too): free, as often as you like.' },
     { target: '#holdBtn', title: '📦 Reserve', text: 'Store the current item here for later. Tap it again to swap with what is stored. Also free.' },
     { target: '.hud .stat', title: '⭐ Score and coins', text: 'Every merge adds to your <b>score</b> and pays 🪙 <b>coins</b> (bigger groups pay more). Coins buy things in the shop. <b>Best</b> is your top score on this map.' },
-    { target: '#menuBtn', title: '☰ Menu', text: 'Everything else is in here: <b>🗺️ World</b> (nine regions in a 3×3 grid, each its own game: the calm Meadow in the middle, harder ones further out; build a 🏘️ village in the Meadow to open the next), <b>🏆 Quests</b> (quests, achievements and titles with your progress), <b>How to play</b> and this tour, the <b>Item guide</b>, the <b>🎨 Season</b> theme, <b>Haptics</b>, and <b>↻ Update</b> (it keeps your saved game and best scores), and <b>⟳ New game</b> (in a region it restarts that region on its own map; in the <b>Custom game</b> you choose the map, the bear mode and whether foxes appear; it warns you before it erases the game you are playing). A <b>gold dot</b> on the button means something is new: a finished quest or a newer version.' },
+    { target: '#menuBtn', title: '☰ Menu', text: 'Everything else is in here: <b>🗺️ World</b> (nine regions in a 3×3 grid, each its own game: the calm Meadow in the middle, harder ones further out; build a 🏘️ village in the Meadow to open the next), <b>🏆 Quests</b> (quests, achievements and titles with your progress), <b>How to play</b> and this tour, the <b>Item guide</b>, <b>📣 Share</b>, <b>💾 Backup</b> (save your games as a file or code), a folded <b>⚙️ Settings</b> row (Season, Haptics, Critters, Weather, Animations), and <b>↻ Update</b> (it keeps your saved game and best scores), and <b>⟳ New game</b> (in a region it restarts that region on its own map; in the <b>Custom game</b> you choose the map, the bear mode and whether foxes appear; it warns you before it erases the game you are playing). A <b>gold dot</b> on the button means something is new: a finished quest or a newer version.' },
     { target: '.topinfo', title: '📋 Turn and calendar', text: 'The turn counter with the 📅 calendar (10 turns = a month, 12 months = a year) and, once you own a bank, the ⏱ clock speed (tap to cycle 1×, 2×, 3×, paused). The 🏞️ lake quest lives in 🏆 Quests now, and the game seed and map are at the bottom of the ☰ Menu.' },
     { target: '#undoBtn', title: '↶ Undo', text: 'Takes back your last move, or your last 🚚 mover, 🔨 hammer or 🪤 trap use (a mover drop that merges at once, say). It costs a few coins, and only one step can be undone.' },
     { target: '#previewBtn', title: '👁 Preview', text: 'Shows what a tap would do before you place. Turn it off to place with a single tap.' },

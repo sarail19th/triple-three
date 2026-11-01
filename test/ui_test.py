@@ -115,6 +115,8 @@ def menu_tap(page, selector):
     if page.locator('#menu').is_hidden():
         page.tap('#menuBtn')
     assert page.locator('#menu').is_visible(), 'the menu opens'
+    if selector in ('#seasonLink', '#hapticLink', '#critterLink', '#weatherLink', '#motionLink') and page.locator('#settingsPanel').is_hidden():
+        page.tap('#settingsToggle')   # the switches fold away under Settings
     page.tap(selector)
 
 
@@ -440,7 +442,9 @@ with sync_playwright() as p:
 
     g = [0] * 36
     load(g, cur=1, next=1)
-    page.tap('#menuBtn'); assert page.locator('#hapticLink').is_visible() and 'on' in page.inner_text('#hapticLink'); page.tap('#menuClose')
+    page.tap('#menuBtn')
+    if page.locator('#settingsPanel').is_hidden(): page.tap('#settingsToggle')
+    assert page.locator('#hapticLink').is_visible() and 'on' in page.inner_text('#hapticLink'); page.tap('#menuClose')
     page.evaluate('window.__vib.length = 0')
     tap_cell(page, 3, True)
     assert page.evaluate('window.__vib.length') >= 1, 'placing buzzes while haptics are on'
@@ -1185,7 +1189,14 @@ with sync_playwright() as p:
     assert page.evaluate("document.querySelector('.topinfo').getBoundingClientRect().height") < 40, 'a single slim info line'
     assert page.evaluate("document.getElementById('menuBtn').getBoundingClientRect().right <= document.querySelector('.hud').getBoundingClientRect().right + 1 && document.getElementById('menuBtn').getBoundingClientRect().top < 80"), 'the menu button sits at the top right'
     page.tap('#menuBtn')
-    assert all(page.locator(x).is_visible() for x in ['#worldLink', '#questsLink', '#helpLink', '#guideLink', '#seasonLink', '#hapticLink', '#updateBtn', '#seed']), 'every button is in the menu'
+    assert all(page.locator(x).is_visible() for x in ['#worldLink', '#questsLink', '#helpLink', '#guideLink', '#shareLink', '#backupLink', '#settingsToggle', '#updateBtn', '#seed']), 'every button is in the menu'
+    if page.locator('#settingsPanel').is_visible(): page.tap('#settingsToggle')   # earlier tests left it unfolded (the pick is remembered)
+    assert page.locator('#settingsPanel').is_hidden() and all(page.locator(x).is_hidden() for x in ['#seasonLink', '#hapticLink', '#critterLink', '#weatherLink', '#motionLink']), 'the switches are folded under Settings'
+    page.tap('#settingsToggle')
+    assert all(page.locator(x).is_visible() for x in ['#seasonLink', '#hapticLink', '#critterLink', '#weatherLink', '#motionLink']) and page.get_attribute('#settingsToggle', 'aria-expanded') == 'true', 'Settings unfolds the switches'
+    assert page.evaluate("document.querySelector('#menu .card').scrollHeight <= document.querySelector('#menu .card').clientHeight + 1"), 'the unfolded menu still fits the screen'
+    page.tap('#settingsToggle')
+    assert page.locator('#settingsPanel').is_hidden() and page.evaluate("JSON.parse(localStorage.getItem('tt-settings-open'))") is False, 'and folds again'
     page.keyboard.press('Escape'); assert page.locator('#menu').is_hidden()
     page.tap('#menuBtn'); page.mouse.click(5, 5); assert page.locator('#menu').is_hidden(), 'a tap outside closes it'
     page.evaluate("localStorage.setItem('tt-earned', JSON.stringify(['village'])); localStorage.setItem('tt-quests-seen', '0')")
