@@ -222,19 +222,35 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 .menugrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 8px 0; }
 .menuitem { position: relative; margin: 0; padding: 12px 6px; font-size: 14px; }
 .menuitem[hidden] { display: none; }
-.menugrid.settings { margin-top: 0; padding-top: 8px; border-top: 1px dashed #1d4a30; }
+.menugrid.settings { margin-top: 0; }
+/* the settings rows are flat: a soft fill, no borders (owner's request) */
+.menugrid.settings .menuitem { border: 0; background: #1d3f2c; }
+.menugrid.settings .menuitem:active { filter: brightness(1.25); }
+.opts.seasons { grid-template-columns: repeat(2, 1fr); }
+.seasons .opt[data-pick="auto"] { grid-column: 1 / -1; }
+.seasoncard { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 4px; font-size: 13px; }
+.seasoncard .mini { width: 92px; height: 92px; border-radius: 8px; }
+.seasoncard .mini span { font-size: 11px; }
 .menuitem.sw { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; text-align: left; }
 .menuitem.sw[hidden] { display: none; }
-.swt { flex: none; position: relative; width: 46px; height: 26px; border-radius: 999px; background: #0c1d13; border: 2px solid #2b5b3f; transition: background .15s, border-color .15s; }
-.swt i { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #7da08a; transition: transform .15s, background .15s; }
-.sw[aria-checked="true"] .swt { background: var(--accent); border-color: var(--accent); }
+.swv { color: var(--muted); font-size: 13px; }
+.swt { flex: none; position: relative; width: 46px; height: 26px; border-radius: 999px; background: #0c1d13; transition: background .15s; }
+.swt i { position: absolute; top: 4px; left: 4px; width: 18px; height: 18px; border-radius: 50%; background: #7da08a; transition: transform .15s, background .15s; }
+.sw[aria-checked="true"] .swt { background: var(--accent); }
 .sw[aria-checked="true"] .swt i { transform: translateX(20px); background: #2b2100; }
 .menugrid.settings[hidden] { display: none; }
 a.btn.menuitem { display: flex; align-items: center; justify-content: center; text-decoration: none; color: var(--ink); }
 #backupCode { width: 100%; box-sizing: border-box; background: #0c1d13; color: var(--ink); border: 2px solid #1d4a30; border-radius: 10px; padding: 8px; font: 12px/1.3 monospace; resize: none; word-break: break-all; }
 #share .menuitem.primary { background: var(--accent); color: #2b2100; border-color: var(--accent); }
 .menuitem.wide { grid-column: 1 / -1; }
-#menu .updatebtn { display: block; width: 100%; margin: 4px 0 8px; padding: 10px 12px; }
+#menu .updatebtn { margin: 0; padding: 8px 6px; border-radius: 12px; border: 2px solid var(--accent); white-space: pre-line; line-height: 1.15; font-size: 14px; }
+#menu .updatebtn.ready { font-size: 12px; }
+.menuitem.cta { margin: 8px 0 2px; border-color: #8a6d1c; background: #2a2410; color: var(--accent); }
+.shortonly { display: none; } html.noquick .shortonly { display: block; }
+/* the shortcut row under the score line (Item guide / World / Quests) */
+.quick { order: 1; width: var(--bs); display: flex; gap: 6px; margin-top: 2px; }
+.quick[hidden] { display: none; }
+.qbtn { flex: 1; position: relative; padding: 9px 4px; font-size: 13px; }
 .dot { position: absolute; top: 5px; right: 5px; width: 11px; height: 11px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px #14301f; }
 .dot[hidden] { display: none; }
 .tray .dot { top: 4px; right: 4px; }
@@ -272,6 +288,7 @@ a.btn.menuitem { display: flex; align-items: center; justify-content: center; te
   .hud { grid-column: 1; grid-row: 1; }
   .topinfo { grid-column: 1; grid-row: 2; width: auto; }
   #boardWrap { grid-column: 1; grid-row: 3; }
+  .quick { grid-column: 1; grid-row: 4; width: auto; order: 0; }
   .side { display: flex; flex-direction: column; gap: 8px; grid-column: 2; grid-row: 1 / span 3; width: 340px; padding-top: 4px; }
   .side > * { width: auto; }
   .panel, .actions, .noterow, .topinfo { order: 0; margin-top: 0; }
@@ -301,18 +318,19 @@ a.btn.menuitem { display: flex; align-items: center; justify-content: center; te
 #helpTour { margin-bottom: 8px; }
 
 /* seasons: the same tokens, different colours (summer is the default look); ambient petals / leaves / snow fall over the page */
-:root[data-season="spring"] { --bg: #12261c; --bg2: #1a3626; --g1: #92d672; --g2: #86cd66; --line: #4f8f38; --edge: #2b5a3c; --muted: #9bc4a6;
+:root[data-season="spring"], .smp[data-season="spring"] { --bg: #12261c; --bg2: #1a3626; --g1: #92d672; --g2: #86cd66; --line: #4f8f38; --edge: #2b5a3c; --muted: #9bc4a6;
   --deco: radial-gradient(circle at 30% 40%, #fff 0 1.5px, transparent 2.3px) 0 0 / 37px 41px, radial-gradient(circle at 70% 70%, #ffb3d4 0 1.7px, transparent 2.5px) 0 0 / 53px 47px, radial-gradient(circle at 20% 80%, #ffe27a 0 1.4px, transparent 2.2px) 0 0 / 61px 57px;
   --w1: #7fd0f8; --w2: #58b2ea; --w3: #4796d6;
   --h-rim: #bdeb97; --h-lip: #1d4a18; --h-out: #3d7c31; --h-in: #153713; --h-crack: #214d1c; }
-:root[data-season="autumn"] { --bg: #26180e; --bg2: #38220f; --g1: #b8b04a; --g2: #ada543; --line: #7d7424; --edge: #5b3b1b; --muted: #c9ab88;
+:root[data-season="autumn"], .smp[data-season="autumn"] { --bg: #26180e; --bg2: #38220f; --g1: #b8b04a; --g2: #ada543; --line: #7d7424; --edge: #5b3b1b; --muted: #c9ab88;
   --deco: radial-gradient(circle at 30% 40%, #e0762a 0 1.7px, transparent 2.5px) 0 0 / 41px 43px, radial-gradient(circle at 70% 70%, #a8501f 0 1.8px, transparent 2.6px) 0 0 / 57px 49px, radial-gradient(circle at 20% 80%, #f2b63c 0 1.5px, transparent 2.3px) 0 0 / 67px 59px;
   --w1: #7cc4cf; --w2: #55a3b5; --w3: #438a9f; --bank: #d9c78a;
   --h-rim: #cfa465; --h-lip: #3a2410; --h-out: #6a4526; --h-in: #1b0f07; --h-crack: #2b1a0d; }
-:root[data-season="winter"] { --bg: #0d1927; --bg2: #16293d; --g1: #f1f7fb; --g2: #e1edf5; --line: #a9c3d6; --edge: #2c4a63; --muted: #93b0c6;
+:root[data-season="winter"], .smp[data-season="winter"] { --bg: #0d1927; --bg2: #16293d; --g1: #f1f7fb; --g2: #e1edf5; --line: #a9c3d6; --edge: #2c4a63; --muted: #93b0c6;
   --deco: radial-gradient(circle at 30% 40%, #ffffff 0 1.6px, transparent 2.4px) 0 0 / 31px 33px, radial-gradient(circle at 70% 70%, #b9d6ea 0 1.8px, transparent 2.6px) 0 0 / 47px 43px;
   --w1: #d2f0fc; --w2: #aadcf2; --w3: #8cc7e6; --bank: #ffffff;
   --h-rim: #ffffff; --h-lip: #6fa8cf; --h-out: #a9d9f1; --h-in: #2d78b4; --h-crack: #84b8d8; }
+.smp[data-season="summer"] { --g1: #84c660; --g2: #7bbd57; --edge: #1d4a30; --w1: #6cc3f4; --w2: #4aa3e4; --w3: #3a86cc; }
 .season-fx { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 4; }
 .season-fx i { position: absolute; top: -8vh; font-style: normal; opacity: .6; animation: sfall linear infinite; will-change: transform; }
 @keyframes sfall { 0% { transform: translate(0, -8vh) rotate(0deg); } 50% { transform: translate(var(--sway), 55vh) rotate(180deg); } 100% { transform: translate(0, 110vh) rotate(360deg); } }

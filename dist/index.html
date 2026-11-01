@@ -247,19 +247,35 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-are
 .menugrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 8px 0; }
 .menuitem { position: relative; margin: 0; padding: 12px 6px; font-size: 14px; }
 .menuitem[hidden] { display: none; }
-.menugrid.settings { margin-top: 0; padding-top: 8px; border-top: 1px dashed #1d4a30; }
+.menugrid.settings { margin-top: 0; }
+/* the settings rows are flat: a soft fill, no borders (owner's request) */
+.menugrid.settings .menuitem { border: 0; background: #1d3f2c; }
+.menugrid.settings .menuitem:active { filter: brightness(1.25); }
+.opts.seasons { grid-template-columns: repeat(2, 1fr); }
+.seasons .opt[data-pick="auto"] { grid-column: 1 / -1; }
+.seasoncard { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 4px; font-size: 13px; }
+.seasoncard .mini { width: 92px; height: 92px; border-radius: 8px; }
+.seasoncard .mini span { font-size: 11px; }
 .menuitem.sw { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; text-align: left; }
 .menuitem.sw[hidden] { display: none; }
-.swt { flex: none; position: relative; width: 46px; height: 26px; border-radius: 999px; background: #0c1d13; border: 2px solid #2b5b3f; transition: background .15s, border-color .15s; }
-.swt i { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #7da08a; transition: transform .15s, background .15s; }
-.sw[aria-checked="true"] .swt { background: var(--accent); border-color: var(--accent); }
+.swv { color: var(--muted); font-size: 13px; }
+.swt { flex: none; position: relative; width: 46px; height: 26px; border-radius: 999px; background: #0c1d13; transition: background .15s; }
+.swt i { position: absolute; top: 4px; left: 4px; width: 18px; height: 18px; border-radius: 50%; background: #7da08a; transition: transform .15s, background .15s; }
+.sw[aria-checked="true"] .swt { background: var(--accent); }
 .sw[aria-checked="true"] .swt i { transform: translateX(20px); background: #2b2100; }
 .menugrid.settings[hidden] { display: none; }
 a.btn.menuitem { display: flex; align-items: center; justify-content: center; text-decoration: none; color: var(--ink); }
 #backupCode { width: 100%; box-sizing: border-box; background: #0c1d13; color: var(--ink); border: 2px solid #1d4a30; border-radius: 10px; padding: 8px; font: 12px/1.3 monospace; resize: none; word-break: break-all; }
 #share .menuitem.primary { background: var(--accent); color: #2b2100; border-color: var(--accent); }
 .menuitem.wide { grid-column: 1 / -1; }
-#menu .updatebtn { display: block; width: 100%; margin: 4px 0 8px; padding: 10px 12px; }
+#menu .updatebtn { margin: 0; padding: 8px 6px; border-radius: 12px; border: 2px solid var(--accent); white-space: pre-line; line-height: 1.15; font-size: 14px; }
+#menu .updatebtn.ready { font-size: 12px; }
+.menuitem.cta { margin: 8px 0 2px; border-color: #8a6d1c; background: #2a2410; color: var(--accent); }
+.shortonly { display: none; } html.noquick .shortonly { display: block; }
+/* the shortcut row under the score line (Item guide / World / Quests) */
+.quick { order: 1; width: var(--bs); display: flex; gap: 6px; margin-top: 2px; }
+.quick[hidden] { display: none; }
+.qbtn { flex: 1; position: relative; padding: 9px 4px; font-size: 13px; }
 .dot { position: absolute; top: 5px; right: 5px; width: 11px; height: 11px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px #14301f; }
 .dot[hidden] { display: none; }
 .tray .dot { top: 4px; right: 4px; }
@@ -297,6 +313,7 @@ a.btn.menuitem { display: flex; align-items: center; justify-content: center; te
   .hud { grid-column: 1; grid-row: 1; }
   .topinfo { grid-column: 1; grid-row: 2; width: auto; }
   #boardWrap { grid-column: 1; grid-row: 3; }
+  .quick { grid-column: 1; grid-row: 4; width: auto; order: 0; }
   .side { display: flex; flex-direction: column; gap: 8px; grid-column: 2; grid-row: 1 / span 3; width: 340px; padding-top: 4px; }
   .side > * { width: auto; }
   .panel, .actions, .noterow, .topinfo { order: 0; margin-top: 0; }
@@ -326,18 +343,19 @@ a.btn.menuitem { display: flex; align-items: center; justify-content: center; te
 #helpTour { margin-bottom: 8px; }
 
 /* seasons: the same tokens, different colours (summer is the default look); ambient petals / leaves / snow fall over the page */
-:root[data-season="spring"] { --bg: #12261c; --bg2: #1a3626; --g1: #92d672; --g2: #86cd66; --line: #4f8f38; --edge: #2b5a3c; --muted: #9bc4a6;
+:root[data-season="spring"], .smp[data-season="spring"] { --bg: #12261c; --bg2: #1a3626; --g1: #92d672; --g2: #86cd66; --line: #4f8f38; --edge: #2b5a3c; --muted: #9bc4a6;
   --deco: radial-gradient(circle at 30% 40%, #fff 0 1.5px, transparent 2.3px) 0 0 / 37px 41px, radial-gradient(circle at 70% 70%, #ffb3d4 0 1.7px, transparent 2.5px) 0 0 / 53px 47px, radial-gradient(circle at 20% 80%, #ffe27a 0 1.4px, transparent 2.2px) 0 0 / 61px 57px;
   --w1: #7fd0f8; --w2: #58b2ea; --w3: #4796d6;
   --h-rim: #bdeb97; --h-lip: #1d4a18; --h-out: #3d7c31; --h-in: #153713; --h-crack: #214d1c; }
-:root[data-season="autumn"] { --bg: #26180e; --bg2: #38220f; --g1: #b8b04a; --g2: #ada543; --line: #7d7424; --edge: #5b3b1b; --muted: #c9ab88;
+:root[data-season="autumn"], .smp[data-season="autumn"] { --bg: #26180e; --bg2: #38220f; --g1: #b8b04a; --g2: #ada543; --line: #7d7424; --edge: #5b3b1b; --muted: #c9ab88;
   --deco: radial-gradient(circle at 30% 40%, #e0762a 0 1.7px, transparent 2.5px) 0 0 / 41px 43px, radial-gradient(circle at 70% 70%, #a8501f 0 1.8px, transparent 2.6px) 0 0 / 57px 49px, radial-gradient(circle at 20% 80%, #f2b63c 0 1.5px, transparent 2.3px) 0 0 / 67px 59px;
   --w1: #7cc4cf; --w2: #55a3b5; --w3: #438a9f; --bank: #d9c78a;
   --h-rim: #cfa465; --h-lip: #3a2410; --h-out: #6a4526; --h-in: #1b0f07; --h-crack: #2b1a0d; }
-:root[data-season="winter"] { --bg: #0d1927; --bg2: #16293d; --g1: #f1f7fb; --g2: #e1edf5; --line: #a9c3d6; --edge: #2c4a63; --muted: #93b0c6;
+:root[data-season="winter"], .smp[data-season="winter"] { --bg: #0d1927; --bg2: #16293d; --g1: #f1f7fb; --g2: #e1edf5; --line: #a9c3d6; --edge: #2c4a63; --muted: #93b0c6;
   --deco: radial-gradient(circle at 30% 40%, #ffffff 0 1.6px, transparent 2.4px) 0 0 / 31px 33px, radial-gradient(circle at 70% 70%, #b9d6ea 0 1.8px, transparent 2.6px) 0 0 / 47px 43px;
   --w1: #d2f0fc; --w2: #aadcf2; --w3: #8cc7e6; --bank: #ffffff;
   --h-rim: #ffffff; --h-lip: #6fa8cf; --h-out: #a9d9f1; --h-in: #2d78b4; --h-crack: #84b8d8; }
+.smp[data-season="summer"] { --g1: #84c660; --g2: #7bbd57; --edge: #1d4a30; --w1: #6cc3f4; --w2: #4aa3e4; --w3: #3a86cc; }
 .season-fx { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 4; }
 .season-fx i { position: absolute; top: -8vh; font-style: normal; opacity: .6; animation: sfall linear infinite; will-change: transform; }
 @keyframes sfall { 0% { transform: translate(0, -8vh) rotate(0deg); } 50% { transform: translate(var(--sway), 55vh) rotate(180deg); } 100% { transform: translate(0, 110vh) rotate(360deg); } }
@@ -406,6 +424,12 @@ a.btn.menuitem { display: flex; align-items: center; justify-content: center; te
     <div><span id="turn">Turn 0</span><span id="speedBox" hidden> · <a href="#" id="speedLink" aria-label="Game clock speed">⏱ 1×</a></span></div>
     <div id="loanLine" class="questline loanline" role="button" tabindex="0" aria-label="Loans: open the bank" hidden></div>
   </div>
+
+  <nav id="quick" class="quick" aria-label="Shortcuts">
+    <button id="guideLink" class="btn qbtn" type="button">🧾 Item guide</button>
+    <button id="worldLink" class="btn qbtn" type="button">🗺️ World</button>
+    <button id="questsLink" class="btn qbtn" type="button">🏆 Quests<i id="questsDot" class="dot" hidden></i></button>
+  </nav>
 
   <div id="boardWrap">
     <div id="board" role="grid" aria-label="Game board"></div>
@@ -479,25 +503,35 @@ a.btn.menuitem { display: flex; align-items: center; justify-content: center; te
     <h2>☰ Menu</h2>
     <div class="menugrid">
       <button id="newBtn" class="btn menuitem wide" type="button" aria-label="New game">⟳ New game</button>
-      <button id="worldLink" class="btn menuitem" type="button">🗺️ World</button>
-      <button id="questsLink" class="btn menuitem" type="button">🏆 Quests<i id="questsDot" class="dot" hidden></i></button>
-      <button id="helpLink" class="btn menuitem" type="button">📖 How to play</button>
-      <button id="guideLink" class="btn menuitem" type="button">🧾 Item guide</button>
-      <button id="shareLink" class="btn menuitem" type="button">📣 Share</button>
       <button id="backupLink" class="btn menuitem" type="button">💾 Backup</button>
+      <button id="updateBtn" class="btn menuitem updatebtn" type="button" aria-label="Check for a newer version and update">↻ Update</button>
+      <button id="helpLink" class="btn menuitem wide" type="button">📖 How to play</button>
+      <!-- on short screens the shortcut row under the score is hidden (no free space), so the same three live here -->
+      <button id="menuGuide" class="btn menuitem wide shortonly" type="button" data-go="guideLink">🧾 Item guide</button>
+      <button id="menuWorld" class="btn menuitem shortonly" type="button" data-go="worldLink">🗺️ World</button>
+      <button id="menuQuests" class="btn menuitem shortonly" type="button" data-go="questsLink">🏆 Quests</button>
       <button id="settingsToggle" class="btn menuitem wide" type="button" aria-expanded="false" aria-controls="settingsPanel">⚙️ Settings ▾</button>
     </div>
     <div id="settingsPanel" class="menugrid settings" hidden>
-      <button id="seasonLink" class="btn menuitem wide" type="button" aria-label="Season theme">🎨 Season: auto</button>
+      <button id="seasonLink" class="btn menuitem wide sw" type="button" aria-label="Season theme" aria-haspopup="dialog"><span class="swl">🎨 Season</span><span id="seasonVal" class="swv"></span></button>
       <button id="hapticLink" class="btn menuitem wide sw" type="button" role="switch" aria-checked="true"><span class="swl">📳 Haptics</span><span class="swt" aria-hidden="true"><i></i></span></button>
       <button id="critterLink" class="btn menuitem wide sw" type="button" role="switch" aria-checked="true"><span class="swl">🐇 Critters</span><span class="swt" aria-hidden="true"><i></i></span></button>
       <button id="weatherLink" class="btn menuitem wide sw" type="button" role="switch" aria-checked="true"><span class="swl">🌦️ Weather</span><span class="swt" aria-hidden="true"><i></i></span></button>
       <button id="motionLink" class="btn menuitem wide sw" type="button" role="switch" aria-checked="true"><span class="swl">✨ Animations</span><span class="swt" aria-hidden="true"><i></i></span></button>
     </div>
-    <button id="updateBtn" class="updatebtn" type="button" aria-label="Check for a newer version and update">↻ Update · v<span id="verNow"></span></button>
-    <p class="gnote">Game: <span id="seed">seed</span></p>
+    <button id="shareLink" class="btn menuitem wide cta" type="button">📣 Share Triple Three</button>
+    <p class="gnote">Game: <span id="seed">seed</span> · v<span id="verNow"></span></p>
     <p class="gnote"><a href="https://github.com/sarail19th/triple-three" target="_blank" rel="noopener noreferrer">Source on GitHub</a></p>
     <button id="menuClose" class="btn primary">Close</button>
+  </div>
+</div>
+
+<div id="seasonDlg" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Season">
+  <div class="card">
+    <h2>🎨 Season</h2>
+    <p class="gnote">Changes the colours, plants and animals. Auto follows the calendar month.</p>
+    <div id="seasonCards" class="opts seasons"></div>
+    <button id="seasonClose" class="btn primary">Done</button>
   </div>
 </div>
 
@@ -647,7 +681,7 @@ a.btn.menuitem { display: flex; align-items: center; justify-content: center; te
         <li>Connect <b>3 or more</b> identical items (up, down, left, right) and <i>all</i> of them merge into one of the next tier on the tile you tapped (4 or 5 pay more points and coins, nothing is left over):<br>🌱 → 🌿 → 🌳 → 🏕️ → 🛖 → 🏠 → 🏘️ → 🏫 → 🏥 → 🏬 → 💵 <b>cash</b>: tap it to collect coins.</li>
         <li>Tap the <b>⇄</b> button between <b>Place</b> and <b>Next</b> (or the Next item itself) to swap them (free, as often as you like). The <b>Reserve</b> slot (left of Place) stores the current item for later (free swap). <b>Undo</b> takes back your last move, or your last 🚚 / 🔨 / 🪤 use, for a few coins (one step only).</li>
         <li>The game ends when the board is full and you cannot afford a hammer.</li>
-        <li>Your games live in this browser. Use <b>☰ Menu → 💾 Backup &amp; restore</b> to save them as a file or code, so clearing site data or changing phone does not lose them.</li>
+        <li>Your games live in this browser. Use <b>☰ Menu → 💾 Backup</b> to save them as a file or code, so clearing site data or changing phone does not lose them.</li>
         </ul>
       </section>
       <section class="helppage" data-title="Animals" hidden>
@@ -690,7 +724,7 @@ a.btn.menuitem { display: flex; align-items: center; justify-content: center; te
       </section>
     </div>
     <div class="pager"><button id="helpPrev" class="btn" aria-label="Previous page">‹ Back</button><span id="helpPageLabel" aria-live="polite"></span><button id="helpNext" class="btn" aria-label="Next page">Next ›</button></div>
-    <p class="gnote">Version <b id="buildId">52a6f045</b> · update with the ↻ <b>Update</b> button at the top of the game<br>(it keeps your saved game and best scores)</p>
+    <p class="gnote">Version <b id="buildId">252caf91</b> · update with the ↻ <b>Update</b> button at the top of the game<br>(it keeps your saved game and best scores)</p>
     <div class="helpbtns"><button id="helpTour" class="btn">▶ Quick tour</button><button id="helpClose" class="btn primary">Got it</button></div>
   </div>
 </div>
@@ -2055,18 +2089,21 @@ a.btn.menuitem { display: flex; align-items: center; justify-content: center; te
     autumn: { bear: ['🐗', 'boar'], fox: ['🦝', 'raccoon'] }, winter: { bear: ['🐺', 'wolf'], fox: ['🐇', 'rabbit'] } };
   var curSeason = 'summer';
   function em(code) { // the emoji to show for an item code
-    if (code === TT.MOUNTAIN && curSeason === 'winter') return '🏔️'; // snow-capped: the mountain turns white in winter
-    var p = PLANTS[curSeason];
+    return emIn(curSeason, code);
+  }
+  function emIn(sea, code) { // the same for any season (the season picker shows all of them at once)
+    if (code === TT.MOUNTAIN && sea === 'winter') return '🏔️'; // snow-capped: the mountain turns white in winter
+    var p = PLANTS[sea];
     if (p && p[code]) return p[code];
-    if (TT.isBear(code)) return SKINS[curSeason].bear[0];
-    return code === TT.FOX ? SKINS[curSeason].fox[0] : TT.EMOJI[code];
+    if (TT.isBear(code)) return SKINS[sea].bear[0];
+    return code === TT.FOX ? SKINS[sea].fox[0] : TT.EMOJI[code];
   }
   function nm(code) { // the name to show ('wolf' instead of 'bear' in winter; 'angry wolf'...)
     var n = TT.NAME[code];
     return TT.isBear(code) ? n.replace('bear', SKINS[curSeason].bear[1]) : code === TT.FOX ? SKINS[curSeason].fox[1] : n;
   }
   var SEASONS = ['auto', 'spring', 'summer', 'autumn', 'winter'];
-  var SEASON_LABEL = { auto: '🎨 Season: auto', spring: '🌸 Spring', summer: '☀️ Summer', autumn: '🍂 Autumn', winter: '❄️ Winter' };
+  var SEASON_LABEL = { auto: '🔄 Auto', spring: '🌸 Spring', summer: '☀️ Summer', autumn: '🍂 Autumn', winter: '❄️ Winter' };
   var SEASON_BITS = { spring: ['🌸', '🌼', '🌸'], autumn: ['🍂', '🍁', '🍂'], winter: ['❄️', '❄', '❄️'] };
   var season = store.get('tt-season', 'auto');
   if (SEASONS.indexOf(season) < 0) season = 'auto';
@@ -2075,7 +2112,7 @@ a.btn.menuitem { display: flex; align-items: center; justify-content: center; te
     var cur = season === 'auto' ? seasonNow() : season, fx = $('seasonFx'), bits = SEASON_BITS[cur] || [];
     document.documentElement.dataset.season = cur; curSeason = cur;
     if (typeof AREAS !== 'undefined') { AREAS[0].kinds = CRITTERS[cur].home; AREAS[1].kinds = CRITTERS[cur].grave; AREAS[2].kinds = CRITTERS[cur].water; }
-    $('seasonLink').textContent = SEASON_LABEL[season];
+    $('seasonVal').textContent = SEASON_LABEL[season] + ' ›';
     fx.innerHTML = '';
     if (!bits.length || !showWeather) return;
     for (var i = 0; i < 16; i++) {
@@ -2334,7 +2371,22 @@ a.btn.menuitem { display: flex; align-items: center; justify-content: center; te
     });
   }
 
+  // the shortcut row (Item guide / World / Quests) lives in the free space under the score line. It is shown only when that space really exists (tall phones, wide
+  // screens); on short screens it would push the map down, so it hides and the same three buttons appear in the Menu (`.shortonly`, shown by `html.noquick`).
+  var wideMQ = window.matchMedia ? window.matchMedia('(min-width: 900px) and (min-aspect-ratio: 5/4)') : { matches: false }, fitQueued = false;
+  function fitQuick() {
+    fitQueued = false;
+    var q = $('quick'), show = true;
+    if (!wideMQ.matches) {
+      q.hidden = false;
+      show = document.documentElement.scrollHeight <= window.innerHeight + 1; // shown only if nothing gets pushed off the screen
+    }
+    q.hidden = !show; document.documentElement.classList.toggle('noquick', !show);
+  }
+  function queueFit() { if (!fitQueued) { fitQueued = true; (window.requestAnimationFrame || setTimeout)(fitQuick); } }
+  window.addEventListener('resize', queueFit); window.addEventListener('orientationchange', queueFit);
   function render(events) {
+    queueFit();
     if (state.w !== bw || state.h !== bh) buildBoard();
     clearAnim();
     var g = state.grid, w = state.w;
@@ -2844,7 +2896,7 @@ a.btn.menuitem { display: flex; align-items: center; justify-content: center; te
   $('toolCancel').addEventListener('click', function () { mode = null; moveFrom = -1; sel = -1; render([]); });
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
-    if (!$('tour').classList.contains('hidden')) endTour(); else { closeShop(); closeMenu(); closeShare(); closeBackup(); }
+    if (!$('tour').classList.contains('hidden')) endTour(); else { closeShop(); closeMenu(); closeShare(); closeBackup(); closeSeason(); }
   });
   $('newBtn').addEventListener('click', function () { closeShop(); openNewGame(); });
   $('newCancel').addEventListener('click', function () { $('newGame').classList.add('hidden'); });
@@ -2928,9 +2980,10 @@ a.btn.menuitem { display: flex; align-items: center; justify-content: center; te
   $('settingsToggle').addEventListener('click', function () { var open = $('settingsPanel').hidden; showSettings(open); store.set('tt-settings-open', open); });
   showSettings(store.get('tt-settings-open', false) === true);
   $('menuBtn').addEventListener('click', openMenu);
+  document.querySelectorAll('.shortonly').forEach(function (b) { b.addEventListener('click', function () { $(b.dataset.go).click(); }); });
   $('menuClose').addEventListener('click', closeMenu);
   $('menu').addEventListener('click', function (e) {
-    if (e.target === this || (e.target.closest && e.target.closest('#newBtn, #worldLink, #questsLink, #helpLink, #guideLink, #shareLink, #backupLink, #updateBtn'))) closeMenu();
+    if (e.target === this || (e.target.closest && e.target.closest('#newBtn, #helpLink, #shareLink, #backupLink, #updateBtn, .shortonly'))) closeMenu();
   });
   // ---- sharing: the native share sheet where there is one, otherwise copy-link plus post links for the common networks.
   // The link is always the public site (not the current URL, which may carry a #seed= or a local address).
@@ -3100,7 +3153,7 @@ a.btn.menuitem { display: flex; align-items: center; justify-content: center; te
       var m = /triple-three-([0-9a-f]{8})/.exec(t);
       if (m && m[1] !== $('buildId').textContent) {
         var b = $('updateBtn'), fresh = !b.classList.contains('ready');
-        b.classList.add('ready'); b.textContent = '⬆️ New version v' + m[1] + ': tap to update'; refreshDots();
+        b.classList.add('ready'); b.textContent = '⬆️ New version\nv' + m[1] + ': tap'; refreshDots();
         if (fresh) toast('⬆️ New version: ☰ Menu → Update', 0.3);
       }
     }).catch(function () {});
@@ -3155,10 +3208,40 @@ a.btn.menuitem { display: flex; align-items: center; justify-content: center; te
   $('weatherLink').addEventListener('click', function () { showWeather = !showWeather; store.set('tt-weather', showWeather); showToggles(); applySeason(); });
   $('motionLink').addEventListener('click', function () { showMotion = !showMotion; store.set('tt-motion', showMotion); showToggles(); });
   showToggles();
-  $('seasonLink').addEventListener('click', function (e) {
-    e.preventDefault();
-    season = SEASONS[(SEASONS.indexOf(season) + 1) % SEASONS.length]; store.set('tt-season', season); applySeason();
+  // the season picker: one card per choice, each a small sample map painted in THAT season's colours, plants and animals (`.smp[data-season]` carries the tokens)
+  var SAMPLE_ITEMS = [1, 2, 3, 1, 6, 2, 12, 3, 1, 6, 3, 1];
+  function seasonSample(el, sea) {
+    var g = TT.newGame(11, { map: 'medium' }).grid, side = Math.round(Math.sqrt(g.length)), k = 0;
+    el.dataset.season = sea; el.textContent = '';
+    el.style.gridTemplate = 'repeat(' + side + ', 1fr) / repeat(' + side + ', 1fr)';
+    g.forEach(function (v, i) {
+      var c = document.createElement('span');
+      if (v === TT.WATER) c.className = 'w';
+      else if (v === 0 && i % 3 === 1) c.textContent = emIn(sea, SAMPLE_ITEMS[k++ % SAMPLE_ITEMS.length]);
+      el.appendChild(c);
+    });
+  }
+  function buildSeasonCards() {
+    var box = $('seasonCards'); box.textContent = '';
+    SEASONS.forEach(function (sea) {
+      var b = document.createElement('button'), real = sea === 'auto' ? seasonNow() : sea;
+      b.type = 'button'; b.className = 'opt seasoncard'; b.dataset.pick = sea; b.setAttribute('aria-pressed', sea === season ? 'true' : 'false');
+      var mini = document.createElement('div'); mini.className = 'mini smp'; seasonSample(mini, real);
+      var name = document.createElement('span'); name.textContent = SEASON_LABEL[sea] + (sea === 'auto' ? ' (now ' + SEASON_LABEL[real].replace(/^\S+\s/, '') + ')' : '');
+      b.appendChild(mini); b.appendChild(name); box.appendChild(b);
+    });
+  }
+  function openSeason() { buildSeasonCards(); $('seasonDlg').classList.remove('hidden'); }
+  function closeSeason() { $('seasonDlg').classList.add('hidden'); }
+  $('seasonLink').addEventListener('click', openSeason);
+  $('seasonClose').addEventListener('click', closeSeason);
+  $('seasonDlg').addEventListener('click', function (e) {
+    if (e.target === this) { closeSeason(); return; }
+    var b = e.target.closest && e.target.closest('.seasoncard');
+    if (!b) return;
+    season = b.dataset.pick; store.set('tt-season', season); applySeason();
     shopKey = ''; buildGuide(); buildCards(); render([]); // the plant emojis and critters follow the season
+    buildSeasonCards();
   });
   applySeason();
   buildGuide(); buildCards(); // the first build ran before the season was known
@@ -3186,7 +3269,8 @@ a.btn.menuitem { display: flex; align-items: center; justify-content: center; te
     { target: '.panel', title: '🌱 Place and Next', text: '<b>Place</b> is the item you will put down now, <b>Next</b> is the one after it. <b>Tap the ⇄ button between them to swap them</b> (tapping the Next item works too): free, as often as you like.' },
     { target: '#holdBtn', title: '📦 Reserve', text: 'Store the current item here for later. Tap it again to swap with what is stored. Also free.' },
     { target: '.hud .stat', title: '⭐ Score and coins', text: 'Every merge adds to your <b>score</b> and pays 🪙 <b>coins</b> (bigger groups pay more). Coins buy things in the shop. <b>Best</b> is your top score on this map.' },
-    { target: '#menuBtn', title: '☰ Menu', text: 'Everything else is in here: <b>🗺️ World</b> (nine regions in a 3×3 grid, each its own game: the calm Meadow in the middle, harder ones further out; build a 🏘️ village in the Meadow to open the next), <b>🏆 Quests</b> (quests, achievements and titles with your progress), <b>How to play</b> and this tour, the <b>Item guide</b>, <b>📣 Share</b>, <b>💾 Backup</b> (save your games as a file or code), a folded <b>⚙️ Settings</b> row (Season, Haptics, Critters, Weather, Animations), and <b>↻ Update</b> (it keeps your saved game and best scores), and <b>⟳ New game</b> (in a region it restarts that region on its own map; in the <b>Custom game</b> you choose the map, the bear mode and whether foxes appear; it warns you before it erases the game you are playing). A <b>gold dot</b> on the button means something is new: a finished quest or a newer version.' },
+    { target: '#quick', title: '🧾 Shortcuts', text: 'Quick buttons in the free space under the score: the <b>Item guide</b> (what every item does and what it merges into), the <b>🗺️ World</b> (nine regions in a 3×3 grid, each its own game: the calm Meadow in the middle, harder ones further out; build a 🏘️ village in the Meadow to open the next) and <b>🏆 Quests</b> (quests, achievements and titles with your progress; a <b>gold dot</b> means one just finished). On a short screen they move into the ☰ Menu.', when: function () { return !$('quick').hidden; } },
+    { target: '#menuBtn', title: '☰ Menu', text: 'The housekeeping: <b>⟳ New game</b> (in a region it restarts that region on its own map; in the <b>Custom game</b> you choose the map, the bear mode and whether foxes appear; it warns you before it erases the game you are playing), <b>💾 Backup</b> (save your games as a file or code, so clearing site data does not lose them), <b>↻ Update</b> (it keeps your saved game and best scores), <b>📖 How to play</b> and this tour, a folded <b>⚙️ Settings</b> row (a <b>🎨 Season</b> picker with a sample map for each season, and switches for Haptics, Critters, Weather and Animations), and <b>📣 Share</b> at the bottom. A <b>gold dot</b> on the button means something is new: a finished quest or a newer version.' },
     { target: '.topinfo', title: '📋 Turn and calendar', text: 'The turn counter with the 📅 calendar (10 turns = a month, 12 months = a year) and, once you own a bank, the ⏱ clock speed (tap to cycle 1×, 2×, 3×, paused). The 🏞️ lake quest lives in 🏆 Quests now, and the game seed and map are at the bottom of the ☰ Menu.' },
     { target: '#undoBtn', title: '↶ Undo', text: 'Takes back your last move, or your last 🚚 mover, 🔨 hammer or 🪤 trap use (a mover drop that merges at once, say). It costs a few coins, and only one step can be undone.' },
     { target: '#previewBtn', title: '👁 Preview', text: 'Shows what a tap would do before you place. Turn it off to place with a single tap.' },
