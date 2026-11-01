@@ -1048,7 +1048,7 @@
   $('toolCancel').addEventListener('click', function () { mode = null; moveFrom = -1; sel = -1; render([]); });
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
-    if (!$('tour').classList.contains('hidden')) endTour(); else { closeShop(); closeMenu(); closeShare(); }
+    if (!$('tour').classList.contains('hidden')) endTour(); else { closeShop(); closeMenu(); closeShare(); closeBackup(); }
   });
   $('newBtn').addEventListener('click', function () { closeShop(); openNewGame(); });
   $('newCancel').addEventListener('click', function () { $('newGame').classList.add('hidden'); });
@@ -1127,7 +1127,7 @@
   $('menuBtn').addEventListener('click', openMenu);
   $('menuClose').addEventListener('click', closeMenu);
   $('menu').addEventListener('click', function (e) {
-    if (e.target === this || (e.target.closest && e.target.closest('#newBtn, #worldLink, #questsLink, #helpLink, #guideLink, #shareLink, #updateBtn'))) closeMenu();
+    if (e.target === this || (e.target.closest && e.target.closest('#newBtn, #worldLink, #questsLink, #helpLink, #guideLink, #shareLink, #backupLink, #updateBtn'))) closeMenu();
   });
   // ---- sharing: the native share sheet where there is one, otherwise copy-link plus post links for the common networks.
   // The link is always the public site (not the current URL, which may carry a #seed= or a local address).
@@ -1160,6 +1160,98 @@
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(SITE_URL).then(done, function () { window.prompt('Copy this link', SITE_URL); });
     else window.prompt('Copy this link', SITE_URL);
   });
+  // ---- backup and restore: everything the game keeps in localStorage (every `tt-` key: all saves, best scores, stats, quests, treasury, world, settings) as a file or a
+  // text code. Clearing "cookies and site data" wipes localStorage, so the player keeps a copy outside the browser. Restoring REPLACES this browser's progress, checks
+  // every game save with the logic's migrate / validate first (a broken save is skipped, never loaded), then reloads.
+  var BACKUP_SKIP = { 'tt-backup-at': 1, 'tt-test-fresh': 1 };
+  function backupKeys() {
+    var out = [], i, k;
+    try { for (i = 0; i < localStorage.length; i++) { k = localStorage.key(i); if (/^tt-[a-z0-9-]{1,48}$/.test(k) && !BACKUP_SKIP[k]) out.push(k); } } catch (e) {}
+    return out.sort();
+  }
+  function backupJson() {
+    var data = {};
+    backupKeys().forEach(function (k) { try { data[k] = localStorage.getItem(k); } catch (e) {} });
+    return JSON.stringify({ app: 'triple-three', format: 1, saved: new Date().toISOString(), build: ($('verNow') || {}).textContent || '', data: data });
+  }
+  function backupCode() { return 'TT1:' + btoa(unescape(encodeURIComponent(backupJson()))); }
+  // text (a file's content or a pasted code) -> {data, skipped} or {error}
+  function parseBackup(text) {
+    var j, raw = String(text || '').replace(/\s+/g, ' ').trim();
+    try {
+      if (/^TT1:/.test(raw)) raw = decodeURIComponent(escape(atob(raw.slice(4).replace(/\s/g, ''))));
+      j = JSON.parse(raw);
+    } catch (e) { return { error: 'That is not a Triple Three backup.' }; }
+    if (!j || j.app !== 'triple-three' || j.format !== 1 || !j.data || typeof j.data !== 'object') return { error: 'That is not a Triple Three backup.' };
+    var data = {}, skipped = 0, total = 0, saves = 0, badSaves = 0;
+    Object.keys(j.data).forEach(function (k) {
+      var v = j.data[k], parsed, isSave = k === 'tt-save' || k.indexOf('tt-save-') === 0;
+      if (!/^tt-[a-z0-9-]{1,48}$/.test(k) || BACKUP_SKIP[k] || typeof v !== 'string' || v.length > 2000000 || (total += v.length) > 8000000) { skipped++; return; }
+      try {
+        parsed = JSON.parse(v);
+        if (isSave) { // a game: it has to pass the same checks as a normal load
+          TT.migrate(parsed);
+          if (TT.validate(parsed).length || typeof parsed.rng !== 'number') throw new Error('invalid save');
+          saves++;
+          v = JSON.stringify(parsed);
+        }
+      } catch (e) { skipped++; if (isSave) badSaves++; return; }
+      data[k] = v;
+    });
+    if (!Object.keys(data).length) return { error: 'The backup has nothing usable in it.' };
+    if (badSaves && !saves) return { error: 'The game in this backup is damaged, so nothing was changed.' };
+    return { data: data, skipped: skipped, saves: saves };
+  }
+  function backupMsg(t, bad) { var m = $('backupMsg'); m.textContent = t; m.style.color = bad ? '#ff9b8a' : ''; }
+  function backupWhen() {
+    var t = store.get('tt-backup-at', ''), d = t && new Date(t);
+    $('backupWhen').textContent = d && !isNaN(d) ? 'Last backup made on this device: ' + d.toLocaleString() : 'No backup made on this device yet.';
+  }
+  function backupMade() { store.set('tt-backup-at', new Date().toISOString()); backupWhen(); }
+  function openBackup() { closeShop(); $('backupCode').value = backupCode(); backupMsg(''); backupWhen(); $('backup').classList.remove('hidden'); }
+  function closeBackup() { $('backup').classList.add('hidden'); }
+  function restoreBackup(text) {
+    var r = parseBackup(text);
+    if (r.error) { backupMsg(r.error, true); return; }
+    if (!window.confirm('Replace the games and progress in this browser with the backup (' + r.saves + ' game' + (r.saves === 1 ? '' : 's') + ')? This cannot be undone.')) return;
+    try {
+      backupKeys().forEach(function (k) { localStorage.removeItem(k); });
+      Object.keys(r.data).forEach(function (k) { localStorage.setItem(k, r.data[k]); });
+    } catch (e) { backupMsg('Could not write to this browser\'s storage.', true); return; }
+    backupMsg('✅ Restored' + (r.skipped ? ' (' + r.skipped + ' damaged entr' + (r.skipped === 1 ? 'y' : 'ies') + ' skipped)' : '') + '. Reloading…');
+    setTimeout(function () { location.href = location.pathname; }, 400);
+  }
+  $('backupLink').addEventListener('click', openBackup);
+  $('backupClose').addEventListener('click', closeBackup);
+  $('backup').addEventListener('click', function (e) { if (e.target === this) closeBackup(); });
+  $('backupDownload').addEventListener('click', function () {
+    try {
+      var blob = new Blob([backupJson()], { type: 'application/json' }), a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = 'triple-three-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+      backupMade(); backupMsg('✅ Backup file saved. Keep it somewhere outside the browser (Files, cloud drive, email to yourself).');
+    } catch (e) { backupMsg('Could not make a file here: use Copy code instead.', true); }
+  });
+  $('backupCopy').addEventListener('click', function () {
+    var code = backupCode();
+    $('backupCode').value = code;
+    var ok = function () { backupMade(); backupMsg('✅ Code copied. Paste it into a note or message to yourself.'); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(code).then(ok, function () { $('backupCode').select(); backupMsg('Select the code above and copy it by hand.'); });
+    else { $('backupCode').select(); backupMsg('Select the code above and copy it by hand.'); }
+  });
+  $('backupPick').addEventListener('click', function () { $('backupFile').click(); });
+  $('backupFile').addEventListener('change', function () {
+    var f = this.files && this.files[0], input = this;
+    if (!f) return;
+    if (f.size > 9000000) { backupMsg('That file is too big to be a backup.', true); input.value = ''; return; }
+    var rd = new FileReader();
+    rd.onload = function () { input.value = ''; restoreBackup(rd.result); };
+    rd.onerror = function () { backupMsg('Could not read that file.', true); };
+    rd.readAsText(f);
+  });
+  $('backupRestore').addEventListener('click', function () { restoreBackup($('backupCode').value); });
+  // ask the browser to keep our storage when space runs low (it does not survive the player clearing site data: that is what Backup is for)
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {}); } catch (e) {}
   // ---- the quests screen: titles first, then the achievements, each with its progress
   var questsPage = 0;
   function renderQuests() {
