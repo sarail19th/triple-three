@@ -216,18 +216,19 @@
   // Haptic feedback (a short buzz on placing, merging and buying): on by default, switched off with the 📳 link at the top.
   var haptics = store.get('tt-haptics', true) !== false;
   function vibrate(ms) { if (haptics && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } }
+  // an on/off switch button: its label sits in .swl, the track + knob are drawn by CSS from aria-checked
+  function setSwitch(el, label, on) { el.querySelector('.swl').textContent = label; el.setAttribute('aria-checked', on ? 'true' : 'false'); }
   function showHaptics() {
     var link = $('hapticLink');
     link.hidden = !navigator.vibrate; // phones without vibration support (iPhones) have nothing to switch off
-    link.textContent = haptics ? '📳 Haptics: on' : '📴 Haptics: off';
-    link.setAttribute('aria-pressed', haptics);
+    setSwitch(link, haptics ? '📳 Haptics' : '📴 Haptics', haptics);
   }
 
   // Visual extras that can be switched off in the menu (all default on): the little critters, the falling petals / leaves / snow ("Weather"), and every CSS animation.
   var showCritters = store.get('tt-critters', true) !== false, showWeather = store.get('tt-weather', true) !== false, showMotion = store.get('tt-motion', true) !== false;
   function showToggles() {
     [['critterLink', showCritters, '🐇 Critters'], ['weatherLink', showWeather, '🌦️ Weather'], ['motionLink', showMotion, '✨ Animations']].forEach(function (t) {
-      var el = $(t[0]); el.textContent = t[2] + ': ' + (t[1] ? 'on' : 'off'); el.setAttribute('aria-pressed', t[1]);
+      setSwitch($(t[0]), t[2], t[1]);
     });
     document.documentElement.classList.toggle('no-anim', !showMotion);
   }
