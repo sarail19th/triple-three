@@ -407,6 +407,37 @@ with sync_playwright() as p:
     assert page.get_attribute('meta[name="twitter:card"]', 'content') == 'summary_large_image'
     page.tap('#shareClose')
     assert page.locator('#share').is_hidden(), 'the share dialog closes'
+    # backup and restore: a code / file made from the game brings it back after the site data is wiped; bad input changes nothing
+    import base64, json as _json
+    before = state(page)
+    menu_tap(page, '#backupLink')
+    assert page.locator('#backup').is_visible() and page.locator('#menu').is_hidden(), 'the backup dialog opens'
+    code = page.input_value('#backupCode')
+    assert code.startswith('TT1:'), 'the code starts with its marker'
+    raw = _json.loads(base64.b64decode(code[4:]).decode('utf-8'))
+    assert raw['app'] == 'triple-three' and 'tt-save' in raw['data'], 'the backup holds the game save'
+    page.fill('#backupCode', 'this is not a backup'); page.tap('#backupRestore')
+    assert 'not a Triple Three backup' in page.inner_text('#backupMsg'), 'garbage is refused'
+    bad = _json.loads(_json.dumps(raw)); sv = _json.loads(bad['data']['tt-save']); sv['grid'] = [99] * 5; bad['data']['tt-save'] = _json.dumps(sv)
+    page.fill('#backupCode', 'TT1:' + base64.b64encode(_json.dumps(bad).encode()).decode()); page.tap('#backupRestore')
+    assert 'damaged' in page.inner_text('#backupMsg'), 'a damaged game is refused'
+    assert state(page)['grid'] == before['grid'], 'a refused restore changes nothing'
+    page.tap('#backupDownload'); assert 'saved' in page.inner_text('#backupMsg') and 'Last backup made' in page.inner_text('#backupWhen'), 'saving a file is reported'
+    page.tap('#backupClose')
+    for how in ('code', 'file'):
+        page.evaluate("localStorage.clear(); localStorage.setItem('tt-seen-help', 'true')"); page.goto(URL + '?wipe=' + how + '#seed=777'); page.wait_for_selector('#board .cell')   # the site data is gone: a fresh game
+        assert state(page)['seed'] != before['seed'], 'a different game is on screen after the wipe'
+        menu_tap(page, '#backupLink')
+        if how == 'code':
+            page.fill('#backupCode', code); page.tap('#backupRestore')
+        else:
+            page.set_input_files('#backupFile', files=[{'name': 'b.json', 'mimeType': 'application/json', 'buffer': base64.b64decode(code[4:])}])
+        page.wait_for_function("document.querySelector('#backup').classList.contains('hidden') || true"); page.wait_for_timeout(1200)
+        page.wait_for_selector('#board .cell'); page.wait_for_function('window.ttDebug && window.ttDebug.state().seed === ' + str(before['seed']))
+        after = state(page)
+        assert after['grid'] == before['grid'] and after['score'] == before['score'] and after['turn'] == before['turn'], 'the game is back after a restore from the ' + how
+        assert page.evaluate("location.hash") == '', 'the restore reloads without the seed link'
+
     g = [0] * 36
     load(g, cur=1, next=1)
     page.tap('#menuBtn'); assert page.locator('#hapticLink').is_visible() and 'on' in page.inner_text('#hapticLink'); page.tap('#menuClose')
