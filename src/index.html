@@ -6,6 +6,20 @@
 <meta name="theme-color" content="#14301f">
 <meta name="mobile-web-app-capable" content="yes">
 <title>Triple Three</title>
+<meta name="description" content="Triple Three: a free emoji merge-puzzle game. Match 3 to grow 🌱 into 🏬, trap the bears, build banks. Plays in your browser, installs as an app.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Triple Three">
+<meta property="og:title" content="Triple Three 🌱🌿🌳🏠🏬">
+<meta property="og:description" content="A free emoji merge-puzzle game. Match 3 to grow 🌱 into 🏬, trap the bears, build banks. Plays in your browser, installs as an app.">
+<meta property="og:url" content="https://sarail19th.github.io/triple-three/">
+<meta property="og:image" content="https://sarail19th.github.io/triple-three/social.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Triple Three 🌱🌿🌳🏠🏬">
+<meta name="twitter:description" content="A free emoji merge-puzzle game. Match 3 to grow 🌱 into 🏬, trap the bears, build banks.">
+<meta name="twitter:image" content="https://sarail19th.github.io/triple-three/social.png">
+<link rel="canonical" href="https://sarail19th.github.io/triple-three/">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -102,6 +116,7 @@
     <div class="menugrid">
       <button id="newBtn" class="btn menuitem wide" type="button" aria-label="New game">⟳ New game</button>
       <button id="worldLink" class="btn menuitem" type="button">🗺️ World</button>
+      <button id="shareLink" class="btn menuitem" type="button">📣 Share</button>
       <button id="questsLink" class="btn menuitem" type="button">🏆 Quests<i id="questsDot" class="dot" hidden></i></button>
       <button id="helpLink" class="btn menuitem" type="button">📖 How to play</button>
       <button id="guideLink" class="btn menuitem" type="button">🧾 Item guide</button>
@@ -115,6 +130,23 @@
     <p class="gnote">Game: <span id="seed">seed</span></p>
     <p class="gnote"><a href="https://github.com/sarail19th/triple-three" target="_blank" rel="noopener noreferrer">Source on GitHub</a></p>
     <button id="menuClose" class="btn primary">Close</button>
+  </div>
+</div>
+
+<div id="share" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Share">
+  <div class="card">
+    <h2>📣 Share Triple Three</h2>
+    <p id="shareText" class="gnote"></p>
+    <div class="menugrid">
+      <button id="shareNative" class="btn menuitem wide primary" type="button" hidden>📤 Share…</button>
+      <button id="shareCopy" class="btn menuitem wide" type="button">🔗 Copy link</button>
+      <a class="btn menuitem" id="shareX" target="_blank" rel="noopener noreferrer">𝕏 Post</a>
+      <a class="btn menuitem" id="shareFb" target="_blank" rel="noopener noreferrer">Facebook</a>
+      <a class="btn menuitem" id="shareWa" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+      <a class="btn menuitem" id="shareTg" target="_blank" rel="noopener noreferrer">Telegram</a>
+      <a class="btn menuitem wide" id="shareRd" target="_blank" rel="noopener noreferrer">Reddit</a>
+    </div>
+    <button id="shareClose" class="btn primary">Close</button>
   </div>
 </div>
 

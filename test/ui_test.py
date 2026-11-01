@@ -394,6 +394,19 @@ with sync_playwright() as p:
     assert after['grid'][20] == TOMB and after['turn'] == 3 and after['coins'] == 30 - 12, 'trapped fox becomes a tombstone'
 
     # ---- haptic feedback can be switched off (and back on), and the choice is remembered
+    # sharing: the Menu opens the share dialog with the public link (never the local address), and the page carries link-preview meta tags
+    menu_tap(page, '#shareLink')
+    assert page.locator('#share').is_visible(), 'the share dialog opens'
+    assert page.locator('#menu').is_hidden(), 'choosing Share closes the menu'
+    for sid in ('shareX', 'shareFb', 'shareWa', 'shareTg', 'shareRd'):
+        href = page.get_attribute('#' + sid, 'href')
+        assert 'sarail19th.github.io' in href.replace('%2F', '/').replace('%3A', ':') or 'sarail19th.github.io' in href, 'share link ' + sid + ' points at the public site: ' + href
+        assert 'localhost' not in href and '127.0.0.1' not in href, 'share link must not leak the local address'
+    assert page.locator('#shareCopy').is_visible()
+    assert page.get_attribute('meta[property="og:image"]', 'content').endswith('/social.png')
+    assert page.get_attribute('meta[name="twitter:card"]', 'content') == 'summary_large_image'
+    page.tap('#shareClose')
+    assert page.locator('#share').is_hidden(), 'the share dialog closes'
     g = [0] * 36
     load(g, cur=1, next=1)
     page.tap('#menuBtn'); assert page.locator('#hapticLink').is_visible() and 'on' in page.inner_text('#hapticLink'); page.tap('#menuClose')

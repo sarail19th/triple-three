@@ -1048,7 +1048,7 @@
   $('toolCancel').addEventListener('click', function () { mode = null; moveFrom = -1; sel = -1; render([]); });
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
-    if (!$('tour').classList.contains('hidden')) endTour(); else { closeShop(); closeMenu(); }
+    if (!$('tour').classList.contains('hidden')) endTour(); else { closeShop(); closeMenu(); closeShare(); }
   });
   $('newBtn').addEventListener('click', function () { closeShop(); openNewGame(); });
   $('newCancel').addEventListener('click', function () { $('newGame').classList.add('hidden'); });
@@ -1127,7 +1127,38 @@
   $('menuBtn').addEventListener('click', openMenu);
   $('menuClose').addEventListener('click', closeMenu);
   $('menu').addEventListener('click', function (e) {
-    if (e.target === this || (e.target.closest && e.target.closest('#newBtn, #worldLink, #questsLink, #helpLink, #guideLink, #updateBtn'))) closeMenu();
+    if (e.target === this || (e.target.closest && e.target.closest('#newBtn, #worldLink, #questsLink, #helpLink, #guideLink, #shareLink, #updateBtn'))) closeMenu();
+  });
+  // ---- sharing: the native share sheet where there is one, otherwise copy-link plus post links for the common networks.
+  // The link is always the public site (not the current URL, which may carry a #seed= or a local address).
+  var SITE_URL = 'https://sarail19th.github.io/triple-three/';
+  function shareMessage() {
+    return state.turn > 0 && state.score > 0
+      ? 'I scored ' + fmt(state.score) + ' in Triple Three 🌱→🏬 Can you beat it? Free emoji merge puzzle, plays in the browser.'
+      : 'Triple Three 🌱→🏬 A free emoji merge puzzle: match 3, trap the bears, build banks. Plays in the browser.';
+  }
+  function openShare() {
+    var msg = shareMessage(), u = encodeURIComponent(SITE_URL), t = encodeURIComponent(msg);
+    $('shareText').textContent = msg;
+    $('shareX').href = 'https://twitter.com/intent/tweet?text=' + t + '&url=' + u;
+    $('shareFb').href = 'https://www.facebook.com/sharer/sharer.php?u=' + u;
+    $('shareWa').href = 'https://wa.me/?text=' + encodeURIComponent(msg + ' ' + SITE_URL);
+    $('shareTg').href = 'https://t.me/share/url?url=' + u + '&text=' + t;
+    $('shareRd').href = 'https://www.reddit.com/submit?url=' + u + '&title=' + encodeURIComponent('Triple Three: a free emoji merge puzzle');
+    $('shareNative').hidden = !navigator.share;
+    $('share').classList.remove('hidden');
+  }
+  function closeShare() { $('share').classList.add('hidden'); }
+  $('shareLink').addEventListener('click', openShare);
+  $('shareClose').addEventListener('click', closeShare);
+  $('share').addEventListener('click', function (e) { if (e.target === this) closeShare(); });
+  $('shareNative').addEventListener('click', function () {
+    try { navigator.share({ title: 'Triple Three', text: shareMessage(), url: SITE_URL }).catch(function () {}); } catch (err) {}
+  });
+  $('shareCopy').addEventListener('click', function () {
+    var b = this, done = function () { b.textContent = '✅ Link copied'; setTimeout(function () { b.textContent = '🔗 Copy link'; }, 1800); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(SITE_URL).then(done, function () { window.prompt('Copy this link', SITE_URL); });
+    else window.prompt('Copy this link', SITE_URL);
   });
   // ---- the quests screen: titles first, then the achievements, each with its progress
   var questsPage = 0;
