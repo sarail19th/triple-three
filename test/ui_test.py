@@ -437,7 +437,7 @@ with sync_playwright() as p:
     assert crit() > 0, 'critters live on the houses'
     menu_tap(page, '#critterLink')
     assert 'off' in page.inner_text('#critterLink') and page.evaluate("JSON.parse(localStorage.getItem('tt-critters'))") is False and crit() == 0 and page.locator('#critters .crit').count() == 0
-    page.tap('#menuClose'); tap_cell(page, 0, True)
+    page.tap('#menuClose'); tap_cell(page, 1, True)
     assert crit() == 0, 'still none after a move'
     page.reload(); page.wait_for_selector('#board .cell'); page.wait_for_timeout(500)
     assert crit() == 0 and 'off' in page.inner_text('#critterLink'), 'the choice survives a reload'
