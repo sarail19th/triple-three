@@ -724,7 +724,7 @@ a.btn.menuitem { display: flex; align-items: center; justify-content: center; te
       </section>
     </div>
     <div class="pager"><button id="helpPrev" class="btn" aria-label="Previous page">‹ Back</button><span id="helpPageLabel" aria-live="polite"></span><button id="helpNext" class="btn" aria-label="Next page">Next ›</button></div>
-    <p class="gnote">Version <b id="buildId">252caf91</b> · update with the ↻ <b>Update</b> button at the top of the game<br>(it keeps your saved game and best scores)</p>
+    <p class="gnote">Version <b id="buildId">b9c12091</b> · update with the ↻ <b>Update</b> button at the top of the game<br>(it keeps your saved game and best scores)</p>
     <div class="helpbtns"><button id="helpTour" class="btn">▶ Quick tour</button><button id="helpClose" class="btn primary">Got it</button></div>
   </div>
 </div>
@@ -849,7 +849,7 @@ a.btn.menuitem { display: flex; align-items: center; justify-content: center; te
   function milestoneScore(n) { return n < MILESTONES.length ? MILESTONES[n] : MILESTONES[MILESTONES.length - 1] * (n - MILESTONES.length + 2); }
   // Land: one extra row/column per side, each side once, dearer every time.
   var SIDES = ['top', 'bottom', 'left', 'right'];
-  var LAND_PRICE = [150, 400, 1000, 2500];
+  var LAND_PRICE = [1000, 2500, 6000, 15000]; // one row or column each; the first is a mid-game purchase (owner: the starter price must be higher)
   // The shop always sells grass, bush and tree; a higher building tier is unlocked once one has stood on the board.
   var STARTER_TIER = 3;
 
