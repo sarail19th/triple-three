@@ -8,8 +8,9 @@ const template = read('src/index.html')
   .replace('/*INLINE_CSS*/', () => read('src/style.css'))
   .replace('/*INLINE_LOGIC*/', () => read('src/logic.js'))
   .replace('/*INLINE_GAME*/', () => read('src/game.js'));
-// the version id (shown in How to play, also the service-worker cache name) is a hash of the game's content
-const v = crypto.createHash('md5').update(template).digest('hex').slice(0, 8);
+// the version id (shown in How to play, also the service-worker cache name) is a hash of the game's content plus the icon generator,
+// so a new icon also rolls the cache over (icons are cache-first and would otherwise stay stale in installed copies)
+const v = crypto.createHash('md5').update(template).update(read('gen/icons.js')).digest('hex').slice(0, 8);
 const html = template.replace('__BUILD__', v);
 fs.mkdirSync(path.join(__dirname, 'dist'), { recursive: true });
 fs.writeFileSync(path.join(__dirname, 'dist/index.html'), html);
