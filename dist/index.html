@@ -724,7 +724,7 @@ a.btn.menuitem { display: flex; align-items: center; justify-content: center; te
       </section>
     </div>
     <div class="pager"><button id="helpPrev" class="btn" aria-label="Previous page">‹ Back</button><span id="helpPageLabel" aria-live="polite"></span><button id="helpNext" class="btn" aria-label="Next page">Next ›</button></div>
-    <p class="gnote">Version <b id="buildId">388e2ea8</b> · update with the ↻ <b>Update</b> button at the top of the game<br>(it keeps your saved game and best scores)</p>
+    <p class="gnote">Version <b id="buildId">6a2122a7</b> · update with the ↻ <b>Update</b> button at the top of the game<br>(it keeps your saved game and best scores)</p>
     <div class="helpbtns"><button id="helpTour" class="btn">▶ Quick tour</button><button id="helpClose" class="btn primary">Got it</button></div>
   </div>
 </div>
@@ -3139,11 +3139,23 @@ a.btn.menuitem { display: flex; align-items: center; justify-content: center; te
     if (updating) return;
     updating = true;
     var b = $('updateBtn'); b.disabled = true; b.textContent = '↻ Updating…';
-    var jobs = [];
-    if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); }));
-    if (window.caches && caches.keys) jobs.push(caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); }));
+    // Only this app's own caches and worker: other apps on the same address (github.io) share Cache Storage and the worker list.
+    var jobs = [], scope = new URL('./', location.href).href;
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) { return Promise.all(rs.filter(function (r) { return r.scope === scope; }).map(function (r) { return r.unregister(); })); }));
+    if (window.caches && caches.keys) jobs.push(caches.keys().then(function (ks) { return Promise.all(ks.filter(function (k) { return k.indexOf('triple-three-') === 0; }).map(function (k) { return caches.delete(k); })); }));
     Promise.all(jobs).catch(function () {})
       .then(function () { return fetch(location.pathname, { cache: 'reload' }).catch(function () {}); })
+      .then(function () { // install a fresh worker and wait until its offline copy is complete, so going offline right after is safe
+        if (!(navigator.serviceWorker && navigator.serviceWorker.register)) return;
+        return navigator.serviceWorker.register('sw.js').then(function (reg) {
+          return new Promise(function (res) {
+            var w = reg.installing || reg.waiting || reg.active;
+            if (!w || w.state === 'activated') return res();
+            var t = setTimeout(res, 15000);
+            w.addEventListener('statechange', function () { if (w.state === 'activated' || w.state === 'redundant') { clearTimeout(t); res(); } });
+          });
+        }).catch(function () {});
+      })
       .then(function () { location.replace(location.pathname + '?v=' + Date.now() + location.hash); });
   }
   $('updateBtn').addEventListener('click', doUpdate);

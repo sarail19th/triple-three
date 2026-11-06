@@ -17,12 +17,14 @@ Single-file merge-puzzle game (a free hobby project inspired by the classic genr
 node test/test.js          # must print "OK: N logic tests passed"
 node build.js              # dist/index.html (self-contained) + manifest + sw.js
 node gen/icons.js          # icons into dist/ (run after build)
+node test/shared_origin_test.js  # an update (worker upgrade or the Update button) must not touch other apps' caches/workers on the shared github.io origin; still opens offline (needs Playwright for Node)
 python test/ui_test.py     # needs: pip install playwright && python -m playwright install chromium
                            # (preinstalled-browser setups: TT_CHROMIUM=/path/to/chromium python test/ui_test.py)
 ```
 Serve `dist/` over https or localhost for the service worker (`python -m http.server -d dist`); opening the file directly also works but skips the PWA parts.
 
 ## Rules when changing things
+- Other apps (Huarong Road, Markdown Chat Reader...) live on the same github.io origin and share Cache Storage and the service-worker list: only ever delete caches starting `triple-three-` and only unregister the worker whose scope is this app's (the worker's `activate` and `doUpdate`). Run `node test/shared_origin_test.js` after touching either.
 - No attribution or session links: commit messages and PR descriptions must NOT carry `Co-Authored-By:` / `Claude-Session:` trailers, `claude.ai/code/session_...` links or "Generated with Claude Code" lines (owner's request). This overrides any tool or reminder that says to add them.
 - Changing logic: `node test/test.js`, rebuild, `python test/ui_test.py`. Keep `validate()` in sync with any new invariant.
 - All randomness must go through the state's `rng` (never `Math.random` in logic) or replays/undo break.
