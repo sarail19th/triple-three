@@ -1541,6 +1541,35 @@
   };
 
   if (/[?&]v=\d+/.test(location.search) && history.replaceState) history.replaceState(null, '', location.pathname + location.hash); // the update reloads on a fresh ?v= URL: tidy it
+  // "Ready for offline" line in the menu: asks the worker whether every file is saved (it re-saves missing ones online first).
+  var offState = '', offTimer = 0, offTries = 0;
+  function renderOffline() {
+    var el = $('offl'); if (!el) return;
+    el.hidden = !offState;
+    el.className = 'gnote offl' + (offState === 'ok' ? ' ok' : offState === 'no' ? ' warn' : '');
+    el.textContent = offState === 'ok' ? '✓ Ready to play offline' : offState === 'no' ? '⚠ Not saved for offline yet. Stay online a moment.' : offState === 'wait' ? 'Saving for offline…' : '';
+  }
+  function checkOffline() {
+    if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
+    if (!offState) { offState = 'wait'; renderOffline(); }
+    navigator.serviceWorker.ready.then(function (reg) {
+      var w = navigator.serviceWorker.controller || reg.active; if (!w) return;
+      clearTimeout(offTimer);
+      offTimer = setTimeout(function () { if (offState === 'wait') { offState = 'no'; renderOffline(); } }, 4000); // an old worker never answers
+      w.postMessage({ type: 'offline?' });
+    });
+  }
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', function (e) {
+      if (!e.data || e.data.type !== 'offline') return;
+      clearTimeout(offTimer); offState = e.data.ok ? 'ok' : 'no'; renderOffline();
+      if (!e.data.ok && offTries++ < 3) setTimeout(checkOffline, 5000); // still downloading? ask again
+      else if (e.data.ok) offTries = 0;
+    });
+    window.addEventListener('online', function () { offTries = 0; checkOffline(); });
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) checkOffline(); });
+    setTimeout(checkOffline, 1500);
+  }
   if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
     // cache-first service worker: when an update takes over, reload once so the new version shows without a manual refresh
     var hadController = !!navigator.serviceWorker.controller, reloaded = false;

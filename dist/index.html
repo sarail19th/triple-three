@@ -304,6 +304,9 @@ a.btn.menuitem { display: flex; align-items: center; justify-content: center; te
 .chip .ce { font-size: 30px; line-height: 1.15; }
 .chip small, .arrow small { font-size: 10px; color: var(--muted); line-height: 1.1; text-align: center; }
 .arrow { display: flex; flex-direction: column; align-items: center; color: var(--muted); font-size: 16px; }
+:root { --ok: #8fdc8a; --warn: #ffb36b; }
+.offl.ok { color: var(--ok); font-weight: 600; }
+.offl.warn { color: var(--warn); font-weight: 600; }
 .gnote { font-size: 13px !important; color: var(--muted); margin: 10px 0 12px !important; }
 
 /* wide screens: board on the left, controls on the right, board as large as the height allows */
@@ -520,6 +523,7 @@ a.btn.menuitem { display: flex; align-items: center; justify-content: center; te
       <button id="motionLink" class="btn menuitem wide sw" type="button" role="switch" aria-checked="true"><span class="swl">✨ Animations</span><span class="swt" aria-hidden="true"><i></i></span></button>
     </div>
     <button id="shareLink" class="btn menuitem wide cta" type="button">📣 Share Triple Three</button>
+    <p class="gnote offl" id="offl" role="status" aria-live="polite" hidden></p>
     <p class="gnote">Game: <span id="seed">seed</span> · v<span id="verNow"></span></p>
     <p class="gnote"><a href="https://github.com/sarail19th/triple-three" target="_blank" rel="noopener noreferrer">Source on GitHub</a></p>
     <button id="menuClose" class="btn primary">Close</button>
@@ -724,7 +728,7 @@ a.btn.menuitem { display: flex; align-items: center; justify-content: center; te
       </section>
     </div>
     <div class="pager"><button id="helpPrev" class="btn" aria-label="Previous page">‹ Back</button><span id="helpPageLabel" aria-live="polite"></span><button id="helpNext" class="btn" aria-label="Next page">Next ›</button></div>
-    <p class="gnote">Version <b id="buildId">6a2122a7</b> · update with the ↻ <b>Update</b> button at the top of the game<br>(it keeps your saved game and best scores)</p>
+    <p class="gnote">Version <b id="buildId">b1a719c2</b> · update with the ↻ <b>Update</b> button at the top of the game<br>(it keeps your saved game and best scores)</p>
     <div class="helpbtns"><button id="helpTour" class="btn">▶ Quick tour</button><button id="helpClose" class="btn primary">Got it</button></div>
   </div>
 </div>
@@ -3370,6 +3374,35 @@ a.btn.menuitem { display: flex; align-items: center; justify-content: center; te
   };
 
   if (/[?&]v=\d+/.test(location.search) && history.replaceState) history.replaceState(null, '', location.pathname + location.hash); // the update reloads on a fresh ?v= URL: tidy it
+  // "Ready for offline" line in the menu: asks the worker whether every file is saved (it re-saves missing ones online first).
+  var offState = '', offTimer = 0, offTries = 0;
+  function renderOffline() {
+    var el = $('offl'); if (!el) return;
+    el.hidden = !offState;
+    el.className = 'gnote offl' + (offState === 'ok' ? ' ok' : offState === 'no' ? ' warn' : '');
+    el.textContent = offState === 'ok' ? '✓ Ready to play offline' : offState === 'no' ? '⚠ Not saved for offline yet. Stay online a moment.' : offState === 'wait' ? 'Saving for offline…' : '';
+  }
+  function checkOffline() {
+    if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
+    if (!offState) { offState = 'wait'; renderOffline(); }
+    navigator.serviceWorker.ready.then(function (reg) {
+      var w = navigator.serviceWorker.controller || reg.active; if (!w) return;
+      clearTimeout(offTimer);
+      offTimer = setTimeout(function () { if (offState === 'wait') { offState = 'no'; renderOffline(); } }, 4000); // an old worker never answers
+      w.postMessage({ type: 'offline?' });
+    });
+  }
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', function (e) {
+      if (!e.data || e.data.type !== 'offline') return;
+      clearTimeout(offTimer); offState = e.data.ok ? 'ok' : 'no'; renderOffline();
+      if (!e.data.ok && offTries++ < 3) setTimeout(checkOffline, 5000); // still downloading? ask again
+      else if (e.data.ok) offTries = 0;
+    });
+    window.addEventListener('online', function () { offTries = 0; checkOffline(); });
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) checkOffline(); });
+    setTimeout(checkOffline, 1500);
+  }
   if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
     // cache-first service worker: when an update takes over, reload once so the new version shows without a manual refresh
     var hadController = !!navigator.serviceWorker.controller, reloaded = false;

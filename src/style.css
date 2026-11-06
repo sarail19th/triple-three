@@ -279,6 +279,9 @@ a.btn.menuitem { display: flex; align-items: center; justify-content: center; te
 .chip .ce { font-size: 30px; line-height: 1.15; }
 .chip small, .arrow small { font-size: 10px; color: var(--muted); line-height: 1.1; text-align: center; }
 .arrow { display: flex; flex-direction: column; align-items: center; color: var(--muted); font-size: 16px; }
+:root { --ok: #8fdc8a; --warn: #ffb36b; }
+.offl.ok { color: var(--ok); font-weight: 600; }
+.offl.warn { color: var(--warn); font-weight: 600; }
 .gnote { font-size: 13px !important; color: var(--muted); margin: 10px 0 12px !important; }
 
 /* wide screens: board on the left, controls on the right, board as large as the height allows */

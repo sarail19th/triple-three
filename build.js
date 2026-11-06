@@ -46,6 +46,8 @@ function page(e){
   const timeout=new Promise((_,no)=>setTimeout(no,4000));
   return Promise.race([net,timeout]).catch(()=>caches.match('./').then(r=>r||net));
 }
+// The page asks "is everything saved for offline?": re-save anything missing (online), then answer.
+self.addEventListener('message',e=>{if(!e.data||e.data.type!=='offline?'||!e.source)return;const src=e.source;e.waitUntil(caches.open(C).then(c=>Promise.all(FILES.map(f=>c.match(f).then(r=>r||fetch(new Request(f,{cache:'reload'})).then(x=>{if(x.ok)return c.put(f,x)}).catch(()=>{})))).then(()=>Promise.all(FILES.map(f=>c.match(f).then(Boolean))))).then(a=>src.postMessage({type:'offline',ok:a.every(Boolean)})).catch(()=>src.postMessage({type:'offline',ok:false})))});
 self.addEventListener('fetch',e=>{
   const u=new URL(e.request.url);
   if(e.request.method!=='GET'||u.origin!==location.origin)return;
